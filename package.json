@@ -1,6 +1,6 @@
 {
   "name": "socketcluster-client",
-  "description": "Client for the realtime cluster engine",
+  "description": "Client side of SocketCluster",
   "version": "0.9.0",
   "homepage": "https://github.com/topcloud/socketcluster-client",
   "contributors": [
