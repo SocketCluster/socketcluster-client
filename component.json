@@ -1,0 +1,26 @@
+{
+  "name": "engine.io",
+  "version": "0.6.3",
+  "dependencies": {
+    "component/emitter": "1.0.0",
+    "component/indexof": "*",
+    "LearnBoost/engine.io-protocol": "0.3.0",
+    "visionmedia/debug": "*"
+  },
+  "main": "lib/index.js",
+  "scripts": [
+    "lib/index.js",
+    "lib/clustersocket.js",
+    "lib/socket.js",
+    "lib/transport.js",
+    "lib/emitter.js",
+	"lib/json.js",
+    "lib/util.js",
+    "lib/transports/index.js",
+    "lib/transports/polling.js",
+    "lib/transports/polling-xhr.js",
+    "lib/transports/polling-jsonp.js",
+    "lib/transports/websocket.js",
+    "lib/transports/flashsocket.js"
+  ]
+}
