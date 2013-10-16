@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "Client side of SocketCluster",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "homepage": "https://github.com/topcloud/socketcluster-client",
   "contributors": [
     {
@@ -10,9 +10,11 @@
     }
   ],
   "dependencies": {
-    "ws": "0.4.25",
-    "xmlhttprequest": "1.5.0",
-    "emitter": "http://github.com/component/emitter/archive/1.0.0.tar.gz",
+    "global": "https://github.com/component/global/archive/v2.0.1.tar.gz",
+    "has-cors": "https://github.com/component/has-cors/archive/v1.0.2.tar.gz",
+    "ws": "https://github.com/TooTallNate/ws/archive/0cb9fe7a21a7a7c200f68b57916d1d62b66082a1.tar.gz",
+    "xmlhttprequest": "https://github.com/LearnBoost/node-XMLHttpRequest/archive/0f36d0b5ebc03d85f860d42a64ae9791e1daa433.tar.gz",
+    "emitter": "http://github.com/component/emitter/archive/1.0.1.tar.gz",
     "indexof": "0.0.1",
     "engine.io-parser": "0.3.0",
     "debug": "0.7.2"
@@ -25,18 +27,19 @@
   },
   "component": {
     "scripts": {
-      "engine.io/index.js": "lib/index.js",
-	  "engine.io/clustersocket.js": "lib/clustersocket.js",
-      "engine.io/socket.js": "lib/socket.js",
-      "engine.io/transport.js": "lib/transport.js",
-      "engine.io/emitter.js": "lib/emitter.js",
-      "engine.io/util.js": "lib/util.js",
-      "engine.io/transports/index.js": "lib/transports/index.js",
-      "engine.io/transports/polling.js": "lib/transports/polling.js",
-      "engine.io/transports/polling-xhr.js": "lib/transports/polling-xhr.js",
-      "engine.io/transports/polling-jsonp.js": "lib/transports/polling-jsonp.js",
-      "engine.io/transports/websocket.js": "lib/transports/websocket.js",
-      "engine.io/transports/flashsocket.js": "lib/transports/flashsocket.js"
+      "socketcluster/index.js": "lib/index.js",
+	  "socketcluster/clustersocket.js": "lib/clustersocket.js",
+      "socketcluster/socket.js": "lib/socket.js",
+      "socketcluster/transport.js": "lib/transport.js",
+      "socketcluster/emitter.js": "lib/emitter.js",
+	  "socketcluster/json.js": "lib/json.js",
+      "socketcluster/util.js": "lib/util.js",
+      "socketcluster/transports/index.js": "lib/transports/index.js",
+      "socketcluster/transports/polling.js": "lib/transports/polling.js",
+      "socketcluster/transports/polling-xhr.js": "lib/transports/polling-xhr.js",
+      "socketcluster/transports/polling-jsonp.js": "lib/transports/polling-jsonp.js",
+      "socketcluster/transports/websocket.js": "lib/transports/websocket.js",
+      "socketcluster/transports/flashsocket.js": "lib/transports/flashsocket.js"
     }
   },
   "readmeFilename": "README.md"

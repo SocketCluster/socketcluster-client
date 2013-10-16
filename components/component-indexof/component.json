@@ -8,6 +8,9 @@
     "indexOf"
   ],
   "dependencies": {},
+  "development": {
+    "component/assert": "*"
+  },
   "scripts": [
     "index.js"
   ],

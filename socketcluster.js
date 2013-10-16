@@ -27,10 +27,14 @@ function require(path, parent, orig) {
   // perform real require()
   // by invoking the module's
   // registered function
-  if (!module.exports) {
-    module.exports = {};
-    module.client = module.component = true;
-    module.call(this, module.exports, require.relative(resolved), module);
+  if (!module._resolving && !module.exports) {
+    var mod = {};
+    mod.exports = {};
+    mod.client = mod.component = true;
+    module._resolving = true;
+    module.call(this, mod.exports, require.relative(resolved), mod);
+    delete module._resolving;
+    module.exports = mod.exports;
   }
 
   return module.exports;
@@ -199,6 +203,12 @@ require.relative = function(parent) {
 require.register("component-emitter/index.js", function(exports, require, module){
 
 /**
+ * Module dependencies.
+ */
+
+var index = require('indexof');
+
+/**
  * Expose `Emitter`.
  */
 
@@ -301,7 +311,7 @@ Emitter.prototype.removeAllListeners = function(event, fn){
   }
 
   // remove specific handler
-  var i = callbacks.indexOf(fn._off || fn);
+  var i = index(callbacks, fn._off || fn);
   if (~i) callbacks.splice(i, 1);
   return this;
 };
@@ -356,16 +366,90 @@ Emitter.prototype.hasListeners = function(event){
 
 });
 require.register("component-indexof/index.js", function(exports, require, module){
-
-var indexOf = [].indexOf;
-
 module.exports = function(arr, obj){
-  if (indexOf) return arr.indexOf(obj);
+  if (arr.indexOf) return arr.indexOf(obj);
   for (var i = 0; i < arr.length; ++i) {
     if (arr[i] === obj) return i;
   }
   return -1;
 };
+});
+require.register("component-global/index.js", function(exports, require, module){
+
+/**
+ * Returns `this`. Execute this without a "context" (i.e. without it being
+ * attached to an object of the left-hand side), and `this` points to the
+ * "global" scope of the current JS execution.
+ */
+
+module.exports = (function () { return this; })();
+
+});
+require.register("component-has-cors/index.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var global = require('global');
+
+/**
+ * Module exports.
+ *
+ * Logic borrowed from Modernizr:
+ *
+ *   - https://github.com/Modernizr/Modernizr/blob/master/feature-detects/cors.js
+ */
+
+module.exports = 'XMLHttpRequest' in global &&
+  'withCredentials' in new global.XMLHttpRequest();
+
+});
+require.register("component-ws/index.js", function(exports, require, module){
+
+/**
+ * Module dependencies.
+ */
+
+var global = require('global');
+
+/**
+ * WebSocket constructor.
+ */
+
+var WebSocket = global.WebSocket || global.MozWebSocket;
+
+/**
+ * Module exports.
+ */
+
+module.exports = WebSocket ? ws : null;
+
+/**
+ * WebSocket constructor.
+ *
+ * The third `opts` options object gets ignored in web browsers, since it's
+ * non-standard, and throws a TypeError if passed to the constructor.
+ * See: https://github.com/einaros/ws/issues/227
+ *
+ * @param {String} uri
+ * @param {Array} protocols (optional)
+ * @param {Object) opts (optional)
+ * @api public
+ */
+
+function ws(uri, protocols, opts) {
+  var instance;
+  if (protocols) {
+    instance = new WebSocket(uri, protocols);
+  } else {
+    instance = new WebSocket(uri);
+  }
+  return instance;
+}
+
+if (WebSocket) ws.prototype = WebSocket.prototype;
+
 });
 require.register("LearnBoost-engine.io-protocol/lib/index.js", function(exports, require, module){
 /**
@@ -702,10 +786,12 @@ function coerce(val) {
 
 // persist
 
-if (window.localStorage) debug.enable(localStorage.debug);
+try {
+  if (window.localStorage) debug.enable(localStorage.debug);
+} catch(e){}
 
 });
-require.register("engine.io/lib/index.js", function(exports, require, module){
+require.register("socketcluster/lib/index.js", function(exports, require, module){
 module.exports.parser = require('engine.io-parser');
 
 var ClusterSocket = require('./clustersocket');
@@ -722,7 +808,7 @@ module.exports.connect = function (options) {
 	return new ClusterSocket(options);
 };
 });
-require.register("engine.io/lib/clustersocket.js", function(exports, require, module){
+require.register("socketcluster/lib/clustersocket.js", function(exports, require, module){
 /**
  * Module dependencies.
  */
@@ -953,7 +1039,7 @@ var NS = function (namespace, socket) {
 
 module.exports = ClusterSocket;
 });
-require.register("engine.io/lib/socket.js", function(exports, require, module){
+require.register("socketcluster/lib/socket.js", function(exports, require, module){
 /**
  * Module dependencies.
  */
@@ -961,7 +1047,7 @@ require.register("engine.io/lib/socket.js", function(exports, require, module){
 var util = require('./util')
   , transports = require('./transports')
   , Emitter = require('./emitter')
-  , debug = require('debug')('engine-client:socket')
+  , debug = require('debug')('engine.io-client:socket')
   , index = require('indexof')
   , parser = require('engine.io-parser');
 
@@ -975,7 +1061,7 @@ module.exports = Socket;
  * Global reference.
  */
 
-var global = util.global();
+var global = require('global');
 
 /**
  * Noop function.
@@ -1020,6 +1106,7 @@ function Socket(uri, opts){
     if (pieces.length) opts.port = pieces.pop();
   }
 
+  this.agent = opts.agent || false;
   this.hostname = opts.hostname ||
     (global.location ? location.hostname : 'localhost');
   this.port = opts.port || (global.location && location.port ?
@@ -1099,6 +1186,7 @@ Socket.prototype.createTransport = function (name) {
   if (this.id) query.sid = this.id;
 
   var transport = new transports[name]({
+    agent: this.agent,
     hostname: this.hostname,
     port: this.port,
     secure: this.secure,
@@ -1516,6 +1604,7 @@ Socket.prototype.onClose = function (reason, desc) {
     setTimeout(function() {
       self.writeBuffer = [];
       self.callbackBuffer = [];
+      self.prevBufferLen = 0;
     }, 0);
 
     // ignore further transport communication
@@ -1553,7 +1642,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 });
-require.register("engine.io/lib/transport.js", function(exports, require, module){
+require.register("socketcluster/lib/transport.js", function(exports, require, module){
 
 /**
  * Module dependencies.
@@ -1585,10 +1674,11 @@ function Transport (opts) {
   this.timestampParam = opts.timestampParam;
   this.timestampRequests = opts.timestampRequests;
   this.readyState = '';
+  this.agent = opts.agent || false;
 };
 
 /**
-  * Mix in `Emitter`.
+ * Mix in `Emitter`.
  */
 
 Emitter(Transport.prototype);
@@ -1697,7 +1787,7 @@ Transport.prototype.onClose = function () {
 };
 
 });
-require.register("engine.io/lib/emitter.js", function(exports, require, module){
+require.register("socketcluster/lib/emitter.js", function(exports, require, module){
 
 /**
  * Module dependencies.
@@ -1736,7 +1826,7 @@ Emitter.prototype.removeEventListener = Emitter.prototype.off;
 Emitter.prototype.removeListener = Emitter.prototype.off;
 
 });
-require.register("engine.io/lib/json.js", function(exports, require, module){
+require.register("socketcluster/lib/json.js", function(exports, require, module){
 /**
  * socket.io
  * Copyright(c) 2011 LearnBoost <dev@learnboost.com>
@@ -2059,22 +2149,15 @@ require.register("engine.io/lib/json.js", function(exports, require, module){
   , typeof JSON !== 'undefined' ? JSON : undefined
 );
 });
-require.register("engine.io/lib/util.js", function(exports, require, module){
+require.register("socketcluster/lib/util.js", function(exports, require, module){
+
+var global = require('global');
+
 /**
  * Status of page load.
  */
 
 var pageLoaded = false;
-
-/**
- * Returns the global object
- *
- * @api private
- */
-
-exports.global = function () {
-  return 'undefined' != typeof window ? window : global;
-};
 
 /**
  * Inheritance.
@@ -2128,7 +2211,6 @@ exports.on = function (element, event, fn, capture) {
  */
 
 exports.load = function (fn) {
-  var global = exports.global();
   if (global.document && document.readyState === 'complete' || pageLoaded) {
     return fn();
   }
@@ -2178,8 +2260,6 @@ var rtrimLeft = /^\s+/;
 var rtrimRight = /\s+$/;
 
 exports.parseJSON = function (data) {
-  var global = exports.global();
-
   if ('string' != typeof data || !data) {
     return null;
   }
@@ -2212,16 +2292,7 @@ exports.ua = {};
  * @api private
  */
 
-exports.ua.hasCORS = 'undefined' != typeof XMLHttpRequest && (function () {
-  var a;
-  try {
-    a = new XMLHttpRequest();
-  } catch (e) {
-    return false;
-  }
-
-  return a.withCredentials != undefined;
-})();
+exports.ua.hasCORS = require('has-cors');
 
 /**
  * Detect webkit.
@@ -2257,16 +2328,23 @@ exports.ua.ios = 'undefined' != typeof navigator &&
 exports.ua.ios6 = exports.ua.ios && /OS 6_/.test(navigator.userAgent);
 
 /**
+ * Detect Chrome Frame.
+ */
+
+exports.ua.chromeframe = Boolean(global.externalHost);
+
+/**
  * XHR request helper.
  *
  * @param {Boolean} whether we need xdomain
+ * @param {Object} opts Optional "options" object
  * @api private
  */
 
-exports.request = function request (xdomain) {
+exports.request = function request (xdomain, opts) {
   try {
-    var _XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest;
-    return new _XMLHttpRequest();
+    var _XMLHttpRequest = require('xmlhttprequest');
+    return new _XMLHttpRequest(opts);
   } catch (e) {}
 
   if (xdomain && 'undefined' != typeof XDomainRequest && !exports.ua.hasCORS) {
@@ -2351,7 +2429,7 @@ exports.qsParse = function(qs){
 };
 
 });
-require.register("engine.io/lib/transports/index.js", function(exports, require, module){
+require.register("socketcluster/lib/transports/index.js", function(exports, require, module){
 
 /**
  * Module dependencies
@@ -2375,7 +2453,7 @@ exports.flashsocket = flashsocket;
  * Global reference.
  */
 
-var global = util.global()
+var global = require('global');
 
 /**
  * Polling transport polymorphic constructor.
@@ -2402,7 +2480,7 @@ function polling (opts) {
     isXProtocol = opts.secure != isSSL;
   }
 
-  xhr = util.request(xd);
+  xhr = util.request(xd, opts);
   /* See #7 at http://blogs.msdn.com/b/ieinternals/archive/2010/05/13/xdomainrequest-restrictions-limitations-and-workarounds.aspx */
   if (isXProtocol && global.XDomainRequest && xhr instanceof global.XDomainRequest) {
     return new JSONP(opts);
@@ -2416,7 +2494,7 @@ function polling (opts) {
 };
 
 });
-require.register("engine.io/lib/transports/polling.js", function(exports, require, module){
+require.register("socketcluster/lib/transports/polling.js", function(exports, require, module){
 /**
  * Module dependencies.
  */
@@ -2436,7 +2514,7 @@ module.exports = Polling;
  * Global reference.
  */
 
-var global = util.global();
+var global = require('global');
 
 /**
  * Polling interface.
@@ -2624,7 +2702,7 @@ Polling.prototype.uri = function(){
   var port = '';
 
   // cache busting is forced for IE / android / iOS6 ಠ_ಠ
-  if (global.ActiveXObject || util.ua.android || util.ua.ios6 ||
+  if (global.ActiveXObject || util.ua.chromeframe || util.ua.android || util.ua.ios6 ||
       this.timestampRequests) {
     query[this.timestampParam] = +new Date;
   }
@@ -2646,7 +2724,7 @@ Polling.prototype.uri = function(){
 };
 
 });
-require.register("engine.io/lib/transports/polling-xhr.js", function(exports, require, module){
+require.register("socketcluster/lib/transports/polling-xhr.js", function(exports, require, module){
 /**
  * Module requirements.
  */
@@ -2667,8 +2745,7 @@ module.exports.Request = Request;
  * Global reference.
  */
 
-var global = util.global();
-
+var global = require('global');
 
 /**
  * Obfuscated key for Blue Coat.
@@ -2736,6 +2813,7 @@ XHR.prototype.request = function(opts){
   opts = opts || {};
   opts.uri = this.uri();
   opts.xd = this.xd;
+  opts.agent = this.agent || false;
   return new Request(opts);
 };
 
@@ -2789,6 +2867,7 @@ function Request(opts){
   this.xd = !!opts.xd;
   this.async = false !== opts.async;
   this.data = undefined != opts.data ? opts.data : null;
+  this.agent = opts.agent;
   this.create();
 }
 
@@ -2805,7 +2884,7 @@ Emitter(Request.prototype);
  */
 
 Request.prototype.create = function(){
-  var xhr = this.xhr = util.request(this.xd);
+  var xhr = this.xhr = util.request(this.xd, { agent: this.agent });
   var self = this;
 
   xhr.open(this.method, this.uri, this.async);
@@ -2949,7 +3028,7 @@ if (xobject) {
 }
 
 });
-require.register("engine.io/lib/transports/polling-jsonp.js", function(exports, require, module){
+require.register("socketcluster/lib/transports/polling-jsonp.js", function(exports, require, module){
 
 /**
  * Module requirements.
@@ -2968,7 +3047,7 @@ module.exports = JSONPPolling;
  * Global reference.
  */
 
-var global = util.global();
+var global = require('global');
 
 /**
  * Cached regular expressions.
@@ -3184,12 +3263,13 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 });
-require.register("engine.io/lib/transports/websocket.js", function(exports, require, module){
+require.register("socketcluster/lib/transports/websocket.js", function(exports, require, module){
 /**
  * Module dependencies.
  */
 
 var Transport = require('../transport')
+  , WebSocket = require('ws')
   , parser = require('engine.io-parser')
   , util = require('../util')
   , debug = require('debug')('engine.io-client:websocket');
@@ -3204,7 +3284,7 @@ module.exports = WS;
  * Global reference.
  */
 
-var global = util.global();
+var global = require('global');
 
 /**
  * WebSocket transport constructor.
@@ -3244,8 +3324,11 @@ WS.prototype.doOpen = function(){
   }
 
   var self = this;
+  var uri = this.uri();
+  var protocols = void(0);
+  var opts = { agent: this.agent };
 
-  this.socket = new (ws())(this.uri());
+  this.socket = new WebSocket(uri, protocols, opts);
   this.socket.onopen = function(){
     self.onOpen();
   };
@@ -3296,19 +3379,9 @@ WS.prototype.write = function(packets){
     self.writable = true;
     self.emit('drain');
   }
-  // check periodically if we're done sending
-  if ('bufferedAmount' in this.socket) {
-    this.bufferedAmountId = setInterval(function() {
-      if (self.socket.bufferedAmount == 0) {
-        clearInterval(self.bufferedAmountId);
-        ondrain();
-      }
-    }, 50);
-  } else {
-    // fake drain
-    // defer to next tick to allow Socket to clear writeBuffer
-    setTimeout(ondrain, 0);
-  }
+  // fake drain
+  // defer to next tick to allow Socket to clear writeBuffer
+  setTimeout(ondrain, 0);
 };
 
 /**
@@ -3318,8 +3391,6 @@ WS.prototype.write = function(packets){
  */
 
 WS.prototype.onClose = function(){
-  // stop checking to see if websocket is done sending buffer
-  clearInterval(this.bufferedAmountId);
   Transport.prototype.onClose.call(this);
 };
 
@@ -3375,26 +3446,11 @@ WS.prototype.uri = function(){
  */
 
 WS.prototype.check = function(){
-  var websocket = ws();
-  return !!websocket && !('__initialize' in websocket && this.name === WS.prototype.name);
+  return !!WebSocket && !('__initialize' in WebSocket && this.name === WS.prototype.name);
 };
 
-/**
- * Getter for WS constructor.
- *
- * @api private
- */
-
-function ws(){
-  if ('undefined' == typeof window) {
-    return require('ws');
-  }
-
-  return global.WebSocket || global.MozWebSocket;
-}
-
 });
-require.register("engine.io/lib/transports/flashsocket.js", function(exports, require, module){
+require.register("socketcluster/lib/transports/flashsocket.js", function(exports, require, module){
 /**
  * Module dependencies.
  */
@@ -3413,7 +3469,7 @@ module.exports = FlashWS;
  * Global reference.
  */
 
-var global = util.global()
+var global = require('global');
 
 /**
  * Obfuscated key for Blue Coat.
@@ -3656,28 +3712,48 @@ function load (arr, fn) {
 };
 
 });
-require.alias("component-emitter/index.js", "engine.io/deps/emitter/index.js");
-require.alias("component-emitter/index.js", "emitter/index.js");
 
-require.alias("component-indexof/index.js", "engine.io/deps/indexof/index.js");
+
+
+
+
+
+
+require.alias("component-emitter/index.js", "socketcluster/deps/emitter/index.js");
+require.alias("component-emitter/index.js", "emitter/index.js");
+require.alias("component-indexof/index.js", "component-emitter/deps/indexof/index.js");
+
+require.alias("component-indexof/index.js", "socketcluster/deps/indexof/index.js");
 require.alias("component-indexof/index.js", "indexof/index.js");
 
-require.alias("LearnBoost-engine.io-protocol/lib/index.js", "engine.io/deps/engine.io-parser/lib/index.js");
-require.alias("LearnBoost-engine.io-protocol/lib/keys.js", "engine.io/deps/engine.io-parser/lib/keys.js");
-require.alias("LearnBoost-engine.io-protocol/lib/index.js", "engine.io/deps/engine.io-parser/index.js");
+require.alias("component-global/index.js", "socketcluster/deps/global/index.js");
+require.alias("component-global/index.js", "global/index.js");
+
+require.alias("component-has-cors/index.js", "socketcluster/deps/has-cors/index.js");
+require.alias("component-has-cors/index.js", "socketcluster/deps/has-cors/index.js");
+require.alias("component-has-cors/index.js", "has-cors/index.js");
+require.alias("component-global/index.js", "component-has-cors/deps/global/index.js");
+
+require.alias("component-has-cors/index.js", "component-has-cors/index.js");
+require.alias("component-ws/index.js", "socketcluster/deps/ws/index.js");
+require.alias("component-ws/index.js", "socketcluster/deps/ws/index.js");
+require.alias("component-ws/index.js", "ws/index.js");
+require.alias("component-global/index.js", "component-ws/deps/global/index.js");
+
+require.alias("component-ws/index.js", "component-ws/index.js");
+require.alias("LearnBoost-engine.io-protocol/lib/index.js", "socketcluster/deps/engine.io-parser/lib/index.js");
+require.alias("LearnBoost-engine.io-protocol/lib/keys.js", "socketcluster/deps/engine.io-parser/lib/keys.js");
+require.alias("LearnBoost-engine.io-protocol/lib/index.js", "socketcluster/deps/engine.io-parser/index.js");
 require.alias("LearnBoost-engine.io-protocol/lib/index.js", "engine.io-parser/index.js");
 require.alias("LearnBoost-engine.io-protocol/lib/index.js", "LearnBoost-engine.io-protocol/index.js");
-
-require.alias("visionmedia-debug/index.js", "engine.io/deps/debug/index.js");
-require.alias("visionmedia-debug/debug.js", "engine.io/deps/debug/debug.js");
+require.alias("visionmedia-debug/index.js", "socketcluster/deps/debug/index.js");
+require.alias("visionmedia-debug/debug.js", "socketcluster/deps/debug/debug.js");
 require.alias("visionmedia-debug/index.js", "debug/index.js");
 
-require.alias("engine.io/lib/index.js", "engine.io/index.js");
-
-if (typeof exports == "object") {
-  module.exports = require("engine.io");
+require.alias("socketcluster/lib/index.js", "socketcluster/index.js");if (typeof exports == "object") {
+  module.exports = require("socketcluster");
 } else if (typeof define == "function" && define.amd) {
-  define(function(){ return require("engine.io"); });
+  define(function(){ return require("socketcluster"); });
 } else {
-  this["socketCluster"] = require("engine.io");
+  this["socketCluster"] = require("socketcluster");
 }})();
