@@ -2472,7 +2472,7 @@ function polling (opts) {
     var port = location.port;
 
     // some user agents have empty `location.port`
-    if (Number(port) !== port) {
+    if (!port) {
       port = isSSL ? 443 : 80;
     }
 
@@ -2774,7 +2774,7 @@ function XHR(opts){
     var port = location.port;
 
     // some user agents have empty `location.port`
-    if (Number(port) !== port) {
+    if (!port) {
       port = isSSL ? 443 : 80;
     }
 
