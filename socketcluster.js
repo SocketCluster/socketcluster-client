@@ -885,6 +885,8 @@ var ClusterSocket = function (options, namespace) {
 	Socket.call(this, options);
 	
 	this._localEvents = {
+		'connect': 1,
+		'disconnect': 1,
 		'upgrading': 1,
 		'upgrade': 1,
 		'open': 1,
@@ -903,23 +905,47 @@ var ClusterSocket = function (options, namespace) {
 	this.options = options;
 	this.namespace = namespace || '__';
 	this.connected = false;
+	this.connecting = true;
 	
 	this._cid = 1;
 	this._callbackMap = {};
 	this._destId = null;
+	this._emitBuffer = [];
+	
+	Socket.prototype.on.call(this, 'error', function () {
+		self.connecting = false;
+		self._emitBuffer = [];
+	});
+	
+	Socket.prototype.on.call(this, 'close', function () {
+		self.connected = false;
+		self.connecting = false;
+		self._emitBuffer = [];
+		Emitter.prototype.emit.call(self, 'disconnect');
+	});
 	
 	Socket.prototype.on.call(this, 'message', function (message) {
 		var e = self.JSON.parse(message);
-		
 		if(e.event) {
 			if (e.event == 'connect') {
 				self.connected = true;
-			} else if (e.event == 'close') {
+				self.connecting = false;
+				var ev;
+				for (var i in self._emitBuffer) {
+					ev = self._emitBuffer[i];
+					self._emit(ev.ns, ev.event, ev.data, ev.callback);
+				}
+				self._emitBuffer = [];
+				Emitter.prototype.emit.call(self, 'connect', e.data);	
+			} else if (e.event == 'disconnect') {
 				self.connected = false;
+				self.connecting = false;
+				Emitter.prototype.emit.call(self, 'disconnect');
+			} else {
+				var eventName = e.ns + '.' + e.event;
+				var response = new Response(self, e.cid);
+				Emitter.prototype.emit.call(self, eventName, e.data, response);
 			}
-			var eventName = e.ns + '.' + e.event;
-			var response = new Response(self, e.cid);
-			Emitter.prototype.emit.call(self, eventName, e.data, response);
 		} else if (e.cid != null) {
 			var ret = self._callbackMap[e.cid];
 			if (ret) {
@@ -937,6 +963,12 @@ ClusterSocket.prototype.ns = function (namespace) {
 	return new NS(namespace, this);
 };
 
+ClusterSocket.prototype.connect = ClusterSocket.prototype.open = function () {
+	this.connected = false;
+	this.connecting = true;
+	Socket.prototype.open.apply(this, arguments);
+};
+
 ClusterSocket.prototype._nextCallId = function () {
 	return this.namespace + '-' + this._cid++;
 };
@@ -945,28 +977,39 @@ ClusterSocket.prototype.createTransport = function () {
 	return Socket.prototype.createTransport.apply(this, arguments);
 };
 
+ClusterSocket.prototype._emit = function (ns, event, data, callback) {
+	var eventObject = {
+		ns: ns,
+		event: event
+	};
+	if (data !== undefined) {
+		eventObject.data = data;
+	}
+	if (callback) {
+		var self = this;
+		var cid = this._nextCallId();
+		eventObject.cid = cid;
+		
+		var timeout = setTimeout(function () {
+			delete self._callbackMap[cid];
+			callback('Event response timed out', eventObject);
+		}, this.pingTimeout);
+		
+		this._callbackMap[cid] = {callback: callback, timeout: timeout};
+	}
+	Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
+};
+
 ClusterSocket.prototype.emit = function (event, data, callback) {
 	if (this._localEvents[event] == null) {
-		var eventObject = {
-			ns: this.namespace,
-			event: event
-		};
-		if (data !== undefined) {
-			eventObject.data = data;
+		if (this.connected) {
+			this._emit(this.namespace, event, data, callback);
+		} else {
+			this._emitBuffer.push({ns: this.namespace, event: event, data: data, callback: callback});
+			if (!this.connecting) {
+				this.connect();
+			}
 		}
-		if (callback) {
-			var self = this;
-			var cid = this._nextCallId();
-			eventObject.cid = cid;
-			
-			var timeout = setTimeout(function () {
-				delete self._callbackMap[cid];
-				callback('Event response timed out', eventObject);
-			}, this.pingTimeout);
-			
-			this._callbackMap[cid] = {callback: callback, timeout: timeout};
-		}
-		Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
 	} else {
 		Emitter.prototype.emit.call(this, event, data);
 	}
