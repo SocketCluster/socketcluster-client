@@ -877,6 +877,67 @@ Response.prototype.error = function (error, data) {
 	}
 };
 
+var isBrowser = typeof window != 'undefined';
+
+if (isBrowser) {
+	var ActivityManager = function () {
+		var self = this;
+		
+		this._interval = null;
+		this._intervalDuration = 1000;
+		this._counter = 0;
+		
+		if (window.addEventListener) {
+			window.addEventListener('blur', function () {
+				self._triggerBlur();
+			});
+			window.addEventListener('focus', function () {
+				self._triggerFocus();
+			});
+		} else if (window.attachEvent) {
+			window.attachEvent('onblur', function () {
+				self._triggerBlur();
+			});
+			window.attachEvent('onfocus', function () {
+				self._triggerFocus();
+			});
+		} else {
+			throw new Error('The browser does not support proper event handling');
+		}
+	};
+
+	ActivityManager.prototype = Object.create(Emitter.prototype);
+
+	ActivityManager.prototype._triggerBlur = function () {		
+		var self = this;
+		
+		var now = (new Date()).getTime();
+		this._counter = now;
+		
+		// If interval skips 2 turns, then client is sleeping
+		this._interval = setInterval(function () {
+			var newCount = (new Date()).getTime();
+			if (newCount - self._counter < self._intervalDuration * 3) {
+				self._counter = newCount;
+			}
+		}, this._intervalDuration);
+		
+		this.emit('deactivate');
+	};
+
+	ActivityManager.prototype._triggerFocus = function () {
+		clearInterval(this._interval);
+		var now = (new Date()).getTime();
+		if (now - this._counter >= this._intervalDuration * 3) {
+			this.emit('wakeup');
+		}
+		
+		this.emit('activate');
+	};
+
+	var activityManager = new ActivityManager();
+}
+
 var ClusterSocket = function (options, namespace) {
 	var self = this;
 	
@@ -955,6 +1016,13 @@ var ClusterSocket = function (options, namespace) {
 			}
 		}
 	});
+	
+	if (isBrowser) {
+		activityManager.on('wakeup', function () {
+			self.close();
+			self.connect();
+		});
+	}
 };
 
 ClusterSocket.prototype = Object.create(Socket.prototype);
