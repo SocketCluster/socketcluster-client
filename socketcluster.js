@@ -820,7 +820,7 @@ var Socket = require('./socket');
 /**
  * Module exports.
  */
- 
+
 if (!Object.create) {
 	Object.create = (function () {
 		function F() {};
@@ -885,7 +885,7 @@ if (isBrowser) {
 		
 		this._interval = null;
 		this._intervalDuration = 1000;
-		this._counter = 0;
+		this._counter = null;
 		
 		if (window.addEventListener) {
 			window.addEventListener('blur', function () {
@@ -908,7 +908,7 @@ if (isBrowser) {
 
 	ActivityManager.prototype = Object.create(Emitter.prototype);
 
-	ActivityManager.prototype._triggerBlur = function () {		
+	ActivityManager.prototype._triggerBlur = function () {
 		var self = this;
 		
 		var now = (new Date()).getTime();
@@ -928,7 +928,7 @@ if (isBrowser) {
 	ActivityManager.prototype._triggerFocus = function () {
 		clearInterval(this._interval);
 		var now = (new Date()).getTime();
-		if (now - this._counter >= this._intervalDuration * 3) {
+		if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
 			this.emit('wakeup');
 		}
 		
@@ -973,9 +973,10 @@ var ClusterSocket = function (options, namespace) {
 	this._destId = null;
 	this._emitBuffer = [];
 	
-	Socket.prototype.on.call(this, 'error', function () {
+	Socket.prototype.on.call(this, 'error', function (err) {
 		self.connecting = false;
 		self._emitBuffer = [];
+		Emitter.prototype.emit.call(self, 'error', err);
 	});
 	
 	Socket.prototype.on.call(this, 'close', function () {
@@ -1180,7 +1181,7 @@ var global = require('global');
  * @api private
  */
 
-function noop () {};
+function noop(){}
 
 /**
  * Socket constructor.
@@ -1195,7 +1196,7 @@ function Socket(uri, opts){
 
   opts = opts || {};
 
-  if ('object' == typeof uri) {
+  if (uri && 'object' == typeof uri) {
     opts = uri;
     uri = null;
   }
@@ -1229,7 +1230,7 @@ function Socket(uri, opts){
   this.path = (opts.path || '/engine.io').replace(/\/$/, '') + '/';
   this.forceJSONP = !!opts.forceJSONP;
   this.timestampParam = opts.timestampParam || 't';
-  this.timestampRequests = !!opts.timestampRequests;
+  this.timestampRequests = opts.timestampRequests;
   this.flashPath = opts.flashPath || '';
   this.transports = opts.transports || ['polling', 'websocket', 'flashsocket'];
   this.readyState = '';
@@ -1240,7 +1241,7 @@ function Socket(uri, opts){
 
   Socket.sockets.push(this);
   Socket.sockets.evs.emit('add', this);
-};
+}
 
 /**
  * Mix in `Emitter`.
@@ -1330,8 +1331,9 @@ function clone (obj) {
  */
 
 Socket.prototype.open = function () {
+  var transport = this.transports[0];
   this.readyState = 'opening';
-  var transport = this.createTransport(this.transports[0]);
+  var transport = this.createTransport(transport);
   transport.open();
   this.setTransport(transport);
 };
@@ -1342,11 +1344,12 @@ Socket.prototype.open = function () {
  * @api private
  */
 
-Socket.prototype.setTransport = function (transport) {
+Socket.prototype.setTransport = function(transport){
+  debug('setting transport %s', transport.name);
   var self = this;
 
   if (this.transport) {
-    debug('clearing existing transport');
+    debug('clearing existing transport %s', this.transport.name);
     this.transport.removeAllListeners();
   }
 
@@ -1355,18 +1358,18 @@ Socket.prototype.setTransport = function (transport) {
 
   // set up transport listeners
   transport
-    .on('drain', function () {
-      self.onDrain();
-    })
-    .on('packet', function (packet) {
-      self.onPacket(packet);
-    })
-    .on('error', function (e) {
-      self.onError(e);
-    })
-    .on('close', function () {
-      self.onClose('transport close');
-    });
+  .on('drain', function(){
+    self.onDrain();
+  })
+  .on('packet', function(packet){
+    self.onPacket(packet);
+  })
+  .on('error', function(e){
+    self.onError(e);
+  })
+  .on('close', function(){
+    self.onClose('transport close');
+  });
 };
 
 /**
@@ -1413,7 +1416,7 @@ Socket.prototype.probe = function (name) {
         debug('probe transport "%s" failed', name);
         var err = new Error('probe error');
         err.transport = transport.name;
-        self.emit('error', err);
+        self.emit('upgradeError', err);
       }
     });
   });
@@ -1433,8 +1436,8 @@ Socket.prototype.probe = function (name) {
 
     debug('probe transport "%s" failed because of error: %s', name, err);
 
-    self.emit('error', error);
-  };
+    self.emit('upgradeError', error);
+  }
 
   transport.open();
 
@@ -1786,7 +1789,7 @@ function Transport (opts) {
   this.timestampRequests = opts.timestampRequests;
   this.readyState = '';
   this.agent = opts.agent || false;
-};
+}
 
 /**
  * Mix in `Emitter`.
@@ -2453,14 +2456,13 @@ exports.ua.chromeframe = Boolean(global.externalHost);
  */
 
 exports.request = function request (xdomain, opts) {
+  opts = opts || {};
+  opts.xdomain = xdomain;
+
   try {
     var _XMLHttpRequest = require('xmlhttprequest');
     return new _XMLHttpRequest(opts);
   } catch (e) {}
-
-  if (xdomain && 'undefined' != typeof XDomainRequest && !exports.ua.hasCORS) {
-    return new XDomainRequest();
-  }
 
   // XMLHttpRequest can be disabled on IE
   try {
@@ -2575,8 +2577,7 @@ var global = require('global');
 
 function polling (opts) {
   var xhr
-    , xd = false
-    , isXProtocol = false;
+    , xd = false;
 
   if (global.location) {
     var isSSL = 'https:' == location.protocol;
@@ -2588,14 +2589,9 @@ function polling (opts) {
     }
 
     xd = opts.hostname != location.hostname || port != opts.port;
-    isXProtocol = opts.secure != isSSL;
   }
 
   xhr = util.request(xd, opts);
-  /* See #7 at http://blogs.msdn.com/b/ieinternals/archive/2010/05/13/xdomainrequest-restrictions-limitations-and-workarounds.aspx */
-  if (isXProtocol && global.XDomainRequest && xhr instanceof global.XDomainRequest) {
-    return new JSONP(opts);
-  }
 
   if (xhr && !opts.forceJSONP) {
     return new XHR(opts);
@@ -2813,9 +2809,14 @@ Polling.prototype.uri = function(){
   var port = '';
 
   // cache busting is forced for IE / android / iOS6 ಠ_ಠ
-  if (global.ActiveXObject || util.ua.chromeframe || util.ua.android || util.ua.ios6 ||
-      this.timestampRequests) {
-    query[this.timestampParam] = +new Date;
+  if ('ActiveXObject' in global
+    || util.ua.chromeframe
+    || util.ua.android
+    || util.ua.ios6
+    || this.timestampRequests) {
+    if (false !== this.timestampRequests) {
+      query[this.timestampParam] = +new Date;
+    }
   }
 
   query = util.qs(query);
@@ -2892,7 +2893,7 @@ function XHR(opts){
     this.xd = opts.hostname != global.location.hostname ||
       port != opts.port;
   }
-};
+}
 
 /**
  * Inherits from Polling.
@@ -2998,29 +2999,16 @@ Request.prototype.create = function(){
   var xhr = this.xhr = util.request(this.xd, { agent: this.agent });
   var self = this;
 
-  xhr.open(this.method, this.uri, this.async);
+  try {
+    debug('xhr open %s: %s', this.method, this.uri);
+    xhr.open(this.method, this.uri, this.async);
 
-  if ('POST' == this.method) {
-    try {
-      if (xhr.setRequestHeader) {
-        // xmlhttprequest
+    if ('POST' == this.method) {
+      try {
         xhr.setRequestHeader('Content-type', 'text/plain;charset=UTF-8');
-      } else {
-        // xdomainrequest
-        xhr.contentType = 'text/plain';
-      }
-    } catch (e) {}
-  }
+      } catch (e) {}
+    }
 
-  if (this.xd && global.XDomainRequest && xhr instanceof XDomainRequest) {
-    xhr.onerror = function(e){
-      self.onError(e);
-    };
-    xhr.onload = function(){
-      self.onData(xhr.responseText);
-    };
-    xhr.onprogress = empty;
-  } else {
     // ie6 check
     if ('withCredentials' in xhr) {
       xhr.withCredentials = true;
@@ -3040,14 +3028,22 @@ Request.prototype.create = function(){
         self.onError(e);
       }
 
-      if (undefined !== data) {
+      if (null != data) {
         self.onData(data);
       }
     };
-  }
 
-  debug('sending xhr with url %s | data %s', this.uri, this.data);
-  xhr.send(this.data);
+    debug('xhr data %s', this.data);
+    xhr.send(this.data);
+  } catch (e) {
+    // Need to defer since .create() is called directly from the constructor
+    // and thus the 'error' event can only be only bound *after* this exception
+    // occurs.  Therefore, also, we cannot throw here at all.
+    setTimeout(function() {
+      self.onError(e);
+    }, 0);
+    return;
+  }
 
   if (xobject) {
     this.index = Request.requestsCount++;
@@ -3100,9 +3096,6 @@ Request.prototype.cleanup = function(){
   }
   // xmlhttprequest
   this.xhr.onreadystatechange = empty;
-
-  // xdomainrequest
-  this.xhr.onload = this.xhr.onerror = empty;
 
   try {
     this.xhr.abort();
@@ -3440,6 +3433,18 @@ WS.prototype.doOpen = function(){
   var opts = { agent: this.agent };
 
   this.socket = new WebSocket(uri, protocols, opts);
+  this.addEventListeners();
+};
+
+/**
+ * Adds event listeners to the socket
+ *
+ * @api private
+ */
+
+WS.prototype.addEventListeners = function() {
+  var self = this;
+
   this.socket.onopen = function(){
     self.onOpen();
   };
@@ -3654,7 +3659,8 @@ FlashWS.prototype.doOpen = function () {
   load(deps, function () {
     self.ready(function () {
       WebSocket.__addTask(function () {
-        WS.prototype.doOpen.call(self);
+        self.socket = new WebSocket(self.uri());
+        self.addEventListeners();
       });
     });
   });
@@ -3708,7 +3714,7 @@ FlashWS.prototype.ready = function (fn) {
     // actually supports it
     if (!FlashWS.loaded) {
       if (843 != self.policyPort) {
-        WebSocket.loadFlashPolicyFile('xmlsocket://' + self.host + ':' + self.policyPort);
+        WebSocket.loadFlashPolicyFile('xmlsocket://' + self.hostname + ':' + self.policyPort);
       }
 
       WebSocket.__initialize();
