@@ -1,6 +1,6 @@
 {
   "name": "socketcluster",
-  "version": "0.9.1",
+  "version": "0.9.6",
   "dependencies": {
     "component/emitter": "1.0.1",
     "component/indexof": "*",
