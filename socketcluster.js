@@ -945,6 +945,8 @@ var ClusterSocket = function (options, namespace) {
 	
 	Socket.call(this, options);
 	
+	this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
+	
 	this._localEvents = {
 		'connect': 1,
 		'disconnect': 1,
@@ -1014,6 +1016,7 @@ var ClusterSocket = function (options, namespace) {
 					self._emit(ev.ns, ev.event, ev.data, ev.callback);
 				}
 				self._emitBuffer = [];
+				self.ssid = self._setSessionCookie(self.id);
 				Emitter.prototype.emit.call(self, 'connect', e.data);	
 			} else if (e.event == 'disconnect') {
 				self.connected = false;
@@ -1043,6 +1046,46 @@ var ClusterSocket = function (options, namespace) {
 };
 
 ClusterSocket.prototype = Object.create(Socket.prototype);
+
+ClusterSocket.prototype._setCookie = function (name, value, expirySeconds) {
+	var exdate = null;
+	if (expirySeconds) {
+		exdate = new Date();
+		exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
+	}
+	var value = escape(value) + '; path=/;' + ((exdate == null) ? '' : ' expires=' + exdate.toUTCString() + ';');
+	document.cookie = name + '=' + value;
+};
+
+ClusterSocket.prototype._getCookie = function (name) {
+	var i, x, y, ARRcookies = document.cookie.split(';');
+	for (i = 0; i < ARRcookies.length; i++) {
+		x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
+		y = ARRcookies[i].substr(ARRcookies[i].indexOf('=') + 1);
+		x = x.replace(/^\s+|\s+$/g, '');
+		if (x == name) {
+			return unescape(y);
+		}
+	}
+};
+
+ClusterSocket.prototype._setSessionCookie = function (socketId) {
+	var sessionSegments = socketId.match(this._sessionDestRegex);
+	var soidDest = sessionSegments ? sessionSegments[0] : null;
+	var sessionCookieName = 'n/' + sessionSegments[1] + '/' + sessionSegments[3] + '/ssid';
+	
+	var ssid = this._getCookie(sessionCookieName);
+	var ssidDest = null;
+	if (ssid) {
+		ssidDest = ssid.match(this._sessionDestRegex);
+		ssidDest = ssidDest ? ssidDest[0] : null;
+	}
+	if (!ssid || soidDest != ssidDest) {
+		ssid = socketId;
+		this._setCookie(sessionCookieName, ssid);
+	}
+	return ssid;
+};
 
 ClusterSocket.prototype.ns = function (namespace) {
 	return new NS(namespace, this);
