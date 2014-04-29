@@ -24,7 +24,7 @@ component build -s socketCluster -n socketcluster -o .
 Embed in your HTML page using (Note that the src attribute may be different depending on how you setup your HTTP server):
 
 ```html
-<script type="text/javascript" src="/socketcluster.js"></script>;
+<script type="text/javascript" src="/socketcluster.js"></script>
 ```
 
 Once you have embedded the client socketcluster.js into your page, you will gain access to a global socketCluster object.
