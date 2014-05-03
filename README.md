@@ -16,7 +16,7 @@ SocketCluster Client was created using component (client package manager).
 To build it (outputs to socketcluster.js), use:
 
 ```
-component build -s socketCluster -n socketcluster -o .
+browserify -s socketCluster index.js > socketcluster.js
 ```
 
 ## How to use

@@ -2,9 +2,8 @@
  * Module dependencies.
  */
 
-var util = require('./util');
-var Emitter = require('./emitter');
-var Socket = require('./socket');
+var Emitter = require('emitter');
+var Socket = require('engine.io-client');
 
 /**
  * Module exports.
@@ -131,6 +130,7 @@ var ClusterSocket = function (options, namespace) {
 	var self = this;
 	
 	options = options || {};
+	options.forceBase64 = true;
 	
 	Socket.call(this, options);
 	
