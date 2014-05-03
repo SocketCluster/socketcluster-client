@@ -12,8 +12,7 @@ npm install socketcluster-client
 The socketcluster-client script is called socketcluster.js (located in the main socketcluster-client directory) 
 - You should include it in your HTML page using a &lt;script&gt; tag in order to interact with SocketCluster.
 
-SocketCluster Client was created using component (client package manager).
-To build it (outputs to socketcluster.js), use:
+To build SocketCluster Client with browserify, use:
 
 ```
 browserify -s socketCluster index.js > socketcluster.js
