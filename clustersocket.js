@@ -141,6 +141,7 @@ var ClusterSocket = function (options, namespace) {
 		'disconnect': 1,
 		'upgrading': 1,
 		'upgrade': 1,
+		'upgradeError': 1,
 		'open': 1,
 		'error': 1,
 		'packet': 1,
@@ -151,7 +152,8 @@ var ClusterSocket = function (options, namespace) {
 		'drain': 1,
 		'flush': 1,
 		'packetCreate': 1,
-		'close': 1
+		'close': 1,
+		'fail': 1
 	};
 	
 	if (options.autoReconnect && options.autoReconnectOptions == null) {
@@ -211,6 +213,10 @@ var ClusterSocket = function (options, namespace) {
 				self.connected = false;
 				self.connecting = false;
 				Emitter.prototype.emit.call(self, 'disconnect');
+			} else if (e.event == 'fail') {
+				self.connected = false;
+				self.connecting = false;
+				Emitter.prototype.emit.call(self, 'fail', e.data);
 			} else {
 				var eventName = e.ns + '.' + e.event;
 				var response = new Response(self, e.cid);
