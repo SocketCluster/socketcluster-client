@@ -133,7 +133,11 @@ var ClusterSocket = function (options, namespace) {
 	options = options || {};
 	options.forceBase64 = true;
 	
-	Socket.call(this, options);
+	if (options.url == null) {
+		Socket.call(this, options);
+	} else {
+		Socket.call(this, options.url, options);
+	}
 	
 	this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
 	
