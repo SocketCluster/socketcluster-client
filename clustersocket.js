@@ -211,7 +211,11 @@ var ClusterSocket = function (options, namespace) {
 					self._emit(ev.ns, ev.event, ev.data, ev.callback);
 				}
 				self._emitBuffer = [];
-				self.ssid = self._setSessionCookie(e.data.appName, self.id);
+				if (isBrowser) {
+					self.ssid = self._setSessionCookie(e.data.appName, self.id);
+				} else {
+					self.ssid = self.id;
+				}
 				Emitter.prototype.emit.call(self, 'connect', e.data.soid);	
 			} else if (e.event == 'disconnect') {
 				self.connected = false;
