@@ -5,5 +5,5 @@ module.exports.JSON = ClusterSocket.JSON;
 module.exports.Emitter = require('emitter');
 
 module.exports.connect = function (options) {
-	return new ClusterSocket(options);
+  return new ClusterSocket(options);
 };
