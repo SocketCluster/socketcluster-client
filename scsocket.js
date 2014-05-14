@@ -126,7 +126,7 @@ if (isBrowser) {
 	var activityManager = new ActivityManager();
 }
 
-var ClusterSocket = function (options, namespace) {
+var SCSocket = function (options, namespace) {
 	var self = this;
 	
 	options = options || {};
@@ -248,9 +248,9 @@ var ClusterSocket = function (options, namespace) {
 	}
 };
 
-ClusterSocket.prototype = Object.create(Socket.prototype);
+SCSocket.prototype = Object.create(Socket.prototype);
 
-ClusterSocket.prototype._setCookie = function (name, value, expirySeconds) {
+SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
 	var exdate = null;
 	if (expirySeconds) {
 		exdate = new Date();
@@ -260,7 +260,7 @@ ClusterSocket.prototype._setCookie = function (name, value, expirySeconds) {
 	document.cookie = name + '=' + value;
 };
 
-ClusterSocket.prototype._getCookie = function (name) {
+SCSocket.prototype._getCookie = function (name) {
 	var i, x, y, ARRcookies = document.cookie.split(';');
 	for (i = 0; i < ARRcookies.length; i++) {
 		x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
@@ -272,7 +272,7 @@ ClusterSocket.prototype._getCookie = function (name) {
 	}
 };
 
-ClusterSocket.prototype._setSessionCookie = function (appName, socketId) {
+SCSocket.prototype._setSessionCookie = function (appName, socketId) {
 	var sessionSegments = socketId.match(this._sessionDestRegex);
 	var soidDest = sessionSegments ? sessionSegments[0] : null;
 	var sessionCookieName = 'n/' + appName + '/ssid';
@@ -290,11 +290,11 @@ ClusterSocket.prototype._setSessionCookie = function (appName, socketId) {
 	return ssid;
 };
 
-ClusterSocket.prototype.ns = function (namespace) {
+SCSocket.prototype.ns = function (namespace) {
 	return new NS(namespace, this);
 };
 
-ClusterSocket.prototype.connect = ClusterSocket.prototype.open = function () {
+SCSocket.prototype.connect = SCSocket.prototype.open = function () {
 	if (!this.connected && !this.connecting) {
 		this.connected = false;
 		this.connecting = true;
@@ -302,15 +302,15 @@ ClusterSocket.prototype.connect = ClusterSocket.prototype.open = function () {
 	}
 };
 
-ClusterSocket.prototype._nextCallId = function () {
+SCSocket.prototype._nextCallId = function () {
 	return this.namespace + '-' + this._cid++;
 };
 
-ClusterSocket.prototype.createTransport = function () {
+SCSocket.prototype.createTransport = function () {
 	return Socket.prototype.createTransport.apply(this, arguments);
 };
 
-ClusterSocket.prototype._emit = function (ns, event, data, callback) {
+SCSocket.prototype._emit = function (ns, event, data, callback) {
 	var eventObject = {
 		ns: ns,
 		event: event
@@ -333,7 +333,7 @@ ClusterSocket.prototype._emit = function (ns, event, data, callback) {
 	Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
 };
 
-ClusterSocket.prototype.emit = function (event, data, callback) {
+SCSocket.prototype.emit = function (event, data, callback) {
 	if (this._localEvents[event] == null) {
 		if (this.connected) {
 			this._emit(this.namespace, event, data, callback);
@@ -348,7 +348,7 @@ ClusterSocket.prototype.emit = function (event, data, callback) {
 	}
 };
 
-ClusterSocket.prototype.on = function (event, listener) {
+SCSocket.prototype.on = function (event, listener) {
 	if (this._localEvents[event] == null) {
 		var eventName = this.namespace + '.' + event;
 		Emitter.prototype.on.call(this, eventName, listener);
@@ -357,7 +357,7 @@ ClusterSocket.prototype.on = function (event, listener) {
 	}
 };
 
-ClusterSocket.prototype.once = function (event, listener) {
+SCSocket.prototype.once = function (event, listener) {
 	if (this._localEvents[event] == null) {
 		var eventName = this.namespace + '.' + event;
 		Emitter.prototype.once.call(this, eventName, listener);
@@ -366,7 +366,7 @@ ClusterSocket.prototype.once = function (event, listener) {
 	}
 };
 
-ClusterSocket.prototype.removeListener = function (event, listener) {
+SCSocket.prototype.removeListener = function (event, listener) {
 	if (this._localEvents[event] == null) {
 		var eventName = this.namespace + '.' + event;
 		Emitter.prototype.removeListener.call(this, eventName, listener);
@@ -375,19 +375,19 @@ ClusterSocket.prototype.removeListener = function (event, listener) {
 	}
 };
 
-ClusterSocket.prototype.removeAllListeners = function (event) {
+SCSocket.prototype.removeAllListeners = function (event) {
 	if (event) {
 		event = this.namespace + '.' + event;
 	}
 	Emitter.prototype.removeAllListeners.call(this, event);
 };
 
-ClusterSocket.prototype.listeners = function (event) {
+SCSocket.prototype.listeners = function (event) {
 	event = this.namespace + '.' + event;
 	Emitter.prototype.listeners.call(this, event);
 };
 
-ClusterSocket.JSON = ClusterSocket.prototype.JSON = require('./json').JSON;
+SCSocket.JSON = SCSocket.prototype.JSON = require('./json').JSON;
 
 var NS = function (namespace, socket) {
 	var self = this;
@@ -413,4 +413,4 @@ var NS = function (namespace, socket) {
 	};
 };
 
-module.exports = ClusterSocket;
+module.exports = SCSocket;

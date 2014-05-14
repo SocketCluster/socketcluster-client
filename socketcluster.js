@@ -1,431 +1,14 @@
-!function(e){if("object"==typeof exports)module.exports=e();else if("function"==typeof define&&define.amd)define(e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.socketCluster=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
-/**
- * Module dependencies.
- */
-
-var Emitter = _dereq_('emitter');
-var Socket = _dereq_('engine.io-client');
-
-/**
- * Module exports.
- */
-
-if (!Object.create) {
-	Object.create = (function () {
-		function F() {};
-
-		return function (o) {
-			if (arguments.length != 1) {
-				throw new Error('Object.create implementation only accepts one parameter.');
-			}
-			F.prototype = o;
-			return new F();
-		}
-	})();
-}
-
-var Response = function (socket, id) {
-	this.socket = socket;
-	this.id = id;
-};
-
-Response.prototype._respond = function (responseData) {
-	this.socket.send(this.socket.JSON.stringify(responseData));
-};
-
-Response.prototype.end = function (data) {
-	if (this.id) {
-		var responseData = {
-			cid: this.id
-		};
-		if (data !== undefined) {
-			responseData.data = data;
-		}
-		this._respond(responseData);
-	}
-};
-
-Response.prototype.error = function (error, data) {
-	if (this.id) {
-		var err;
-		if(error instanceof Error) {
-			err = {name: error.name, message: error.message, stack: error.stack};			
-		} else {
-			err = error;
-		}
-		
-		var responseData = {
-			cid: this.id,
-			error: err
-		};
-		if (data !== undefined) {
-			responseData.data = data;
-		}
-		
-		this._respond(responseData);
-	}
-};
-
-var isBrowser = typeof window != 'undefined';
-
-if (isBrowser) {
-	var ActivityManager = function () {
-		var self = this;
-		
-		this._interval = null;
-		this._intervalDuration = 1000;
-		this._counter = null;
-		
-		if (window.addEventListener) {
-			window.addEventListener('blur', function () {
-				self._triggerBlur();
-			});
-			window.addEventListener('focus', function () {
-				self._triggerFocus();
-			});
-		} else if (window.attachEvent) {
-			window.attachEvent('onblur', function () {
-				self._triggerBlur();
-			});
-			window.attachEvent('onfocus', function () {
-				self._triggerFocus();
-			});
-		} else {
-			throw new Error('The browser does not support proper event handling');
-		}
-	};
-
-	ActivityManager.prototype = Object.create(Emitter.prototype);
-
-	ActivityManager.prototype._triggerBlur = function () {
-		var self = this;
-		
-		var now = (new Date()).getTime();
-		this._counter = now;
-		
-		// If interval skips 2 turns, then client is sleeping
-		this._interval = setInterval(function () {
-			var newCount = (new Date()).getTime();
-			if (newCount - self._counter < self._intervalDuration * 3) {
-				self._counter = newCount;
-			}
-		}, this._intervalDuration);
-		
-		this.emit('deactivate');
-	};
-
-	ActivityManager.prototype._triggerFocus = function () {
-		clearInterval(this._interval);
-		var now = (new Date()).getTime();
-		if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
-			this.emit('wakeup');
-		}
-		
-		this.emit('activate');
-	};
-
-	var activityManager = new ActivityManager();
-}
-
-var ClusterSocket = function (options, namespace) {
-	var self = this;
-	
-	options = options || {};
-	options.forceBase64 = true;
-	
-	if (options.url == null) {
-		Socket.call(this, options);
-	} else {
-		Socket.call(this, options.url, options);
-	}
-	
-	this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
-	
-	this._localEvents = {
-		'connect': 1,
-		'disconnect': 1,
-		'upgrading': 1,
-		'upgrade': 1,
-		'upgradeError': 1,
-		'open': 1,
-		'error': 1,
-		'packet': 1,
-		'heartbeat': 1,
-		'data': 1,
-		'message': 1,
-		'handshake': 1,
-		'drain': 1,
-		'flush': 1,
-		'packetCreate': 1,
-		'close': 1,
-		'fail': 1
-	};
-	
-	if (options.autoReconnect && options.autoReconnectOptions == null) {
-		options.autoReconnectOptions = {
-			delay: 10,
-			randomness: 10
-		}
-	}
-	
-	this.options = options;
-	this.namespace = namespace || '__';
-	this.connected = false;
-	this.connecting = true;
-	
-	this._cid = 1;
-	this._callbackMap = {};
-	this._destId = null;
-	this._emitBuffer = [];
-	
-	Socket.prototype.on.call(this, 'error', function (err) {
-		self.connecting = false;
-		self._emitBuffer = [];
-	});
-	
-	Socket.prototype.on.call(this, 'close', function () {
-		self.connected = false;
-		self.connecting = false;
-		self._emitBuffer = [];
-		Emitter.prototype.emit.call(self, 'disconnect');
-		
-		if (self.options.autoReconnect) {
-			var reconnectOptions = self.options.autoReconnectOptions;
-			var timeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
-			setTimeout(function () {
-				if (!self.connected && !self.connecting) {
-					self.connect();
-				}
-			}, timeout);
-		}
-	});
-	
-	Socket.prototype.on.call(this, 'message', function (message) {
-		var e = self.JSON.parse(message);
-		if(e.event) {
-			if (e.event == 'connect') {
-				self.connected = true;
-				self.connecting = false;
-				var ev;
-				for (var i in self._emitBuffer) {
-					ev = self._emitBuffer[i];
-					self._emit(ev.ns, ev.event, ev.data, ev.callback);
-				}
-				self._emitBuffer = [];
-				if (isBrowser) {
-					self.ssid = self._setSessionCookie(e.data.appName, self.id);
-				} else {
-					self.ssid = self.id;
-				}
-				Emitter.prototype.emit.call(self, 'connect', e.data.soid);	
-			} else if (e.event == 'disconnect') {
-				self.connected = false;
-				self.connecting = false;
-				Emitter.prototype.emit.call(self, 'disconnect');
-			} else if (e.event == 'fail') {
-				self.connected = false;
-				self.connecting = false;
-				Emitter.prototype.emit.call(self, 'fail', e.data);
-			} else {
-				var eventName = e.ns + '.' + e.event;
-				var response = new Response(self, e.cid);
-				Emitter.prototype.emit.call(self, eventName, e.data, response);
-			}
-		} else if (e.cid != null) {
-			var ret = self._callbackMap[e.cid];
-			if (ret) {
-				clearTimeout(ret.timeout);
-				delete self._callbackMap[e.cid];
-				ret.callback(e.error, e.data);
-			}
-		}
-	});
-	
-	if (isBrowser) {
-		activityManager.on('wakeup', function () {
-			self.close();
-			self.connect();
-		});
-	}
-};
-
-ClusterSocket.prototype = Object.create(Socket.prototype);
-
-ClusterSocket.prototype._setCookie = function (name, value, expirySeconds) {
-	var exdate = null;
-	if (expirySeconds) {
-		exdate = new Date();
-		exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
-	}
-	var value = escape(value) + '; path=/;' + ((exdate == null) ? '' : ' expires=' + exdate.toUTCString() + ';');
-	document.cookie = name + '=' + value;
-};
-
-ClusterSocket.prototype._getCookie = function (name) {
-	var i, x, y, ARRcookies = document.cookie.split(';');
-	for (i = 0; i < ARRcookies.length; i++) {
-		x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
-		y = ARRcookies[i].substr(ARRcookies[i].indexOf('=') + 1);
-		x = x.replace(/^\s+|\s+$/g, '');
-		if (x == name) {
-			return unescape(y);
-		}
-	}
-};
-
-ClusterSocket.prototype._setSessionCookie = function (appName, socketId) {
-	var sessionSegments = socketId.match(this._sessionDestRegex);
-	var soidDest = sessionSegments ? sessionSegments[0] : null;
-	var sessionCookieName = 'n/' + appName + '/ssid';
-	
-	var ssid = this._getCookie(sessionCookieName);
-	var ssidDest = null;
-	if (ssid) {
-		ssidDest = ssid.match(this._sessionDestRegex);
-		ssidDest = ssidDest ? ssidDest[0] : null;
-	}
-	if (!ssid || soidDest != ssidDest) {
-		ssid = socketId;
-		this._setCookie(sessionCookieName, ssid);
-	}
-	return ssid;
-};
-
-ClusterSocket.prototype.ns = function (namespace) {
-	return new NS(namespace, this);
-};
-
-ClusterSocket.prototype.connect = ClusterSocket.prototype.open = function () {
-	if (!this.connected && !this.connecting) {
-		this.connected = false;
-		this.connecting = true;
-		Socket.prototype.open.apply(this, arguments);
-	}
-};
-
-ClusterSocket.prototype._nextCallId = function () {
-	return this.namespace + '-' + this._cid++;
-};
-
-ClusterSocket.prototype.createTransport = function () {
-	return Socket.prototype.createTransport.apply(this, arguments);
-};
-
-ClusterSocket.prototype._emit = function (ns, event, data, callback) {
-	var eventObject = {
-		ns: ns,
-		event: event
-	};
-	if (data !== undefined) {
-		eventObject.data = data;
-	}
-	if (callback) {
-		var self = this;
-		var cid = this._nextCallId();
-		eventObject.cid = cid;
-		
-		var timeout = setTimeout(function () {
-			delete self._callbackMap[cid];
-			callback('Event response timed out', eventObject);
-		}, this.pingTimeout);
-		
-		this._callbackMap[cid] = {callback: callback, timeout: timeout};
-	}
-	Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
-};
-
-ClusterSocket.prototype.emit = function (event, data, callback) {
-	if (this._localEvents[event] == null) {
-		if (this.connected) {
-			this._emit(this.namespace, event, data, callback);
-		} else {
-			this._emitBuffer.push({ns: this.namespace, event: event, data: data, callback: callback});
-			if (!this.connecting) {
-				this.connect();
-			}
-		}
-	} else {
-		Emitter.prototype.emit.call(this, event, data);
-	}
-};
-
-ClusterSocket.prototype.on = function (event, listener) {
-	if (this._localEvents[event] == null) {
-		var eventName = this.namespace + '.' + event;
-		Emitter.prototype.on.call(this, eventName, listener);
-	} else {
-		Emitter.prototype.on.apply(this, arguments);
-	}
-};
-
-ClusterSocket.prototype.once = function (event, listener) {
-	if (this._localEvents[event] == null) {
-		var eventName = this.namespace + '.' + event;
-		Emitter.prototype.once.call(this, eventName, listener);
-	} else {
-		Emitter.prototype.once.apply(this, arguments);
-	}
-};
-
-ClusterSocket.prototype.removeListener = function (event, listener) {
-	if (this._localEvents[event] == null) {
-		var eventName = this.namespace + '.' + event;
-		Emitter.prototype.removeListener.call(this, eventName, listener);
-	} else {
-		Emitter.prototype.removeListener.apply(this, arguments);
-	}
-};
-
-ClusterSocket.prototype.removeAllListeners = function (event) {
-	if (event) {
-		event = this.namespace + '.' + event;
-	}
-	Emitter.prototype.removeAllListeners.call(this, event);
-};
-
-ClusterSocket.prototype.listeners = function (event) {
-	event = this.namespace + '.' + event;
-	Emitter.prototype.listeners.call(this, event);
-};
-
-ClusterSocket.JSON = ClusterSocket.prototype.JSON = _dereq_('./json').JSON;
-
-var NS = function (namespace, socket) {
-	var self = this;
-	
-	// Generate methods which will apply the namespace to all calls on the underlying socket.
-	for (var i in socket) {
-		if (socket[i] instanceof Function) {
-			(function (j) {
-				self[j] = function () {
-					var prevNS = socket.namespace;
-					socket.namespace = namespace;
-					socket[j].apply(socket, arguments);
-					socket.namespace = prevNS;
-				};
-			})(i);
-		} else {
-			this[i] = socket[i];
-		}
-	}
-	
-	this.ns = function () {
-		return socket.ns.apply(socket, arguments);
-	};
-};
-
-module.exports = ClusterSocket;
-},{"./json":3,"emitter":4,"engine.io-client":6}],2:[function(_dereq_,module,exports){
-var ClusterSocket = _dereq_('./clustersocket');
-module.exports.ClusterSocket = ClusterSocket;
-module.exports.JSON = ClusterSocket.JSON;
+!function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.socketCluster=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
+var SCSocket = _dereq_('./scsocket');
+module.exports.SCSocket = SCSocket;
+module.exports.JSON = SCSocket.JSON;
 
 module.exports.Emitter = _dereq_('emitter');
 
 module.exports.connect = function (options) {
-	return new ClusterSocket(options);
+	return new SCSocket(options);
 };
-},{"./clustersocket":1,"emitter":4}],3:[function(_dereq_,module,exports){
+},{"./scsocket":31,"emitter":3}],2:[function(_dereq_,module,exports){
 /**
  * socket.io
  * Copyright(c) 2011 LearnBoost <dev@learnboost.com>
@@ -747,7 +330,7 @@ module.exports.connect = function (options) {
     'undefined' != typeof io ? io : module.exports
   , typeof JSON !== 'undefined' ? JSON : undefined
 );
-},{}],4:[function(_dereq_,module,exports){
+},{}],3:[function(_dereq_,module,exports){
 
 /**
  * Module dependencies.
@@ -911,7 +494,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{"indexof":5}],5:[function(_dereq_,module,exports){
+},{"indexof":4}],4:[function(_dereq_,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -922,11 +505,11 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],6:[function(_dereq_,module,exports){
+},{}],5:[function(_dereq_,module,exports){
 
 module.exports =  _dereq_('./lib/');
 
-},{"./lib/":7}],7:[function(_dereq_,module,exports){
+},{"./lib/":6}],6:[function(_dereq_,module,exports){
 
 module.exports = _dereq_('./socket');
 
@@ -938,7 +521,7 @@ module.exports = _dereq_('./socket');
  */
 module.exports.parser = _dereq_('engine.io-parser');
 
-},{"./socket":8,"engine.io-parser":18}],8:[function(_dereq_,module,exports){
+},{"./socket":7,"engine.io-parser":17}],7:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -1570,7 +1153,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./transport":9,"./transports":11,"debug":17,"emitter":4,"engine.io-parser":18,"indexof":26,"parsejson":28,"parseqs":29,"parseuri":30}],9:[function(_dereq_,module,exports){
+},{"./transport":8,"./transports":10,"debug":16,"emitter":3,"engine.io-parser":17,"indexof":25,"parsejson":27,"parseqs":28,"parseuri":29}],8:[function(_dereq_,module,exports){
 /**
  * Module dependencies.
  */
@@ -1720,7 +1303,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"emitter":4,"engine.io-parser":18}],10:[function(_dereq_,module,exports){
+},{"emitter":3,"engine.io-parser":17}],9:[function(_dereq_,module,exports){
 (function (global){
 
 /**
@@ -1994,7 +1577,7 @@ function load(arr, fn){
 }
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./websocket":15,"debug":17,"inherits":27}],11:[function(_dereq_,module,exports){
+},{"./websocket":14,"debug":16,"inherits":26}],10:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module dependencies
@@ -2048,7 +1631,7 @@ function polling (opts) {
 };
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./flashsocket":10,"./polling-jsonp":12,"./polling-xhr":13,"./websocket":15,"xmlhttprequest":16}],12:[function(_dereq_,module,exports){
+},{"./flashsocket":9,"./polling-jsonp":11,"./polling-xhr":12,"./websocket":14,"xmlhttprequest":15}],11:[function(_dereq_,module,exports){
 (function (global){
 
 /**
@@ -2281,7 +1864,7 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":14,"inherits":27}],13:[function(_dereq_,module,exports){
+},{"./polling":13,"inherits":26}],12:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module requirements.
@@ -2595,7 +2178,7 @@ function unloadHandler() {
 }
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":14,"debug":17,"emitter":4,"inherits":27,"xmlhttprequest":16}],14:[function(_dereq_,module,exports){
+},{"./polling":13,"debug":16,"emitter":3,"inherits":26,"xmlhttprequest":15}],13:[function(_dereq_,module,exports){
 /**
  * Module dependencies.
  */
@@ -2842,7 +2425,7 @@ Polling.prototype.uri = function(){
   return schema + '://' + this.hostname + port + this.path + query;
 };
 
-},{"../transport":9,"debug":17,"engine.io-parser":18,"inherits":27,"parseqs":29,"xmlhttprequest":16}],15:[function(_dereq_,module,exports){
+},{"../transport":8,"debug":16,"engine.io-parser":17,"inherits":26,"parseqs":28,"xmlhttprequest":15}],14:[function(_dereq_,module,exports){
 /**
  * Module dependencies.
  */
@@ -3073,7 +2656,7 @@ WS.prototype.check = function(){
   return !!WebSocket && !('__initialize' in WebSocket && this.name === WS.prototype.name);
 };
 
-},{"../transport":9,"debug":17,"engine.io-parser":18,"inherits":27,"parseqs":29,"ws":31}],16:[function(_dereq_,module,exports){
+},{"../transport":8,"debug":16,"engine.io-parser":17,"inherits":26,"parseqs":28,"ws":30}],15:[function(_dereq_,module,exports){
 // browser shim for xmlhttprequest module
 var hasCORS = _dereq_('has-cors');
 
@@ -3094,7 +2677,7 @@ module.exports = function(opts) {
   }
 }
 
-},{"has-cors":24}],17:[function(_dereq_,module,exports){
+},{"has-cors":23}],16:[function(_dereq_,module,exports){
 
 /**
  * Expose `debug()` as the module.
@@ -3233,7 +2816,7 @@ try {
   if (window.localStorage) debug.enable(localStorage.debug);
 } catch(e){}
 
-},{}],18:[function(_dereq_,module,exports){
+},{}],17:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -3779,7 +3362,7 @@ exports.decodePayloadAsBinary = function (data, binaryType, callback) {
 };
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./keys":19,"after":20,"arraybuffer.slice":21,"base64-arraybuffer":22,"blob":23}],19:[function(_dereq_,module,exports){
+},{"./keys":18,"after":19,"arraybuffer.slice":20,"base64-arraybuffer":21,"blob":22}],18:[function(_dereq_,module,exports){
 
 /**
  * Gets the keys for an object.
@@ -3800,7 +3383,7 @@ module.exports = Object.keys || function keys (obj){
   return arr;
 };
 
-},{}],20:[function(_dereq_,module,exports){
+},{}],19:[function(_dereq_,module,exports){
 module.exports = after
 
 function after(count, callback, err_cb) {
@@ -3830,7 +3413,7 @@ function after(count, callback, err_cb) {
 
 function noop() {}
 
-},{}],21:[function(_dereq_,module,exports){
+},{}],20:[function(_dereq_,module,exports){
 /**
  * An abstraction for slicing an arraybuffer even when
  * ArrayBuffer.prototype.slice is not supported
@@ -3861,7 +3444,7 @@ module.exports = function(arraybuffer, start, end) {
   return result.buffer;
 };
 
-},{}],22:[function(_dereq_,module,exports){
+},{}],21:[function(_dereq_,module,exports){
 /*
  * base64-arraybuffer
  * https://github.com/niklasvh/base64-arraybuffer
@@ -3921,7 +3504,7 @@ module.exports = function(arraybuffer, start, end) {
     return arraybuffer;
   };
 })("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
-},{}],23:[function(_dereq_,module,exports){
+},{}],22:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Create a blob builder even when vendor prefixes exist
@@ -3974,7 +3557,7 @@ module.exports = (function() {
 })();
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],24:[function(_dereq_,module,exports){
+},{}],23:[function(_dereq_,module,exports){
 
 /**
  * Module dependencies.
@@ -3999,7 +3582,7 @@ try {
   module.exports = false;
 }
 
-},{"global":25}],25:[function(_dereq_,module,exports){
+},{"global":24}],24:[function(_dereq_,module,exports){
 
 /**
  * Returns `this`. Execute this without a "context" (i.e. without it being
@@ -4009,9 +3592,9 @@ try {
 
 module.exports = (function () { return this; })();
 
+},{}],25:[function(_dereq_,module,exports){
+module.exports=_dereq_(4)
 },{}],26:[function(_dereq_,module,exports){
-module.exports=_dereq_(5)
-},{}],27:[function(_dereq_,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -4036,7 +3619,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],28:[function(_dereq_,module,exports){
+},{}],27:[function(_dereq_,module,exports){
 (function (global){
 /**
  * JSON parse.
@@ -4071,7 +3654,7 @@ module.exports = function parsejson(data) {
   }
 };
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],29:[function(_dereq_,module,exports){
+},{}],28:[function(_dereq_,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -4110,7 +3693,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],30:[function(_dereq_,module,exports){
+},{}],29:[function(_dereq_,module,exports){
 /**
  * Parses an URI
  *
@@ -4137,7 +3720,7 @@ module.exports = function parseuri(str) {
   return uri;
 };
 
-},{}],31:[function(_dereq_,module,exports){
+},{}],30:[function(_dereq_,module,exports){
 
 /**
  * Module dependencies.
@@ -4182,6 +3765,423 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}]},{},[2])
-(2)
+},{}],31:[function(_dereq_,module,exports){
+/**
+ * Module dependencies.
+ */
+
+var Emitter = _dereq_('emitter');
+var Socket = _dereq_('engine.io-client');
+
+/**
+ * Module exports.
+ */
+
+if (!Object.create) {
+	Object.create = (function () {
+		function F() {};
+
+		return function (o) {
+			if (arguments.length != 1) {
+				throw new Error('Object.create implementation only accepts one parameter.');
+			}
+			F.prototype = o;
+			return new F();
+		}
+	})();
+}
+
+var Response = function (socket, id) {
+	this.socket = socket;
+	this.id = id;
+};
+
+Response.prototype._respond = function (responseData) {
+	this.socket.send(this.socket.JSON.stringify(responseData));
+};
+
+Response.prototype.end = function (data) {
+	if (this.id) {
+		var responseData = {
+			cid: this.id
+		};
+		if (data !== undefined) {
+			responseData.data = data;
+		}
+		this._respond(responseData);
+	}
+};
+
+Response.prototype.error = function (error, data) {
+	if (this.id) {
+		var err;
+		if(error instanceof Error) {
+			err = {name: error.name, message: error.message, stack: error.stack};			
+		} else {
+			err = error;
+		}
+		
+		var responseData = {
+			cid: this.id,
+			error: err
+		};
+		if (data !== undefined) {
+			responseData.data = data;
+		}
+		
+		this._respond(responseData);
+	}
+};
+
+var isBrowser = typeof window != 'undefined';
+
+if (isBrowser) {
+	var ActivityManager = function () {
+		var self = this;
+		
+		this._interval = null;
+		this._intervalDuration = 1000;
+		this._counter = null;
+		
+		if (window.addEventListener) {
+			window.addEventListener('blur', function () {
+				self._triggerBlur();
+			});
+			window.addEventListener('focus', function () {
+				self._triggerFocus();
+			});
+		} else if (window.attachEvent) {
+			window.attachEvent('onblur', function () {
+				self._triggerBlur();
+			});
+			window.attachEvent('onfocus', function () {
+				self._triggerFocus();
+			});
+		} else {
+			throw new Error('The browser does not support proper event handling');
+		}
+	};
+
+	ActivityManager.prototype = Object.create(Emitter.prototype);
+
+	ActivityManager.prototype._triggerBlur = function () {
+		var self = this;
+		
+		var now = (new Date()).getTime();
+		this._counter = now;
+		
+		// If interval skips 2 turns, then client is sleeping
+		this._interval = setInterval(function () {
+			var newCount = (new Date()).getTime();
+			if (newCount - self._counter < self._intervalDuration * 3) {
+				self._counter = newCount;
+			}
+		}, this._intervalDuration);
+		
+		this.emit('deactivate');
+	};
+
+	ActivityManager.prototype._triggerFocus = function () {
+		clearInterval(this._interval);
+		var now = (new Date()).getTime();
+		if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
+			this.emit('wakeup');
+		}
+		
+		this.emit('activate');
+	};
+
+	var activityManager = new ActivityManager();
+}
+
+var SCSocket = function (options, namespace) {
+	var self = this;
+	
+	options = options || {};
+	options.forceBase64 = true;
+	
+	if (options.url == null) {
+		Socket.call(this, options);
+	} else {
+		Socket.call(this, options.url, options);
+	}
+	
+	this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
+	
+	this._localEvents = {
+		'connect': 1,
+		'disconnect': 1,
+		'upgrading': 1,
+		'upgrade': 1,
+		'upgradeError': 1,
+		'open': 1,
+		'error': 1,
+		'packet': 1,
+		'heartbeat': 1,
+		'data': 1,
+		'message': 1,
+		'handshake': 1,
+		'drain': 1,
+		'flush': 1,
+		'packetCreate': 1,
+		'close': 1,
+		'fail': 1
+	};
+	
+	if (options.autoReconnect && options.autoReconnectOptions == null) {
+		options.autoReconnectOptions = {
+			delay: 10,
+			randomness: 10
+		}
+	}
+	
+	this.options = options;
+	this.namespace = namespace || '__';
+	this.connected = false;
+	this.connecting = true;
+	
+	this._cid = 1;
+	this._callbackMap = {};
+	this._destId = null;
+	this._emitBuffer = [];
+	
+	Socket.prototype.on.call(this, 'error', function (err) {
+		self.connecting = false;
+		self._emitBuffer = [];
+	});
+	
+	Socket.prototype.on.call(this, 'close', function () {
+		self.connected = false;
+		self.connecting = false;
+		self._emitBuffer = [];
+		Emitter.prototype.emit.call(self, 'disconnect');
+		
+		if (self.options.autoReconnect) {
+			var reconnectOptions = self.options.autoReconnectOptions;
+			var timeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
+			setTimeout(function () {
+				if (!self.connected && !self.connecting) {
+					self.connect();
+				}
+			}, timeout);
+		}
+	});
+	
+	Socket.prototype.on.call(this, 'message', function (message) {
+		var e = self.JSON.parse(message);
+		if(e.event) {
+			if (e.event == 'connect') {
+				self.connected = true;
+				self.connecting = false;
+				var ev;
+				for (var i in self._emitBuffer) {
+					ev = self._emitBuffer[i];
+					self._emit(ev.ns, ev.event, ev.data, ev.callback);
+				}
+				self._emitBuffer = [];
+				if (isBrowser) {
+					self.ssid = self._setSessionCookie(e.data.appName, self.id);
+				} else {
+					self.ssid = self.id;
+				}
+				Emitter.prototype.emit.call(self, 'connect', e.data.soid);	
+			} else if (e.event == 'disconnect') {
+				self.connected = false;
+				self.connecting = false;
+				Emitter.prototype.emit.call(self, 'disconnect');
+			} else if (e.event == 'fail') {
+				self.connected = false;
+				self.connecting = false;
+				Emitter.prototype.emit.call(self, 'fail', e.data);
+			} else {
+				var eventName = e.ns + '.' + e.event;
+				var response = new Response(self, e.cid);
+				Emitter.prototype.emit.call(self, eventName, e.data, response);
+			}
+		} else if (e.cid != null) {
+			var ret = self._callbackMap[e.cid];
+			if (ret) {
+				clearTimeout(ret.timeout);
+				delete self._callbackMap[e.cid];
+				ret.callback(e.error, e.data);
+			}
+		}
+	});
+	
+	if (isBrowser) {
+		activityManager.on('wakeup', function () {
+			self.close();
+			self.connect();
+		});
+	}
+};
+
+SCSocket.prototype = Object.create(Socket.prototype);
+
+SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
+	var exdate = null;
+	if (expirySeconds) {
+		exdate = new Date();
+		exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
+	}
+	var value = escape(value) + '; path=/;' + ((exdate == null) ? '' : ' expires=' + exdate.toUTCString() + ';');
+	document.cookie = name + '=' + value;
+};
+
+SCSocket.prototype._getCookie = function (name) {
+	var i, x, y, ARRcookies = document.cookie.split(';');
+	for (i = 0; i < ARRcookies.length; i++) {
+		x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
+		y = ARRcookies[i].substr(ARRcookies[i].indexOf('=') + 1);
+		x = x.replace(/^\s+|\s+$/g, '');
+		if (x == name) {
+			return unescape(y);
+		}
+	}
+};
+
+SCSocket.prototype._setSessionCookie = function (appName, socketId) {
+	var sessionSegments = socketId.match(this._sessionDestRegex);
+	var soidDest = sessionSegments ? sessionSegments[0] : null;
+	var sessionCookieName = 'n/' + appName + '/ssid';
+	
+	var ssid = this._getCookie(sessionCookieName);
+	var ssidDest = null;
+	if (ssid) {
+		ssidDest = ssid.match(this._sessionDestRegex);
+		ssidDest = ssidDest ? ssidDest[0] : null;
+	}
+	if (!ssid || soidDest != ssidDest) {
+		ssid = socketId;
+		this._setCookie(sessionCookieName, ssid);
+	}
+	return ssid;
+};
+
+SCSocket.prototype.ns = function (namespace) {
+	return new NS(namespace, this);
+};
+
+SCSocket.prototype.connect = SCSocket.prototype.open = function () {
+	if (!this.connected && !this.connecting) {
+		this.connected = false;
+		this.connecting = true;
+		Socket.prototype.open.apply(this, arguments);
+	}
+};
+
+SCSocket.prototype._nextCallId = function () {
+	return this.namespace + '-' + this._cid++;
+};
+
+SCSocket.prototype.createTransport = function () {
+	return Socket.prototype.createTransport.apply(this, arguments);
+};
+
+SCSocket.prototype._emit = function (ns, event, data, callback) {
+	var eventObject = {
+		ns: ns,
+		event: event
+	};
+	if (data !== undefined) {
+		eventObject.data = data;
+	}
+	if (callback) {
+		var self = this;
+		var cid = this._nextCallId();
+		eventObject.cid = cid;
+		
+		var timeout = setTimeout(function () {
+			delete self._callbackMap[cid];
+			callback('Event response timed out', eventObject);
+		}, this.pingTimeout);
+		
+		this._callbackMap[cid] = {callback: callback, timeout: timeout};
+	}
+	Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
+};
+
+SCSocket.prototype.emit = function (event, data, callback) {
+	if (this._localEvents[event] == null) {
+		if (this.connected) {
+			this._emit(this.namespace, event, data, callback);
+		} else {
+			this._emitBuffer.push({ns: this.namespace, event: event, data: data, callback: callback});
+			if (!this.connecting) {
+				this.connect();
+			}
+		}
+	} else {
+		Emitter.prototype.emit.call(this, event, data);
+	}
+};
+
+SCSocket.prototype.on = function (event, listener) {
+	if (this._localEvents[event] == null) {
+		var eventName = this.namespace + '.' + event;
+		Emitter.prototype.on.call(this, eventName, listener);
+	} else {
+		Emitter.prototype.on.apply(this, arguments);
+	}
+};
+
+SCSocket.prototype.once = function (event, listener) {
+	if (this._localEvents[event] == null) {
+		var eventName = this.namespace + '.' + event;
+		Emitter.prototype.once.call(this, eventName, listener);
+	} else {
+		Emitter.prototype.once.apply(this, arguments);
+	}
+};
+
+SCSocket.prototype.removeListener = function (event, listener) {
+	if (this._localEvents[event] == null) {
+		var eventName = this.namespace + '.' + event;
+		Emitter.prototype.removeListener.call(this, eventName, listener);
+	} else {
+		Emitter.prototype.removeListener.apply(this, arguments);
+	}
+};
+
+SCSocket.prototype.removeAllListeners = function (event) {
+	if (event) {
+		event = this.namespace + '.' + event;
+	}
+	Emitter.prototype.removeAllListeners.call(this, event);
+};
+
+SCSocket.prototype.listeners = function (event) {
+	event = this.namespace + '.' + event;
+	Emitter.prototype.listeners.call(this, event);
+};
+
+SCSocket.JSON = SCSocket.prototype.JSON = _dereq_('./json').JSON;
+
+var NS = function (namespace, socket) {
+	var self = this;
+	
+	// Generate methods which will apply the namespace to all calls on the underlying socket.
+	for (var i in socket) {
+		if (socket[i] instanceof Function) {
+			(function (j) {
+				self[j] = function () {
+					var prevNS = socket.namespace;
+					socket.namespace = namespace;
+					socket[j].apply(socket, arguments);
+					socket.namespace = prevNS;
+				};
+			})(i);
+		} else {
+			this[i] = socket[i];
+		}
+	}
+	
+	this.ns = function () {
+		return socket.ns.apply(socket, arguments);
+	};
+};
+
+module.exports = SCSocket;
+},{"./json":2,"emitter":3,"engine.io-client":5}]},{},[1])
+(1)
 });

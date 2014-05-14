@@ -1,9 +1,9 @@
-var ClusterSocket = require('./clustersocket');
-module.exports.ClusterSocket = ClusterSocket;
-module.exports.JSON = ClusterSocket.JSON;
+var SCSocket = require('./scsocket');
+module.exports.SCSocket = SCSocket;
+module.exports.JSON = SCSocket.JSON;
 
 module.exports.Emitter = require('emitter');
 
 module.exports.connect = function (options) {
-	return new ClusterSocket(options);
+	return new SCSocket(options);
 };
