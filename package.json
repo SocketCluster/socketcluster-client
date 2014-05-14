@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "Client side of SocketCluster",
-  "version": "0.9.14",
+  "version": "0.9.15",
   "homepage": "https://github.com/topcloud/socketcluster-client",
   "contributors": [
     {
