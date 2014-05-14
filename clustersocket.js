@@ -48,11 +48,11 @@ Response.prototype.error = function (error, data) {
   if (this.id) {
     var err;
     if(error instanceof Error) {
-      err = {name: error.name, message: error.message, stack: error.stack};     
+      err = {name: error.name, message: error.message, stack: error.stack};
     } else {
       err = error;
     }
-    
+
     var responseData = {
       cid: this.id,
       error: err
@@ -60,7 +60,7 @@ Response.prototype.error = function (error, data) {
     if (data !== undefined) {
       responseData.data = data;
     }
-    
+
     this._respond(responseData);
   }
 };
@@ -70,11 +70,11 @@ var isBrowser = typeof window != 'undefined';
 if (isBrowser) {
   var ActivityManager = function () {
     var self = this;
-    
+
     this._interval = null;
     this._intervalDuration = 1000;
     this._counter = null;
-    
+
     if (window.addEventListener) {
       window.addEventListener('blur', function () {
         self._triggerBlur();
@@ -98,10 +98,10 @@ if (isBrowser) {
 
   ActivityManager.prototype._triggerBlur = function () {
     var self = this;
-    
+
     var now = (new Date()).getTime();
     this._counter = now;
-    
+
     // If interval skips 2 turns, then client is sleeping
     this._interval = setInterval(function () {
       var newCount = (new Date()).getTime();
@@ -109,7 +109,7 @@ if (isBrowser) {
         self._counter = newCount;
       }
     }, this._intervalDuration);
-    
+
     this.emit('deactivate');
   };
 
@@ -119,7 +119,7 @@ if (isBrowser) {
     if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
       this.emit('wakeup');
     }
-    
+
     this.emit('activate');
   };
 
@@ -128,18 +128,18 @@ if (isBrowser) {
 
 var ClusterSocket = function (options, namespace) {
   var self = this;
-  
+
   options = options || {};
   options.forceBase64 = true;
-  
+
   if (options.url == null) {
     Socket.call(this, options);
   } else {
     Socket.call(this, options.url, options);
   }
-  
+
   this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
-  
+
   this._localEvents = {
     'connect': 1,
     'disconnect': 1,
@@ -159,35 +159,35 @@ var ClusterSocket = function (options, namespace) {
     'close': 1,
     'fail': 1
   };
-  
+
   if (options.autoReconnect && options.autoReconnectOptions == null) {
     options.autoReconnectOptions = {
       delay: 10,
       randomness: 10
     }
   }
-  
+
   this.options = options;
   this.namespace = namespace || '__';
   this.connected = false;
   this.connecting = true;
-  
+
   this._cid = 1;
   this._callbackMap = {};
   this._destId = null;
   this._emitBuffer = [];
-  
+
   Socket.prototype.on.call(this, 'error', function (err) {
     self.connecting = false;
     self._emitBuffer = [];
   });
-  
+
   Socket.prototype.on.call(this, 'close', function () {
     self.connected = false;
     self.connecting = false;
     self._emitBuffer = [];
     Emitter.prototype.emit.call(self, 'disconnect');
-    
+
     if (self.options.autoReconnect) {
       var reconnectOptions = self.options.autoReconnectOptions;
       var timeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
@@ -198,7 +198,7 @@ var ClusterSocket = function (options, namespace) {
       }, timeout);
     }
   });
-  
+
   Socket.prototype.on.call(this, 'message', function (message) {
     var e = self.JSON.parse(message);
     if(e.event) {
@@ -216,7 +216,7 @@ var ClusterSocket = function (options, namespace) {
         } else {
           self.ssid = self.id;
         }
-        Emitter.prototype.emit.call(self, 'connect', e.data.soid);  
+        Emitter.prototype.emit.call(self, 'connect', e.data.soid);
       } else if (e.event == 'disconnect') {
         self.connected = false;
         self.connecting = false;
@@ -239,7 +239,7 @@ var ClusterSocket = function (options, namespace) {
       }
     }
   });
-  
+
   if (isBrowser) {
     activityManager.on('wakeup', function () {
       self.close();
@@ -276,7 +276,7 @@ ClusterSocket.prototype._setSessionCookie = function (appName, socketId) {
   var sessionSegments = socketId.match(this._sessionDestRegex);
   var soidDest = sessionSegments ? sessionSegments[0] : null;
   var sessionCookieName = 'n/' + appName + '/ssid';
-  
+
   var ssid = this._getCookie(sessionCookieName);
   var ssidDest = null;
   if (ssid) {
@@ -322,12 +322,12 @@ ClusterSocket.prototype._emit = function (ns, event, data, callback) {
     var self = this;
     var cid = this._nextCallId();
     eventObject.cid = cid;
-    
+
     var timeout = setTimeout(function () {
       delete self._callbackMap[cid];
       callback('Event response timed out', eventObject);
     }, this.pingTimeout);
-    
+
     this._callbackMap[cid] = {callback: callback, timeout: timeout};
   }
   Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
@@ -391,7 +391,7 @@ ClusterSocket.JSON = ClusterSocket.prototype.JSON = require('./json').JSON;
 
 var NS = function (namespace, socket) {
   var self = this;
-  
+
   // Generate methods which will apply the namespace to all calls on the underlying socket.
   for (var i in socket) {
     if (socket[i] instanceof Function) {
@@ -407,7 +407,7 @@ var NS = function (namespace, socket) {
       this[i] = socket[i];
     }
   }
-  
+
   this.ns = function () {
     return socket.ns.apply(socket, arguments);
   };
