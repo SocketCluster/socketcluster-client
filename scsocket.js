@@ -126,7 +126,7 @@ if (isBrowser) {
   var activityManager = new ActivityManager();
 }
 
-var SCSocket = function (options, namespace) {
+var SCSocket = function (options) {
   var self = this;
   
   options = options || {};
@@ -168,7 +168,6 @@ var SCSocket = function (options, namespace) {
   }
   
   this.options = options;
-  this.namespace = namespace || '__';
   this.connected = false;
   this.connecting = true;
   
@@ -176,6 +175,8 @@ var SCSocket = function (options, namespace) {
   this._callbackMap = {};
   this._destId = null;
   this._emitBuffer = [];
+  
+  this._subscriptions = {};
   
   Socket.prototype.on.call(this, 'error', function (err) {
     self.connecting = false;
@@ -208,7 +209,7 @@ var SCSocket = function (options, namespace) {
         var ev;
         for (var i in self._emitBuffer) {
           ev = self._emitBuffer[i];
-          self._emit(ev.ns, ev.event, ev.data, ev.callback);
+          self._emit(ev.event, ev.data, ev.callback);
         }
         self._emitBuffer = [];
         if (isBrowser) {
@@ -226,9 +227,8 @@ var SCSocket = function (options, namespace) {
         self.connecting = false;
         Emitter.prototype.emit.call(self, 'fail', e.data);
       } else {
-        var eventName = e.ns + '.' + e.event;
         var response = new Response(self, e.cid);
-        Emitter.prototype.emit.call(self, eventName, e.data, response);
+        Emitter.prototype.emit.call(self, e.event, e.data, response);
       }
     } else if (e.cid != null) {
       var ret = self._callbackMap[e.cid];
@@ -290,10 +290,6 @@ SCSocket.prototype._setSessionCookie = function (appName, socketId) {
   return ssid;
 };
 
-SCSocket.prototype.ns = function (namespace) {
-  return new NS(namespace, this);
-};
-
 SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   if (!this.connected && !this.connecting) {
     this.connected = false;
@@ -303,16 +299,15 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
 };
 
 SCSocket.prototype._nextCallId = function () {
-  return this.namespace + '-' + this._cid++;
+  return this._cid++;
 };
 
 SCSocket.prototype.createTransport = function () {
   return Socket.prototype.createTransport.apply(this, arguments);
 };
 
-SCSocket.prototype._emit = function (ns, event, data, callback) {
+SCSocket.prototype._emit = function (event, data, callback) {
   var eventObject = {
-    ns: ns,
     event: event
   };
   if (data !== undefined) {
@@ -336,9 +331,9 @@ SCSocket.prototype._emit = function (ns, event, data, callback) {
 SCSocket.prototype.emit = function (event, data, callback) {
   if (this._localEvents[event] == null) {
     if (this.connected) {
-      this._emit(this.namespace, event, data, callback);
+      this._emit(event, data, callback);
     } else {
-      this._emitBuffer.push({ns: this.namespace, event: event, data: data, callback: callback});
+      this._emitBuffer.push({event: event, data: data, callback: callback});
       if (!this.connecting) {
         this.connect();
       }
@@ -348,69 +343,73 @@ SCSocket.prototype.emit = function (event, data, callback) {
   }
 };
 
-SCSocket.prototype.on = function (event, listener) {
+SCSocket.prototype.on = function (event, listener, callback) {
+  var self = this;
+  
   if (this._localEvents[event] == null) {
-    var eventName = this.namespace + '.' + event;
-    Emitter.prototype.on.call(this, eventName, listener);
+    if (this._subscriptions[event]) {
+      Emitter.prototype.on.call(self, event, listener);
+      callback && callback();
+    } else {
+      this.emit('subscribe', event, function (err) {
+        if (!err) {
+          if (self._subscriptions[event] == null) {
+            self._subscriptions[event] = 0;
+          }
+          self._subscriptions[event]++;
+          Emitter.prototype.on.call(self, event, listener);
+        }
+        callback && callback(err);
+      }, true);
+    }
   } else {
     Emitter.prototype.on.apply(this, arguments);
   }
 };
 
-SCSocket.prototype.once = function (event, listener) {
-  if (this._localEvents[event] == null) {
-    var eventName = this.namespace + '.' + event;
-    Emitter.prototype.once.call(this, eventName, listener);
-  } else {
-    Emitter.prototype.once.apply(this, arguments);
-  }
+SCSocket.prototype.once = function (event, listener, callback) {
+  var self = this;
+  
+  this.on(event, function watcher() {
+    self.removeListener(event, watcher);
+    listener.apply(self, arguments);
+  }, callback);
 };
 
-SCSocket.prototype.removeListener = function (event, listener) {
+SCSocket.prototype.removeListener = function (event, listener, callback, overrideNamespace) {
+  var self = this;
+  
   if (this._localEvents[event] == null) {
-    var eventName = this.namespace + '.' + event;
-    Emitter.prototype.removeListener.call(this, eventName, listener);
+    Emitter.prototype.removeListener.call(this, event, listener);
+    if (this._subscriptions[event] != null) {
+      this._subscriptions[event]--;
+      if (this._subscriptions[event] < 1) {
+        this.emit('unsubscribe', event, function (err) {
+          if (!err) {
+            delete self._subscriptions[event];
+          }
+          callback && callback(err);
+        }, true);
+      }
+    }
   } else {
     Emitter.prototype.removeListener.apply(this, arguments);
   }
 };
 
 SCSocket.prototype.removeAllListeners = function (event) {
-  if (event) {
-    event = this.namespace + '.' + event;
-  }
   Emitter.prototype.removeAllListeners.call(this, event);
 };
 
 SCSocket.prototype.listeners = function (event) {
-  event = this.namespace + '.' + event;
   Emitter.prototype.listeners.call(this, event);
 };
 
-SCSocket.JSON = SCSocket.prototype.JSON = require('./json').JSON;
-
-var NS = function (namespace, socket) {
-  var self = this;
-  
-  // Generate methods which will apply the namespace to all calls on the underlying socket.
-  for (var i in socket) {
-    if (socket[i] instanceof Function) {
-      (function (j) {
-        self[j] = function () {
-          var prevNS = socket.namespace;
-          socket.namespace = namespace;
-          socket[j].apply(socket, arguments);
-          socket.namespace = prevNS;
-        };
-      })(i);
-    } else {
-      this[i] = socket[i];
-    }
-  }
-  
-  this.ns = function () {
-    return socket.ns.apply(socket, arguments);
-  };
-};
+if (typeof JSON != 'undefined') {
+  SCSocket.prototype.JSON = JSON;
+} else {
+  SCSocket.prototype.JSON = require('./json').JSON;
+}
+SCSocket.JSON = SCSocket.prototype.JSON;
 
 module.exports = SCSocket;
