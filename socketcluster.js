@@ -4144,7 +4144,7 @@ SCSocket.prototype.once = function (event, listener, callback) {
   }, callback);
 };
 
-SCSocket.prototype.removeListener = function (event, listener, callback, overrideNamespace) {
+SCSocket.prototype.removeListener = function (event, listener, callback) {
   var self = this;
   
   if (this._localEvents[event] == null) {
@@ -4161,12 +4161,55 @@ SCSocket.prototype.removeListener = function (event, listener, callback, overrid
       }
     }
   } else {
-    Emitter.prototype.removeListener.apply(this, arguments);
+    Emitter.prototype.removeListener.call(this, event, listener);
   }
 };
 
-SCSocket.prototype.removeAllListeners = function (event) {
+/*
+  removeAllListeners([event, callback]);
+*/
+SCSocket.prototype.removeAllListeners = function () {
+  var self = this;
+  
+  var event, callback;
+  if (typeof arguments[0] == 'string') {
+    event = arguments[0];
+    callback = arguments[1];
+  } else {
+    callback = arguments[0];
+  }
+  
   Emitter.prototype.removeAllListeners.call(this, event);
+  
+  var events = [];
+  if (event) {
+    events.push(event);
+  } else {
+    for (var i in this._subscriptions) {
+      events.push(i);
+    }
+  }
+  this.emit('unsubscribe', events, function (err) {
+    if (!err) {
+      if (event) {
+        delete self._subscriptions[event];
+      } else {
+        self._subscriptions = {};
+      }
+    }
+    callback && callback(err);
+  });
+};
+
+/*
+  off([event, listener, callback])
+*/
+SCSocket.prototype.off = function () {
+  if (arguments.length > 1) {
+    this.removeListener.apply(this, arguments);
+  } else {
+    this.removeAllListeners.apply(this, arguments);
+  }
 };
 
 SCSocket.prototype.listeners = function (event) {
