@@ -3985,7 +3985,9 @@ var SCSocket = function (options) {
         } else {
           self.ssid = self.id;
         }
-        Emitter.prototype.emit.call(self, 'connect', e.data.soid);  
+        var response = new Response(self, e.cid);
+        response.end();
+        Emitter.prototype.emit.call(self, 'connect', e.data.soid);
       } else if (e.event == 'disconnect') {
         self.connected = false;
         self.connecting = false;
@@ -4059,10 +4061,17 @@ SCSocket.prototype._setSessionCookie = function (appName, socketId) {
 };
 
 SCSocket.prototype.connect = SCSocket.prototype.open = function () {
+  var self = this;
+  
   if (!this.connected && !this.connecting) {
     this.connected = false;
     this.connecting = true;
     Socket.prototype.open.apply(this, arguments);
+    this._resubscribe(function (err) {
+      if (err) {
+        self.emit('error', err);
+      }
+    });
   }
 };
 
@@ -4111,6 +4120,25 @@ SCSocket.prototype.emit = function (event, data, callback) {
   }
 };
 
+SCSocket.prototype._resubscribe = function (callback) {
+  var self = this;
+  
+  var events = [];
+  
+  for (var event in this._subscriptions) {
+    events.push(event);
+  }
+  
+  if (events.length) {
+    this.emit('subscribe', events, function (err) {
+      if (err) {
+        self.emit('error', err);
+      }
+      callback && callback(err);
+    });
+  }
+};
+
 SCSocket.prototype.on = function (event, listener, callback) {
   var self = this;
   
@@ -4130,7 +4158,7 @@ SCSocket.prototype.on = function (event, listener, callback) {
           Emitter.prototype.on.call(self, event, listener);
         }
         callback && callback(err);
-      }, true);
+      });
     }
   } else {
     Emitter.prototype.on.apply(this, arguments);
@@ -4161,7 +4189,7 @@ SCSocket.prototype.removeListener = function (event, listener, callback) {
             delete self._subscriptions[event];
           }
           callback && callback(err);
-        }, true);
+        });
       }
     }
   } else {
