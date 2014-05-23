@@ -352,7 +352,9 @@ SCSocket.prototype.on = function (event, listener, callback) {
       callback && callback();
     } else {
       this.emit('subscribe', event, function (err) {
-        if (!err) {
+        if (err) {
+          self.emit('error', err);
+        } else {
           if (self._subscriptions[event] == null) {
             self._subscriptions[event] = 0;
           }
@@ -385,7 +387,9 @@ SCSocket.prototype.removeListener = function (event, listener, callback) {
       this._subscriptions[event]--;
       if (this._subscriptions[event] < 1) {
         this.emit('unsubscribe', event, function (err) {
-          if (!err) {
+          if (err) {
+            self.emit('error', err);
+          } else {
             delete self._subscriptions[event];
           }
           callback && callback(err);
@@ -422,7 +426,9 @@ SCSocket.prototype.removeAllListeners = function () {
     }
   }
   this.emit('unsubscribe', events, function (err) {
-    if (!err) {
+    if (err) {
+      self.emit('error', err);
+    } else {
       if (event) {
         delete self._subscriptions[event];
       } else {
