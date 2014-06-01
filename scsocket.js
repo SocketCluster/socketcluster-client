@@ -467,17 +467,6 @@ SCSocket.prototype.removeAllListeners = function () {
   });
 };
 
-/*
-  off([event, listener, callback])
-*/
-SCSocket.prototype.off = function () {
-  if (arguments.length > 1) {
-    this.removeListener.apply(this, arguments);
-  } else {
-    this.removeAllListeners.apply(this, arguments);
-  }
-};
-
 SCSocket.prototype.listeners = function (event) {
   Emitter.prototype.listeners.call(this, event);
 };
