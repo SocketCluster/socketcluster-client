@@ -4213,15 +4213,7 @@ SCSocket.prototype.removeAllListeners = function () {
   
   Emitter.prototype.removeAllListeners.call(this, event);
   
-  var events = [];
-  if (event) {
-    events.push(event);
-  } else {
-    for (var i in this._subscriptions) {
-      events.push(i);
-    }
-  }
-  this.emit('unsubscribe', events, function (err) {
+  this.emit('unsubscribe', event, function (err) {
     if (err) {
       self.emit('error', err);
     } else {
