@@ -3995,7 +3995,7 @@ var SCSocket = function (options) {
       } else if (e.event == 'fail') {
         self.connected = false;
         self.connecting = false;
-        Emitter.prototype.emit.call(self, 'fail', e.data);
+        Emitter.prototype.emit.call(self, 'error', e.data);
       } else {
         var response = new Response(self, e.cid);
         Emitter.prototype.emit.call(self, e.event, e.data, response);
@@ -4006,6 +4006,9 @@ var SCSocket = function (options) {
         clearTimeout(ret.timeout);
         delete self._callbackMap[e.cid];
         ret.callback(e.error, e.data);
+        if (e.error) {
+          Emitter.prototype.emit.call(self, 'error', e.error);
+        }
       }
     }
   });
