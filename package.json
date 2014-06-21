@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "Client side of SocketCluster",
-  "version": "0.9.17",
+  "version": "0.9.18",
   "homepage": "https://github.com/topcloud/socketcluster-client",
   "contributors": [
     {
@@ -10,7 +10,7 @@
     }
   ],
   "dependencies": {
-    "engine.io-client": "1.1.0",
+    "engine.io-client": "1.3.1",
     "emitter": "http://github.com/component/emitter/archive/1.0.1.tar.gz"
   },
   "readmeFilename": "README.md"
