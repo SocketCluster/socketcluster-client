@@ -403,10 +403,10 @@ SCSocket.prototype.on = function (event, listener, callback) {
 SCSocket.prototype.once = function (event, listener, callback) {
   var self = this;
   
-  this.on(event, function watcher() {
-    self.removeListener(event, watcher);
-    listener.apply(self, arguments);
-  }, callback);
+  this.on(event, listener, callback);
+  Emitter.prototype.once.call(this, event, function () {
+    self.removeListener(event, listener);
+  });
 };
 
 SCSocket.prototype.removeListener = function (event, listener, callback) {
