@@ -47,7 +47,7 @@ Response.prototype.end = function (data) {
 Response.prototype.error = function (error, data) {
   if (this.id) {
     var err;
-    if(error instanceof Error) {
+    if (error instanceof Error) {
       err = {name: error.name, message: error.message, stack: error.stack};      
     } else {
       err = error;
@@ -202,7 +202,7 @@ var SCSocket = function (options) {
   
   Socket.prototype.on.call(this, 'message', function (message) {
     var e = self.JSON.parse(message);
-    if(e.event) {
+    if (e.event) {
       if (e.event == 'connect') {
         self.connected = true;
         self.connecting = false;
@@ -217,9 +217,13 @@ var SCSocket = function (options) {
         } else {
           self.ssid = self.id;
         }
+        /*
         var response = new Response(self, e.cid);
         response.end();
+        */
         Emitter.prototype.emit.call(self, 'connect', e.data.soid);
+        //var response = new Response(self, e.cid);
+        //response.end();
       } else if (e.event == 'disconnect') {
         self.connected = false;
         self.connecting = false;
@@ -229,6 +233,7 @@ var SCSocket = function (options) {
         self.connecting = false;
         Emitter.prototype.emit.call(self, 'error', e.data);
       } else {
+        console.log('received server _emit', e);
         var response = new Response(self, e.cid);
         Emitter.prototype.emit.call(self, e.event, e.data, response);
       }
@@ -345,10 +350,10 @@ SCSocket.prototype.emit = function (event, data, callback) {
     if (this.connected) {
       this._emit(event, data, callback);
     } else {
-      this._emitBuffer.push({event: event, data: data, callback: callback});
       if (!this.connecting) {
         this.connect();
       }
+      this._emitBuffer.push({event: event, data: data, callback: callback});
     }
   } else {
     Emitter.prototype.emit.call(this, event, data);
@@ -382,15 +387,20 @@ SCSocket.prototype.on = function (event, listener, callback) {
       Emitter.prototype.on.call(self, event, listener);
       callback && callback();
     } else {
-      this.emit('subscribe', event, function (err) {
+      this.emit('subscribe', event, function (err, isFirstAck) {
         if (err) {
           self.emit('error', err);
         } else {
-          if (self._subscriptions[event] == null) {
-            self._subscriptions[event] = 0;
+          if (isFirstAck === true) {
+            if (self._subscriptions[event] == null) {
+              self._subscriptions[event] = 0;
+            }
+            self._subscriptions[event]++;
+            console.log('client ON');
+            Emitter.prototype.on.call(self, event, listener);
+          } else {
+            console.log('secondACK');
           }
-          self._subscriptions[event]++;
-          Emitter.prototype.on.call(self, event, listener);
         }
         callback && callback(err);
       });
