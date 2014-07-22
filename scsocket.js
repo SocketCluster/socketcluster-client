@@ -305,6 +305,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
         self.emit('error', err);
       }
     });
+    this.emit('ready');
   }
 };
 
@@ -361,7 +362,6 @@ SCSocket.prototype._resubscribe = function (callback) {
   for (var event in this._subscriptions) {
     events.push(event);
   }
-  
   if (events.length) {
     this.emit('subscribe', events, function (err) {
       if (err) {
@@ -370,7 +370,6 @@ SCSocket.prototype._resubscribe = function (callback) {
       callback && callback(err);
     });
   }
-  this.emit('start');
 };
 
 SCSocket.prototype.on = function (event, listener, callback) {
