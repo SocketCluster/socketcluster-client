@@ -175,6 +175,11 @@ var SCSocket = function (options) {
     Socket.call(this, this.options.url, this.options);
   }
   
+  this._sortWeights = {
+    subscribe: -2,
+    start: -1
+  };
+  
   this.connected = false;
   this.connecting = true;
   
@@ -206,18 +211,18 @@ var SCSocket = function (options) {
       if (e.event == 'connect') {
         self.connected = true;
         self.connecting = false;
-        var ev;
-        for (var i in self._emitBuffer) {
-          ev = self._emitBuffer[i];
-          self._emit(ev.event, ev.data, ev.callback);
-        }
-        self._emitBuffer = [];
+        
         if (isBrowser) {
           self.ssid = self._setSessionCookie(e.data.appName, self.id);
         } else {
           self.ssid = self.id;
         }
         Emitter.prototype.emit.call(self, e.event, e.data.soid);
+        
+        setTimeout(function () {
+          self._flushEmitBuffer();
+        }, 0);
+        
       } else if (e.event == 'disconnect') {
         self.connected = false;
         self.connecting = false;
@@ -339,15 +344,37 @@ SCSocket.prototype._emit = function (event, data, callback) {
   Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
 };
 
+SCSocket.prototype._flushEmitBuffer = function () {
+  var self = this;
+  
+  // 'subscribe' and 'ready' events have priority over user events.
+  this._emitBuffer.sort(function (a, b) {
+    return (self._sortWeights[a.event] || 0) - (self._sortWeights[b.event] || 0);
+  });
+  
+  var len = this._emitBuffer.length;
+  var ev;
+  for (var i = 0; i < len; i++) {
+    ev = this._emitBuffer[i];
+    this._emit(ev.event, ev.data, ev.callback);
+  }
+  this._emitBuffer = [];
+};
+
 SCSocket.prototype.emit = function (event, data, callback) {
+  var self = this;
+  
   if (this._localEvents[event] == null) {
-    if (this.connected) {
-      this._emit(event, data, callback);
-    } else {
-      if (!this.connecting) {
-        this.connect();
+    if (!this.connected && !this.connecting) {
+      this.connect();
+    }
+    this._emitBuffer.push({event: event, data: data, callback: callback});
+    if (this._emitBuffer.length < 2) {
+      if (this.connected) {
+        setTimeout(function () {
+          self._flushEmitBuffer();
+        }, 0);
       }
-      this._emitBuffer.push({event: event, data: data, callback: callback});
     }
   } else {
     Emitter.prototype.emit.call(this, event, data);
