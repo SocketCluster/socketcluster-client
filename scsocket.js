@@ -152,6 +152,8 @@ var SCSocket = function (options) {
     'fail': 1
   };
   
+  this._connectAttempts = 0;
+  
   this._cid = 1;
   this._callbackMap = {};
   this._destId = null;
@@ -178,9 +180,29 @@ var SCSocket = function (options) {
   this.connected = false;
   this.connecting = true;
   
+  Socket.prototype.on.call(this, 'open', function () {
+    self._connectAttempts = 0;
+  });
+  
   Socket.prototype.on.call(this, 'error', function (err) {
     self.connecting = false;
     self._emitBuffer = [];
+    
+    // Exponential backoff reconnect
+    if (!self.connected) {
+      var exponent = ++self._connectAttempts;
+      if (exponent > 5) {
+        exponent = 5;
+      }
+      var reconnectOptions = self.options.autoReconnectOptions;
+      var initialTimeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
+      var backoutTimeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
+      setTimeout(function () {
+        if (!self.connected && !self.connecting) {
+          self.connect();
+        }
+      }, backoutTimeout);
+    }
   });
   
   Socket.prototype.on.call(this, 'close', function () {
