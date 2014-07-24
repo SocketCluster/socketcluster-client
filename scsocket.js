@@ -175,11 +175,6 @@ var SCSocket = function (options) {
     Socket.call(this, this.options.url, this.options);
   }
   
-  this._sortWeights = {
-    subscribe: -2,
-    start: -1
-  };
-  
   this.connected = false;
   this.connecting = true;
   
@@ -347,17 +342,46 @@ SCSocket.prototype._emit = function (event, data, callback) {
 SCSocket.prototype._flushEmitBuffer = function () {
   var self = this;
   
-  // 'subscribe' and 'ready' events have priority over user events.
-  this._emitBuffer.sort(function (a, b) {
-    return (self._sortWeights[a.event] || 0) - (self._sortWeights[b.event] || 0);
-  });
+  /*
+    'subscribe' and 'ready' events have priority over other events 
+    so they get emitted first.
+  */
   
-  var len = this._emitBuffer.length;
+  var subscribeEvents = [];
+  var readyEvents = [];
+  var otherEvents = [];
+  
   var ev;
+  var len = this._emitBuffer.length;
   for (var i = 0; i < len; i++) {
     ev = this._emitBuffer[i];
+    if (ev.event == 'subscribe') {
+      subscribeEvents.push(ev);
+    } else if (ev.event == 'ready') {
+      readyEvents.push(ev);
+    } else {
+      otherEvents.push(ev);
+    }
+  }
+  
+  len = subscribeEvents.length;
+  for (var j = 0; j < len; j++) {
+    ev = subscribeEvents[j];
     this._emit(ev.event, ev.data, ev.callback);
   }
+  
+  len = readyEvents.length;
+  for (var k = 0; k < len; k++) {
+    ev = readyEvents[k];
+    this._emit(ev.event, ev.data, ev.callback);
+  }
+  
+  len = otherEvents.length;
+  for (var m = 0; m < len; m++) {
+    ev = otherEvents[m];
+    this._emit(ev.event, ev.data, ev.callback);
+  }
+  
   this._emitBuffer = [];
 };
 
