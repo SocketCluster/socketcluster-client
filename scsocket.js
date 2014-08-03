@@ -159,6 +159,7 @@ var SCSocket = function (options) {
   this._destId = null;
   this._emitBuffer = [];
   this._subscriptions = {};
+  this._enableAutoReconnect = true;
   
   this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
   
@@ -182,6 +183,7 @@ var SCSocket = function (options) {
   
   Socket.prototype.on.call(this, 'open', function () {
     self._connectAttempts = 0;
+    self._enableAutoReconnect = true;
   });
   
   Socket.prototype.on.call(this, 'error', function (err) {
@@ -189,7 +191,7 @@ var SCSocket = function (options) {
     self._emitBuffer = [];
     
     // Exponential backoff reconnect
-    if (!self.connected && self.options.autoReconnect) {
+    if (!self.connected && self.options.autoReconnect && self._enableAutoReconnect) {
       var exponent = ++self._connectAttempts;
       if (exponent > 5) {
         exponent = 5;
@@ -211,7 +213,7 @@ var SCSocket = function (options) {
     self._emitBuffer = [];
     Emitter.prototype.emit.call(self, 'disconnect');
     
-    if (self.options.autoReconnect) {
+    if (self.options.autoReconnect && self._enableAutoReconnect) {
       var reconnectOptions = self.options.autoReconnectOptions;
       var timeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
       setTimeout(function () {
@@ -329,6 +331,11 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     });
     this.emit('ready');
   }
+};
+
+SCSocket.prototype.disconnect = function () {
+  this._enableAutoReconnect = false;
+  return Socket.prototype.close.apply(this);
 };
 
 SCSocket.prototype._nextCallId = function () {
