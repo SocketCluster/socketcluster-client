@@ -225,7 +225,13 @@ var SCSocket = function (options) {
   });
   
   Socket.prototype.on.call(this, 'message', function (message) {
-    var e = self.JSON.parse(message);
+    var e;
+    try {
+      e = self.JSON.parse(message);
+    } catch (err) {
+      e = message;
+    }
+    
     if (e.event) {
       if (e.event == 'connect') {
         self.connected = true;
@@ -254,7 +260,9 @@ var SCSocket = function (options) {
         var response = new Response(self, e.cid);
         Emitter.prototype.emit.call(self, e.event, e.data, response);
       }
-    } else if (e.cid != null) {
+    } else if (e.cid == null) {
+      Emitter.prototype.emit.call(self, 'raw', e);
+    } else {
       var ret = self._callbackMap[e.cid];
       if (ret) {
         clearTimeout(ret.timeout);
