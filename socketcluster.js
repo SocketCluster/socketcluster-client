@@ -4330,6 +4330,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
   } else {
     Emitter.prototype.emit.call(this, event, data);
   }
+  return this;
 };
 
 SCSocket.prototype._resubscribe = function (callback) {
