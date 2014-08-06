@@ -4019,8 +4019,12 @@ if (isBrowser) {
 var SCSocket = function (options) {
   var self = this;
   
-  options = options || {};
-  options.forceBase64 = true;
+  var opts = {};
+  for (var i in options) {
+    opts[i] = options[i];
+  }
+  opts.forceBase64 = true;
+  opts.path = (opts.path || '/socketcluster').replace(/\/$/, '') + '/';
   
   this._localEvents = {
     'connect': 1,
@@ -4053,7 +4057,7 @@ var SCSocket = function (options) {
   
   this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
   
-  this.options = options;
+  this.options = opts;
   
   if (this.options.autoReconnect && this.options.autoReconnectOptions == null) {
     this.options.autoReconnectOptions = {
