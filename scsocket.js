@@ -185,100 +185,6 @@ var SCSocket = function (options) {
   this.connected = false;
   this.connecting = true;
   
-  Socket.prototype.on.call(this, 'open', function () {
-    self._connectAttempts = 0;
-    self._enableAutoReconnect = true;
-  });
-  
-  Socket.prototype.on.call(this, 'error', function (err) {
-    self.connecting = false;
-    self._emitBuffer = [];
-    
-    // Exponential backoff reconnect
-    if (!self.connected && self.options.autoReconnect && self._enableAutoReconnect) {
-      var exponent = ++self._connectAttempts;
-      if (exponent > 5) {
-        exponent = 5;
-      }
-      var reconnectOptions = self.options.autoReconnectOptions;
-      var initialTimeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
-      var backoutTimeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
-      setTimeout(function () {
-        if (!self.connected && !self.connecting) {
-          self.connect();
-        }
-      }, backoutTimeout);
-    }
-  });
-  
-  Socket.prototype.on.call(this, 'close', function () {
-    self.connected = false;
-    self.connecting = false;
-    self._emitBuffer = [];
-    Emitter.prototype.emit.call(self, 'disconnect');
-    
-    if (self.options.autoReconnect && self._enableAutoReconnect) {
-      var reconnectOptions = self.options.autoReconnectOptions;
-      var timeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
-      setTimeout(function () {
-        if (!self.connected && !self.connecting) {
-          self.connect();
-        }
-      }, timeout);
-    }
-  });
-  
-  Socket.prototype.on.call(this, 'message', function (message) {
-    var e;
-    try {
-      e = self.JSON.parse(message);
-    } catch (err) {
-      e = message;
-    }
-    
-    if (e.event) {
-      if (e.event == 'connect') {
-        self.connected = true;
-        self.connecting = false;
-        
-        if (isBrowser) {
-          self.ssid = self._setSessionCookie(e.data.appName, self.id);
-        } else {
-          self.ssid = self.id;
-        }
-        Emitter.prototype.emit.call(self, e.event, e.data.soid);
-        
-        setTimeout(function () {
-          self._flushEmitBuffer();
-        }, 0);
-        
-      } else if (e.event == 'disconnect') {
-        self.connected = false;
-        self.connecting = false;
-        Emitter.prototype.emit.call(self, 'disconnect');
-      } else if (e.event == 'fail') {
-        self.connected = false;
-        self.connecting = false;
-        Emitter.prototype.emit.call(self, 'error', e.data);
-      } else {
-        var response = new Response(self, e.cid);
-        Emitter.prototype.emit.call(self, e.event, e.data, response);
-      }
-    } else if (e.cid == null) {
-      Emitter.prototype.emit.call(self, 'raw', e);
-    } else {
-      var ret = self._callbackMap[e.cid];
-      if (ret) {
-        clearTimeout(ret.timeout);
-        delete self._callbackMap[e.cid];
-        ret.callback(e.error, e.data);
-        if (e.error) {
-          Emitter.prototype.emit.call(self, 'error', e.error);
-        }
-      }
-    }
-  });
-  
   if (isBrowser) {
     activityManager.on('wakeup', function () {
       self.close();
@@ -348,6 +254,109 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
 SCSocket.prototype.disconnect = function () {
   this._enableAutoReconnect = false;
   return Socket.prototype.close.apply(this);
+};
+
+SCSocket.prototype.onError = function () {
+  var self = this;
+  
+  this.connecting = false;
+  this._emitBuffer = [];
+  
+  // Exponential backoff reconnect
+  if (!this.connected && this.options.autoReconnect && this._enableAutoReconnect) {
+    var exponent = ++this._connectAttempts;
+    if (exponent > 5) {
+      exponent = 5;
+    }
+    var reconnectOptions = this.options.autoReconnectOptions;
+    var initialTimeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
+    var backoutTimeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
+    setTimeout(function () {
+      if (!self.connected && !self.connecting) {
+        self.connect();
+      }
+    }, backoutTimeout);
+  }
+  Socket.prototype.onError.apply(this, arguments);
+};
+
+SCSocket.prototype.onOpen = function () {
+  this._connectAttempts = 0;
+  this._enableAutoReconnect = true;
+  Socket.prototype.onOpen.apply(this, arguments);
+};
+
+SCSocket.prototype.onClose = function () {
+  var self = this;
+  
+  this.connected = false;
+  this.connecting = false;
+  this._emitBuffer = [];
+  Emitter.prototype.emit.call(this, 'disconnect');
+  
+  if (this.options.autoReconnect && this._enableAutoReconnect) {
+    var reconnectOptions = this.options.autoReconnectOptions;
+    var timeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
+    setTimeout(function () {
+      if (!self.connected && !self.connecting) {
+        self.connect();
+      }
+    }, timeout);
+  }
+  Socket.prototype.onClose.apply(this, arguments);
+};
+
+SCSocket.prototype.onMessage = function (message) {
+  var self = this;
+  
+  var e;
+  try {
+    e = this.JSON.parse(message);
+  } catch (err) {
+    e = message;
+  }
+  
+  if (e.event) {
+    if (e.event == 'connect') {
+      this.connected = true;
+      this.connecting = false;
+      
+      if (isBrowser) {
+        this.ssid = this._setSessionCookie(e.data.appName, this.id);
+      } else {
+        this.ssid = this.id;
+      }
+      Emitter.prototype.emit.call(this, e.event, e.data.soid);
+      
+      setTimeout(function () {
+        self._flushEmitBuffer();
+      }, 0);
+      
+    } else if (e.event == 'disconnect') {
+      this.connected = false;
+      this.connecting = false;
+      Emitter.prototype.emit.call(this, 'disconnect');
+    } else if (e.event == 'fail') {
+      this.connected = false;
+      this.connecting = false;
+      Emitter.prototype.emit.call(this, 'error', e.data);
+    } else {
+      var response = new Response(this, e.cid);
+      Emitter.prototype.emit.call(this, e.event, e.data, response);
+    }
+  } else if (e.cid == null) {
+    Emitter.prototype.emit.call(this, 'raw', e);
+  } else {
+    var ret = this._callbackMap[e.cid];
+    if (ret) {
+      clearTimeout(ret.timeout);
+      delete this._callbackMap[e.cid];
+      ret.callback(e.error, e.data);
+      if (e.error) {
+        Emitter.prototype.emit.call(this, 'error', e.error);
+      }
+    }
+  }
 };
 
 SCSocket.prototype._nextCallId = function () {
@@ -442,6 +451,9 @@ SCSocket.prototype.emit = function (event, data, callback) {
       }
     }
   } else {
+    if (event == 'message') {
+      this.onMessage(data);
+    }
     Emitter.prototype.emit.call(this, event, data);
   }
   return this;
@@ -555,7 +567,7 @@ SCSocket.prototype.removeAllListeners = function () {
 };
 
 SCSocket.prototype.listeners = function (event) {
-  Emitter.prototype.listeners.call(this, event);
+  return Emitter.prototype.listeners.call(this, event);
 };
 
 if (typeof JSON != 'undefined') {
