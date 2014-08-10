@@ -301,6 +301,7 @@ SCSocket.prototype.onSCClose = function () {
   this.connecting = false;
   if (!this._connectAttempts) {
     this._tryReconnect();
+    Emitter.prototype.emit.call(this, 'disconnect');
   }
 };
 
