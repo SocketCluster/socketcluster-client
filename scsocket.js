@@ -256,10 +256,9 @@ SCSocket.prototype.disconnect = function () {
   return Socket.prototype.close.apply(this);
 };
 
-SCSocket.prototype.onOpen = function () {
+SCSocket.prototype.onSCOpen = function () {
   this._connectAttempts = 0;
   this._enableAutoReconnect = true;
-  Socket.prototype.onOpen.apply(this, arguments);
 };
 
 SCSocket.prototype._tryReconnect = function () {
@@ -285,25 +284,27 @@ SCSocket.prototype._tryReconnect = function () {
   }
 };
 
-SCSocket.prototype.onError = function () {
-  var wasConnected = this.connected;
+SCSocket.prototype.onSCError = function (err) {
   this.connecting = false;
-  Socket.prototype.onError.apply(this, arguments);
-  if (!wasConnected) {
+  if (!this.connected) {
     this._tryReconnect();
+  }
+  if (this.listeners('error').length < 1) {
+    setTimeout(function () {
+      throw err;
+    }, 0);
   }
 };
 
-SCSocket.prototype.onClose = function () {
+SCSocket.prototype.onSCClose = function () {
   this.connected = false;
   this.connecting = false;
-  Socket.prototype.onClose.apply(this, arguments);
   if (!this._connectAttempts) {
     this._tryReconnect();
   }
 };
 
-SCSocket.prototype.onMessage = function (message) {
+SCSocket.prototype.onSCMessage = function (message) {
   var self = this;
   
   var e;
@@ -448,16 +449,22 @@ SCSocket.prototype.emit = function (event, data, callback) {
       }
     }
   } else {
-    if (event == 'message') {
-      this.onMessage(data);
-    } else if (event == 'error') {
-      // If error event is not explicitly being listened for, throw 
-      // the error on next tick.
-      if (this.listeners(event).length < 1) {
-        setTimeout(function () {
-          throw data;
-        }, 0);
-      }
+    switch (event) {
+      case 'message':
+        this.onSCMessage(data);
+        break;
+        
+      case 'open':
+        this.onSCOpen();
+        break;
+        
+      case 'close':
+        this.onSCClose();
+        break;
+
+      case 'error':
+        this.onSCError(data);
+        break;
     }
     Emitter.prototype.emit.call(this, event, data);
   }
