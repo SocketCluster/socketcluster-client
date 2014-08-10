@@ -4152,12 +4152,14 @@ SCSocket.prototype.onOpen = function () {
   Socket.prototype.onOpen.apply(this, arguments);
 };
 
-SCSocket.prototype.onClose = function () {
+SCSocket.prototype._tryReconnect = function () {
   var self = this;
   
-  this._emitBuffer = [];
-  
-  if (this.options.autoReconnect && this._enableAutoReconnect) {
+  if (!self.connected && !self.connecting &&
+    this.options.autoReconnect && this._enableAutoReconnect) {
+    
+    this._emitBuffer = [];
+    
     var reconnectOptions = this.options.autoReconnectOptions;
     var exponent = this._connectAttempts++;
     if (exponent > 5) {
@@ -4171,13 +4173,24 @@ SCSocket.prototype.onClose = function () {
       }
     }, timeout);
   }
+};
+
+SCSocket.prototype.onError = function () {
   var wasConnected = this.connected;
+  this.connecting = false;
+  Socket.prototype.onError.apply(this, arguments);
+  if (!wasConnected) {
+    this._tryReconnect();
+  }
+};
+
+SCSocket.prototype.onClose = function () {
   this.connected = false;
   this.connecting = false;
-  if (wasConnected) {
-    Emitter.prototype.emit.call(this, 'disconnect');
-  }
   Socket.prototype.onClose.apply(this, arguments);
+  if (!this._connectAttempts) {
+    this._tryReconnect();
+  }
 };
 
 SCSocket.prototype.onMessage = function (message) {
