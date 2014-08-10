@@ -256,30 +256,6 @@ SCSocket.prototype.disconnect = function () {
   return Socket.prototype.close.apply(this);
 };
 
-SCSocket.prototype.onError = function () {
-  var self = this;
-  
-  this.connecting = false;
-  this._emitBuffer = [];
-  
-  // Exponential backoff reconnect
-  if (!this.connected && this.options.autoReconnect && this._enableAutoReconnect) {
-    var exponent = ++this._connectAttempts;
-    if (exponent > 5) {
-      exponent = 5;
-    }
-    var reconnectOptions = this.options.autoReconnectOptions;
-    var initialTimeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
-    var backoutTimeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
-    setTimeout(function () {
-      if (!self.connected && !self.connecting) {
-        self.connect();
-      }
-    }, backoutTimeout);
-  }
-  Socket.prototype.onError.apply(this, arguments);
-};
-
 SCSocket.prototype.onOpen = function () {
   this._connectAttempts = 0;
   this._enableAutoReconnect = true;
@@ -289,19 +265,27 @@ SCSocket.prototype.onOpen = function () {
 SCSocket.prototype.onClose = function () {
   var self = this;
   
-  this.connected = false;
-  this.connecting = false;
   this._emitBuffer = [];
-  Emitter.prototype.emit.call(this, 'disconnect');
   
   if (this.options.autoReconnect && this._enableAutoReconnect) {
     var reconnectOptions = this.options.autoReconnectOptions;
-    var timeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
+    var exponent = this._connectAttempts++;
+    if (exponent > 5) {
+      exponent = 5;
+    }
+    var initialTimeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
+    var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
     setTimeout(function () {
       if (!self.connected && !self.connecting) {
         self.connect();
       }
     }, timeout);
+  }
+  var wasConnected = this.connected;
+  this.connected = false;
+  this.connecting = false;
+  if (wasConnected) {
+    Emitter.prototype.emit.call(this, 'disconnect');
   }
   Socket.prototype.onClose.apply(this, arguments);
 };
@@ -453,6 +437,14 @@ SCSocket.prototype.emit = function (event, data, callback) {
   } else {
     if (event == 'message') {
       this.onMessage(data);
+    } else if (event == 'error') {
+      // If error event is not explicitly being listened for, throw 
+      // the error on next tick.
+      if (this.listeners(event).length < 1) {
+        setTimeout(function () {
+          throw data;
+        }, 0);
+      }
     }
     Emitter.prototype.emit.call(this, event, data);
   }
