@@ -129,7 +129,9 @@ if (isBrowser) {
 var SCSocket = function (options) {
   var self = this;
   
-  var opts = {};
+  var opts = {
+    ackTimeout: 10000
+  };
   for (var i in options) {
     opts[i] = options[i];
   }
@@ -172,8 +174,8 @@ var SCSocket = function (options) {
   
   if (this.options.autoReconnect && this.options.autoReconnectOptions == null) {
     this.options.autoReconnectOptions = {
-      delay: 10,
-      randomness: 10
+      delay: 10000,
+      randomness: 10000
     };
   }
   
@@ -271,7 +273,7 @@ SCSocket.prototype._tryReconnect = function () {
     if (exponent > 5) {
       exponent = 5;
     }
-    var initialTimeout = Math.round((reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random()) * 1000);
+    var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
     var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
     setTimeout(function () {
       if (!self.connected && !self.connecting) {
@@ -376,9 +378,11 @@ SCSocket.prototype._emit = function (event, data, callback) {
   
   if (callback) {
     var timeout = setTimeout(function () {
+      var error = new Error("Event response for '" + event + "' timed out");
       delete self._callbackMap[eventObject.cid];
-      callback('Event response timed out', eventObject);
-    }, this.pingTimeout);
+      callback(error, eventObject);
+      self.emit('error', error);
+    }, this.options.ackTimeout);
     
     this._callbackMap[eventObject.cid] = {callback: callback, timeout: timeout};
   }
@@ -476,7 +480,9 @@ SCSocket.prototype.publish = function (event, data, callback) {
     event: event,
     data: data
   };
-  return this.emit('publish', pubData, callback);
+  return this.emit('publish', pubData, function (err) {
+    callback && callback(err);
+  });
 };
 
 SCSocket.prototype._resubscribe = function (callback) {
