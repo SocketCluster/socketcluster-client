@@ -4037,6 +4037,7 @@ var SCSocket = function (options) {
     'packet': 1,
     'heartbeat': 1,
     'data': 1,
+    'raw': 1,
     'message': 1,
     'handshake': 1,
     'drain': 1,
@@ -4132,11 +4133,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     this.connected = false;
     this.connecting = true;
     Socket.prototype.open.apply(this, arguments);
-    this._resubscribe(function (err) {
-      if (err) {
-        self.emit('error', err);
-      }
-    });
+    this._resubscribe();
     this.emit('ready');
   }
 };
@@ -4228,7 +4225,7 @@ SCSocket.prototype.onSCMessage = function (message) {
     } else if (e.event == 'fail') {
       this.connected = false;
       this.connecting = false;
-      Emitter.prototype.emit.call(this, 'error', e.data);
+      self.emit('error', e.data);
     } else {
       var response = new Response(this, e.cid);
       Emitter.prototype.emit.call(this, e.event, e.data, response);
@@ -4241,9 +4238,9 @@ SCSocket.prototype.onSCMessage = function (message) {
       clearTimeout(ret.timeout);
       delete this._callbackMap[e.cid];
       ret.callback(e.error, e.data);
-      if (e.error) {
-        Emitter.prototype.emit.call(this, 'error', e.error);
-      }
+    }
+    if (e.error) {
+      self.emit('error', e.error);
     }
   }
 };
@@ -4257,23 +4254,23 @@ SCSocket.prototype.createTransport = function () {
 };
 
 SCSocket.prototype._emit = function (event, data, callback) {
+  var self = this;
+  
   var eventObject = {
     event: event
   };
   if (data !== undefined) {
     eventObject.data = data;
   }
+  eventObject.cid = this._nextCallId();
+  
   if (callback) {
-    var self = this;
-    var cid = this._nextCallId();
-    eventObject.cid = cid;
-    
     var timeout = setTimeout(function () {
-      delete self._callbackMap[cid];
+      delete self._callbackMap[eventObject.cid];
       callback('Event response timed out', eventObject);
     }, this.pingTimeout);
     
-    this._callbackMap[cid] = {callback: callback, timeout: timeout};
+    this._callbackMap[eventObject.cid] = {callback: callback, timeout: timeout};
   }
   Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
 };
@@ -4362,21 +4359,39 @@ SCSocket.prototype.emit = function (event, data, callback) {
   return this;
 };
 
+SCSocket.prototype.publish = function (event, data, callback) {
+  var self = this;
+  
+  var pubData = {
+    event: event,
+    data: data
+  };
+  return this.emit('publish', pubData, callback);
+};
+
 SCSocket.prototype._resubscribe = function (callback) {
   var self = this;
   
   var events = [];
-  
   for (var event in this._subscriptions) {
     events.push(event);
   }
-  if (events.length) {
-    this.emit('subscribe', events, function (err) {
+  var error;
+  var ackCount = 0;
+  
+  var ackHandler = function (err) {
+    ackCount++;
+    if (!error) {
       if (err) {
-        self.emit('error', err);
+        error = err;
+        callback && callback(err);
+      } else if (ackCount >= events.length) {
+        callback && callback();
       }
-      callback && callback(err);
-    });
+    }
+  };
+  for (var i in events) {
+    this.emit('subscribe', events[i], ackHandler);
   }
 };
 
@@ -4392,7 +4407,6 @@ SCSocket.prototype.on = function (event, listener, callback) {
       this.emit('subscribe', event, function (err) {
         if (err) {
           Emitter.prototype.removeListener.call(self, event, listener);
-          self.emit('error', err);
         } else {
           if (self._subscriptions[event] == null) {
             self._subscriptions[event] = 0;
@@ -4425,9 +4439,7 @@ SCSocket.prototype.removeListener = function (event, listener, callback) {
       this._subscriptions[event]--;
       if (this._subscriptions[event] < 1) {
         this.emit('unsubscribe', event, function (err) {
-          if (err) {
-            self.emit('error', err);
-          } else {
+          if (!err) {
             delete self._subscriptions[event];
           }
           callback && callback(err);
@@ -4456,9 +4468,7 @@ SCSocket.prototype.removeAllListeners = function () {
   Emitter.prototype.removeAllListeners.call(this, event);
   
   this.emit('unsubscribe', event, function (err) {
-    if (err) {
-      self.emit('error', err);
-    } else {
+    if (!err) {
       if (event) {
         delete self._subscriptions[event];
       } else {

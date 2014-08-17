@@ -147,6 +147,7 @@ var SCSocket = function (options) {
     'packet': 1,
     'heartbeat': 1,
     'data': 1,
+    'raw': 1,
     'message': 1,
     'handshake': 1,
     'drain': 1,
