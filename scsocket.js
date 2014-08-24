@@ -392,12 +392,9 @@ SCSocket.prototype._emit = function (event, data, callback) {
 SCSocket.prototype._flushEmitBuffer = function () {
   var self = this;
   
-  /*
-    'subscribe' and 'ready' events have priority over other events 
-    so they get emitted first.
-  */
+  // Some events have priority over other events
   
-  var subscribeEvents = [];
+  var subUnsubEvents = [];
   var readyEvents = [];
   var otherEvents = [];
   
@@ -405,8 +402,8 @@ SCSocket.prototype._flushEmitBuffer = function () {
   var len = this._emitBuffer.length;
   for (var i = 0; i < len; i++) {
     ev = this._emitBuffer[i];
-    if (ev.event == 'subscribe') {
-      subscribeEvents.push(ev);
+    if (ev.event == 'subscribe' || ev.event == 'unsubscribe') {
+      subUnsubEvents.push(ev);
     } else if (ev.event == 'ready') {
       readyEvents.push(ev);
     } else {
@@ -414,9 +411,9 @@ SCSocket.prototype._flushEmitBuffer = function () {
     }
   }
   
-  len = subscribeEvents.length;
+  len = subUnsubEvents.length;
   for (var j = 0; j < len; j++) {
-    ev = subscribeEvents[j];
+    ev = subUnsubEvents[j];
     this._emit(ev.event, ev.data, ev.callback);
   }
   
@@ -515,19 +512,16 @@ SCSocket.prototype.on = function (event, listener, callback) {
   var self = this;
   
   if (this._localEvents[event] == null) {
-    if (this._subscriptions[event]) {
-      Emitter.prototype.on.call(self, event, listener);
+    if (this._subscriptions[event] && Emitter.prototype.listeners.call(this, event).length) {
+      Emitter.prototype.on.call(this, event, listener);
       callback && callback();
     } else {
-      Emitter.prototype.on.call(self, event, listener);
+      Emitter.prototype.on.call(this, event, listener);
       this.emit('subscribe', event, function (err) {
         if (err) {
           Emitter.prototype.removeListener.call(self, event, listener);
         } else {
-          if (self._subscriptions[event] == null) {
-            self._subscriptions[event] = 0;
-          }
-          self._subscriptions[event]++;
+          self._subscriptions[event] = true;
         }
         callback && callback(err);
       });
@@ -549,11 +543,11 @@ SCSocket.prototype.once = function (event, listener, callback) {
 SCSocket.prototype.removeListener = function (event, listener, callback) {
   var self = this;
   
+  Emitter.prototype.removeListener.call(this, event, listener);
+  
   if (this._localEvents[event] == null) {
-    Emitter.prototype.removeListener.call(this, event, listener);
-    if (this._subscriptions[event] != null) {
-      this._subscriptions[event]--;
-      if (this._subscriptions[event] < 1) {
+    if (this._subscriptions[event]) {
+      if (!Emitter.prototype.listeners.call(this, event).length) {
         this.emit('unsubscribe', event, function (err) {
           if (!err) {
             delete self._subscriptions[event];
@@ -562,8 +556,6 @@ SCSocket.prototype.removeListener = function (event, listener, callback) {
         });
       }
     }
-  } else {
-    Emitter.prototype.removeListener.call(this, event, listener);
   }
 };
 
@@ -580,19 +572,20 @@ SCSocket.prototype.removeAllListeners = function () {
   } else {
     callback = arguments[0];
   }
-  
   Emitter.prototype.removeAllListeners.call(this, event);
   
-  this.emit('unsubscribe', event, function (err) {
-    if (!err) {
-      if (event) {
-        delete self._subscriptions[event];
-      } else {
-        self._subscriptions = {};
+  if (event == null || this._localEvents[event] == null) {
+    this.emit('unsubscribe', event, function (err) {
+      if (!err) {
+        if (event) {
+          delete self._subscriptions[event];
+        } else {
+          self._subscriptions = {};
+        }
       }
-    }
-    callback && callback(err);
-  });
+      callback && callback(err);
+    });
+  }
 };
 
 SCSocket.prototype.listeners = function (event) {
