@@ -130,6 +130,7 @@ var SCSocket = function (options) {
   var self = this;
   
   var opts = {
+    autoReconnect: true,
     ackTimeout: 10000
   };
   for (var i in options) {
