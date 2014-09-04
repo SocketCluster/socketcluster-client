@@ -136,7 +136,6 @@ var SCSocket = function (options) {
   for (var i in options) {
     opts[i] = options[i];
   }
-  opts.forceBase64 = true;
   opts.path = (opts.path || '/socketcluster').replace(/\/$/, '') + '/';
   
   this._localEvents = {
