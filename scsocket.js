@@ -361,10 +361,6 @@ SCSocket.prototype._nextCallId = function () {
   return this._cid++;
 };
 
-SCSocket.prototype.createTransport = function () {
-  return Socket.prototype.createTransport.apply(this, arguments);
-};
-
 SCSocket.prototype._emit = function (event, data, callback) {
   var self = this;
   
