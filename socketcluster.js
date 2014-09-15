@@ -4057,6 +4057,7 @@ var SCSocket = function (options) {
   this._emitBuffer = [];
   this._subscriptions = {};
   this._enableAutoReconnect = true;
+  this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   
   this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
   
@@ -4251,8 +4252,77 @@ SCSocket.prototype._nextCallId = function () {
   return this._cid++;
 };
 
-SCSocket.prototype.createTransport = function () {
-  return Socket.prototype.createTransport.apply(this, arguments);
+SCSocket.prototype._isOwnDescendant = function (object, ancestors) {
+  for (var i in ancestors) {
+    if (ancestors[i] === object) {
+      return true;
+    }
+  }
+  return false;
+};
+
+SCSocket.prototype._arrayBufferToBase64 = function (arraybuffer) {
+  var chars = this._base64Chars;
+  var bytes = new Uint8Array(arraybuffer);
+  var len = bytes.length;
+  var base64 = '';
+
+  for (var i = 0; i < len; i += 3) {
+    base64 += chars[bytes[i] >> 2];
+    base64 += chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+    base64 += chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+    base64 += chars[bytes[i + 2] & 63];
+  }
+
+  if ((len % 3) === 2) {
+    base64 = base64.substring(0, base64.length - 1) + '=';
+  } else if (len % 3 === 1) {
+    base64 = base64.substring(0, base64.length - 2) + '==';
+  }
+
+  return base64;
+};
+
+SCSocket.prototype._convertBuffersToBase64 = function (object, ancestors) {
+  if (!ancestors) {
+    ancestors = [];
+  }
+  if (this._isOwnDescendant(object, ancestors)) {
+    throw new Error('Cannot traverse circular structure');
+  }
+  var newAncestors = ancestors.concat([object]);
+  
+  if (object instanceof ArrayBuffer) {
+    return {
+      base64: true,
+      data: this._arrayBufferToBase64(object)
+    };
+  }
+  
+  if (object instanceof Array) {
+    var base64Array = [];
+    for (var i in object) {
+      base64Array[i] = this._convertBuffersToBase64(object[i], newAncestors);
+    }
+    return base64Array;
+  }
+  if (object instanceof Object) {
+    var base64Object = {};
+    for (var j in object) {
+      base64Object[j] = this._convertBuffersToBase64(object[j], newAncestors);
+    }
+    return base64Object;
+  }
+  
+  return object;
+};
+
+SCSocket.prototype.parse = function (message) {
+  return this.JSON.parse(message);
+};
+
+SCSocket.prototype.stringify = function (object) {
+  return this.JSON.stringify(this._convertBuffersToBase64(object));
 };
 
 SCSocket.prototype._emit = function (event, data, callback) {
@@ -4276,7 +4346,7 @@ SCSocket.prototype._emit = function (event, data, callback) {
     
     this._callbackMap[eventObject.cid] = {callback: callback, timeout: timeout};
   }
-  Socket.prototype.send.call(this, this.JSON.stringify(eventObject));
+  Socket.prototype.send.call(this, this.stringify(eventObject));
 };
 
 SCSocket.prototype._flushEmitBuffer = function () {
