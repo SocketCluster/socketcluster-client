@@ -28,14 +28,11 @@ Embed in your HTML page using (Note that the src attribute may be different depe
 
 Once you have embedded the client socketcluster.js into your page, you will gain access to a global socketCluster object.
 Then, to begin interacting with the SocketCluster cluster, you will need to establish a connection.
-Once that's done, you will be able to emit events to the server and listen to incoming events (sample code):
+Once that's done, you will be able to emit events to the server and listen to incoming events (example code):
 
 ```js
 var options = {
-    protocol: location.protocol.replace(/:$/, ''),
-    hostname: location.hostname,
-    port: 8000,
-    autoReconnect: true
+    port: 8000
 };
 
 // Initiate the connection to the server
@@ -51,4 +48,17 @@ socket.on('rand', function (num) {
     curHTML += 'RANDOM: ' + num + '<br />';
     document.body.innerHTML = curHTML;
 });
+```
+
+Example with HTTPS:
+
+```js
+var options = {
+    protocol: 'https',
+    hostname: 'example.com',
+    port: 443
+};
+
+// Initiate the connection to the server
+var socket = socketCluster.connect(options);
 ```
