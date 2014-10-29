@@ -552,6 +552,28 @@ SCSocket.prototype.publish = function (event, data, callback) {
   });
 };
 
+SCSocket.prototype.subscribe = function (channel, callback) {
+  var self = this;
+  
+  this.emit('subscribe', channel, function (err) {
+    if (!err) {
+      self._subscriptions[channel] = true;
+    }
+    callback && callback(err);
+  });
+};
+
+SCSocket.prototype.unsubscribe = function (channel, callback) {
+  var self = this;
+  
+  this.emit('unsubscribe', channel, function (err) {
+    if (!err) {
+      delete self._subscriptions[event];
+    }
+    callback && callback(err);
+  });
+};
+
 SCSocket.prototype._resubscribe = function (callback) {
   var self = this;
   
@@ -576,90 +598,6 @@ SCSocket.prototype._resubscribe = function (callback) {
   for (var i in events) {
     this.emit('subscribe', events[i], ackHandler);
   }
-};
-
-SCSocket.prototype.on = function (event, listener, callback) {
-  var self = this;
-  
-  if (this._localEvents[event] == null) {
-    if (this._subscriptions[event] && Emitter.prototype.listeners.call(this, event).length) {
-      Emitter.prototype.on.call(this, event, listener);
-      callback && callback();
-    } else {
-      Emitter.prototype.on.call(this, event, listener);
-      this.emit('subscribe', event, function (err) {
-        if (err) {
-          Emitter.prototype.removeListener.call(self, event, listener);
-        } else {
-          self._subscriptions[event] = true;
-        }
-        callback && callback(err);
-      });
-    }
-  } else {
-    Emitter.prototype.on.apply(this, arguments);
-  }
-};
-
-SCSocket.prototype.once = function (event, listener, callback) {
-  var self = this;
-  
-  this.on(event, listener, callback);
-  Emitter.prototype.once.call(this, event, function () {
-    self.removeListener(event, listener);
-  });
-};
-
-SCSocket.prototype.removeListener = function (event, listener, callback) {
-  var self = this;
-  
-  Emitter.prototype.removeListener.call(this, event, listener);
-  
-  if (this._localEvents[event] == null) {
-    if (this._subscriptions[event]) {
-      if (!Emitter.prototype.listeners.call(this, event).length) {
-        this.emit('unsubscribe', event, function (err) {
-          if (!err) {
-            delete self._subscriptions[event];
-          }
-          callback && callback(err);
-        });
-      }
-    }
-  }
-};
-
-/*
-  removeAllListeners([event, callback]);
-*/
-SCSocket.prototype.removeAllListeners = function () {
-  var self = this;
-  
-  var event, callback;
-  if (typeof arguments[0] == 'string') {
-    event = arguments[0];
-    callback = arguments[1];
-  } else {
-    callback = arguments[0];
-  }
-  Emitter.prototype.removeAllListeners.call(this, event);
-  
-  if (event == null || this._localEvents[event] == null) {
-    this.emit('unsubscribe', event, function (err) {
-      if (!err) {
-        if (event) {
-          delete self._subscriptions[event];
-        } else {
-          self._subscriptions = {};
-        }
-      }
-      callback && callback(err);
-    });
-  }
-};
-
-SCSocket.prototype.listeners = function (event) {
-  return Emitter.prototype.listeners.call(this, event);
 };
 
 if (typeof JSON != 'undefined') {
