@@ -541,8 +541,6 @@ SCSocket.prototype.emit = function (event, data, callback) {
 };
 
 SCSocket.prototype.publish = function (event, data, callback) {
-  var self = this;
-  
   var pubData = {
     event: event,
     data: data
@@ -552,26 +550,83 @@ SCSocket.prototype.publish = function (event, data, callback) {
   });
 };
 
-SCSocket.prototype.subscribe = function (channel, callback) {
-  var self = this;
+SCSocket.prototype._execParallel = function (tasks, count, callback) {
+  var pendingCount = count;
+  var errorCount = 0;
+  var errorMap = {};
   
-  this.emit('subscribe', channel, function (err) {
-    if (!err) {
-      self._subscriptions[channel] = true;
-    }
-    callback && callback(err);
-  });
+  for (var i in tasks) {
+    (function (i) {
+      tasks[i](function (err) {
+        pendingCount--;
+        if (err) {
+          errorCount++;
+          errorMap[i] = err;
+        }
+        if (pendingCount < 1 && callback) {
+          if (errorCount) {
+            if (count > 1) {
+              callback(errorMap);
+            } else {
+              callback(errorMap[i]);
+            }
+          } else {
+            callback();
+          }
+        }
+      });
+    })(i);
+  }
 };
 
-SCSocket.prototype.unsubscribe = function (channel, callback) {
+SCSocket.prototype.subscribe = function (channels, callback) {
   var self = this;
   
-  this.emit('unsubscribe', channel, function (err) {
-    if (!err) {
-      delete self._subscriptions[event];
-    }
-    callback && callback(err);
-  });
+  if (!(channels instanceof Array)) {
+    channels = [channels];
+  }
+  
+  var tasks = {};
+  
+  for (var i in channels) {
+    (function (channel) {
+      tasks[channel] = function (cb) {
+        self.emit('subscribe', channel, function (err) {
+          if (!err) {
+            self._subscriptions[channel] = true;
+          }
+          cb(err);
+        });
+      };
+    })(channels[i]);
+  }
+  
+  this._execParallel(tasks, channels.length, callback);
+};
+
+SCSocket.prototype.unsubscribe = function (channels, callback) {
+  var self = this;
+  
+  if (!(channels instanceof Array)) {
+    channels = [channels];
+  }
+  
+  var tasks = {};
+  
+  for (var i in channels) {
+    (function (channel) {
+      tasks[channel] = function (cb) {
+        self.emit('unsubscribe', channel, function (err) {
+          if (!err) {
+            delete self._subscriptions[event];
+          }
+          cb(err);
+        });
+      };
+    })(channels[i]);
+  }
+  
+  this._execParallel(tasks, channels.length, callback);
 };
 
 SCSocket.prototype._resubscribe = function (callback) {
