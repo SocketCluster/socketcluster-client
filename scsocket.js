@@ -4,6 +4,7 @@
 
 var Emitter = require('emitter');
 var Socket = require('engine.io-client');
+var SCChannel = require('./scchannel');
 
 /**
  * Module exports.
@@ -514,89 +515,40 @@ SCSocket.prototype.publish = function (event, data, callback) {
   });
 };
 
-SCSocket.prototype._execParallel = function (tasks, count, callback) {
-  var pendingCount = count;
-  var errorCount = 0;
-  var errorMap = {};
-  
-  for (var i in tasks) {
-    (function (i) {
-      tasks[i](function (err) {
-        pendingCount--;
-        if (err) {
-          errorCount++;
-          errorMap[i] = err;
-        }
-        if (pendingCount < 1 && callback) {
-          if (errorCount) {
-            if (count > 1) {
-              callback(errorMap);
-            } else {
-              callback(errorMap[i]);
-            }
-          } else {
-            callback();
-          }
-        }
-      });
-    })(i);
-  }
-};
-
-SCSocket.prototype.subscribe = function (channels, callback) {
+SCSocket.prototype.subscribe = function (channelName) {
   var self = this;
   
-  if (!(channels instanceof Array)) {
-    channels = [channels];
-  }
+  var channel = new SCChannel(channelName, this);
+  this._subscriptions[channelName] = 'pending';
   
-  var tasks = {};
+  this.emit('subscribe', channelName, function (err) {
+    if (err) {
+      // If it fails, it could be because of a bad connection; so we should leave the 
+      // subscription status as 'pending' - That way, if the connection is the problem,
+      // the socket will automatically retry on reconnect.
+      Emitter.prototype.emit.call(self, 'subscribeFail:' + channelName, channelName);
+    } else {
+      self._subscriptions[channelName] = true;
+      Emitter.prototype.emit.call(self, 'subscribe:' + channelName, channelName);
+    }
+  });
   
-  for (var i in channels) {
-    (function (channel) {
-      tasks[channel] = function (cb) {
-        self.emit('subscribe', channel, function (err) {
-          if (!err) {
-            self._subscriptions[channel] = true;
-          }
-          cb(err);
-        });
-      };
-    })(channels[i]);
-  }
-  
-  this._execParallel(tasks, channels.length, callback);
+  return channel;
 };
 
-SCSocket.prototype.unsubscribe = function (channels, callback) {
-  var self = this;
+SCSocket.prototype.unsubscribe = function (channelName) {
+  delete this._subscriptions[channelName];
   
-  if (!(channels instanceof Array)) {
-    channels = [channels];
-  }
-  
-  var tasks = {};
-  
-  for (var i in channels) {
-    (function (channel) {
-      tasks[channel] = function (cb) {
-        self.emit('unsubscribe', channel, function (err) {
-          if (!err) {
-            delete self._subscriptions[channel];
-          }
-          cb(err);
-        });
-      };
-    })(channels[i]);
-  }
-  
-  this._execParallel(tasks, channels.length, callback);
+  this.emit('unsubscribe', channelName);
+  Emitter.prototype.emit.call(this, 'unsubscribe:' + channelName);
 };
 
 SCSocket.prototype.subscriptions = function () {
   var subs = [];
   for (var channel in this._subscriptions) {
-    subs.push(channel);
+    if (this._subscriptions[channel] === true) {
+      subs.push(channel);
+    }
   }
   return subs;
 };
