@@ -189,6 +189,8 @@ var SCSocket = function (options) {
   this.connected = false;
   this.connecting = true;
   
+  this._channelEmitter = new Emitter();
+  
   if (isBrowser) {
     activityManager.on('wakeup', function () {
       self.close();
@@ -338,6 +340,8 @@ SCSocket.prototype.onSCMessage = function (message) {
       var response = new Response(this, e.cid);
       Emitter.prototype.emit.call(this, e.event, e.data, response);
     }
+  } else if (e.channel) {
+    this._channelEmitter.emit(e.channel, e.data);
   } else if (e.cid == null) {
     Emitter.prototype.emit.call(this, 'raw', e);
   } else {
@@ -621,6 +625,24 @@ SCSocket.prototype._resubscribe = function (callback) {
   for (var i in events) {
     this.emit('subscribe', events[i], ackHandler);
   }
+};
+
+SCSocket.prototype.watch = function (channel, handler) {
+  this._channelEmitter.on(channel, handler);
+  return this;
+};
+
+SCSocket.prototype.unwatch = function (channel, handler) {
+  if (handler) {
+    this._channelEmitter.removeListener(channel, handler);
+  } else {
+    this._channelEmitter.removeAllListeners(channel);
+  }
+  return this;
+};
+
+SCSocket.prototype.watchers = function (channel) {
+  return this._channelEmitter.listeners(channel);
 };
 
 if (typeof JSON != 'undefined') {
