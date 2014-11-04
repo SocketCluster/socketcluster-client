@@ -465,22 +465,33 @@ SCSocket.prototype._flushEmitBuffer = function () {
   
   for (var i = 0; i < len; i++) {
     ev = this._emitBuffer[i];
+    clearTimeout(ev.timeout);
     this._emit(ev.event, ev.data, ev.callback);
   }
   this._emitBuffer = [];
 };
 
 SCSocket.prototype.emit = function (event, data, callback) {
-
+  var self = this;
+  
   if (this._localEvents[event] == null) {
     if (!this.connected && !this.connecting) {
       this.connect();
     }
-    this._emitBuffer.push({event: event, data: data, callback: callback});
-    if (this._emitBuffer.length < 2) {
-      if (this.connected) {
-        this._flushEmitBuffer();
-      }
+    var eventObject = {
+      event: event,
+      data: data,
+      callback: callback
+    };
+    this._emitBuffer.push(eventObject);
+    if (this._emitBuffer.length < 2 && this.connected) {
+      this._flushEmitBuffer();
+    } else {
+      eventObject.timeout = setTimeout(function () {
+        var error = new Error("Event response for '" + event + "' timed out due to failed connection");
+        callback(error, eventObject);
+        self.emit('error', error);
+      }, this.options.ackTimeout);
     }
   } else {
     switch (event) {
