@@ -489,7 +489,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
     } else {
       eventObject.timeout = setTimeout(function () {
         var error = new Error("Event response for '" + event + "' timed out due to failed connection");
-        callback(error, eventObject);
+        callback && callback(error, eventObject);
         self.emit('error', error);
       }, this.options.ackTimeout);
     }
@@ -526,7 +526,7 @@ SCSocket.prototype.publish = function (event, data, callback) {
   });
 };
 
-SCSocket.prototype.subscribe = function (channelName) {
+SCSocket.prototype.subscribe = function (channelName, callback) {
   var self = this;
   
   var channel = new SCChannel(channelName, this);
@@ -542,16 +542,18 @@ SCSocket.prototype.subscribe = function (channelName) {
       self._subscriptions[channelName] = true;
       Emitter.prototype.emit.call(self, 'subscribe:' + channelName, channelName);
     }
+    callback && callback(err);
   });
   
   return channel;
 };
 
-SCSocket.prototype.unsubscribe = function (channelName) {
+SCSocket.prototype.unsubscribe = function (channelName, callback) {
   delete this._subscriptions[channelName];
   
   this.emit('unsubscribe', channelName);
   Emitter.prototype.emit.call(this, 'unsubscribe:' + channelName);
+  callback && callback();
 };
 
 SCSocket.prototype.subscriptions = function () {
