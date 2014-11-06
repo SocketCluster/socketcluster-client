@@ -160,6 +160,12 @@ var SCSocket = function (options) {
     'fail': 1
   };
   
+  this._persistentEvents = {
+    'subscribe': 1,
+    'unsubscribe': 1,
+    'ready': 1
+  };
+  
   this._connectAttempts = 0;
   
   this._cid = 1;
@@ -486,7 +492,8 @@ SCSocket.prototype.emit = function (event, data, callback) {
     this._emitBuffer.push(eventObject);
     if (this._emitBuffer.length < 2 && this.connected) {
       this._flushEmitBuffer();
-    } else {
+    } else if (!this._persistentEvents[event]) {
+      // Persistent events should never timeout
       eventObject.timeout = setTimeout(function () {
         var error = new Error("Event response for '" + event + "' timed out due to failed connection");
         callback && callback(error, eventObject);
