@@ -523,9 +523,9 @@ SCSocket.prototype.emit = function (event, data, callback) {
   return this;
 };
 
-SCSocket.prototype.publish = function (event, data, callback) {
+SCSocket.prototype.publish = function (channelName, data, callback) {
   var pubData = {
-    event: event,
+    event: channelName,
     data: data
   };
   return this.emit('publish', pubData, function (err) {
@@ -599,22 +599,22 @@ SCSocket.prototype._resubscribe = function (callback) {
   }
 };
 
-SCSocket.prototype.watch = function (channel, handler) {
-  this._channelEmitter.on(channel, handler);
+SCSocket.prototype.watch = function (channelName, handler) {
+  this._channelEmitter.on(channelName, handler);
   return this;
 };
 
-SCSocket.prototype.unwatch = function (channel, handler) {
+SCSocket.prototype.unwatch = function (channelName, handler) {
   if (handler) {
-    this._channelEmitter.removeListener(channel, handler);
+    this._channelEmitter.removeListener(channelName, handler);
   } else {
-    this._channelEmitter.removeAllListeners(channel);
+    this._channelEmitter.removeAllListeners(channelName);
   }
   return this;
 };
 
-SCSocket.prototype.watchers = function (channel) {
-  return this._channelEmitter.listeners(channel);
+SCSocket.prototype.watchers = function (channelName) {
+  return this._channelEmitter.listeners(channelName);
 };
 
 if (typeof JSON != 'undefined') {
