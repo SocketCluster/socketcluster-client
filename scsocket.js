@@ -256,7 +256,10 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     this.connecting = true;
     Socket.prototype.open.apply(this, arguments);
     this._resubscribe();
-    this.emit('ready');
+    
+    setTimeout(function () {
+      self.emit('ready');
+    }, 0);
   }
 };
 
