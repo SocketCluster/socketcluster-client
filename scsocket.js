@@ -547,7 +547,7 @@ SCSocket.prototype.subscribe = function (channelName, callback) {
       // If it fails, it could be because of a bad connection; so we should leave the 
       // subscription status as 'pending' - That way, if the connection is the problem,
       // the socket will automatically retry on reconnect.
-      Emitter.prototype.emit.call(self, 'subscribeFail:' + channelName, channelName);
+      Emitter.prototype.emit.call(self, 'subscribeFail:' + channelName, err, channelName);
     } else {
       self._subscriptions[channelName] = true;
       Emitter.prototype.emit.call(self, 'subscribe:' + channelName, channelName);

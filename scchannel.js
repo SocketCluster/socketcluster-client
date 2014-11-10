@@ -32,8 +32,8 @@ var SCChannel = function (name, socket) {
     self.active = true;
     self.emit(subscribeEvent, self.name);
   });
-  this.socket.on(subscribeFailEvent + ':' + this.name, function () {
-    self.emit(subscribeFailEvent, self.name);
+  this.socket.on(subscribeFailEvent + ':' + this.name, function (err) {
+    self.emit(subscribeFailEvent, err, self.name);
   });
   
   this.socket.on(unsubscribeEvent + ':' + this.name, function () {
