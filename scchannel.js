@@ -20,7 +20,7 @@ var SCChannel = function (name, socket) {
   Emitter.call(this);
   
   this.name = name;
-  this.active = false;
+  this.active = socket.isSubscribed(this.name);
   this.socket = socket;
   
   var subscribeEvent = 'subscribe';
@@ -29,8 +29,10 @@ var SCChannel = function (name, socket) {
   var unsubscribeEvent = 'unsubscribe';
   
   this.socket.on(subscribeEvent + ':' + this.name, function () {
-    self.active = true;
-    self.emit(subscribeEvent, self.name);
+    if (!self.active) {
+      self.active = true;
+      self.emit(subscribeEvent, self.name);
+    }
   });
   this.socket.on(subscribeFailEvent + ':' + this.name, function (err) {
     self.emit(subscribeFailEvent, err, self.name);
