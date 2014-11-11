@@ -561,6 +561,10 @@ SCSocket.prototype.subscriptions = function () {
   return subs;
 };
 
+SCSocket.prototype.isSubscribed = function (channel) {
+  return this._subscriptions[channel] === true;
+};
+
 SCSocket.prototype._resubscribe = function (callback) {
   var self = this;
   
