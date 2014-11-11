@@ -444,38 +444,20 @@ SCSocket.prototype.stringify = function (object) {
   return this.JSON.stringify(this._convertBuffersToBase64(object));
 };
 
-SCSocket.prototype._emit = function (event, data, callback) {
-  var self = this;
-  
-  var eventObject = {
-    event: event
-  };
-  if (data !== undefined) {
-    eventObject.data = data;
-  }
+SCSocket.prototype._emit = function (eventObject) {
   eventObject.cid = this._nextCallId();
   
-  if (callback) {
-    var timeout = setTimeout(function () {
-      var error = new Error("Event response for '" + event + "' timed out");
-      delete self._callbackMap[eventObject.cid];
-      callback(error, eventObject);
-      self.emit('error', error);
-    }, this.options.ackTimeout);
-    
-    this._callbackMap[eventObject.cid] = {callback: callback, timeout: timeout};
+  if (eventObject.callback) {
+    this._callbackMap[eventObject.cid] = eventObject;
   }
   Socket.prototype.send.call(this, this.stringify(eventObject));
 };
 
 SCSocket.prototype._flushEmitBuffer = function () {
-  var ev;
   var len = this._emitBuffer.length;
   
   for (var i = 0; i < len; i++) {
-    ev = this._emitBuffer[i];
-    clearTimeout(ev.timeout);
-    this._emit(ev.event, ev.data, ev.callback);
+    this._emit(this._emitBuffer[i]);
   }
   this._emitBuffer = [];
 };
@@ -492,16 +474,22 @@ SCSocket.prototype.emit = function (event, data, callback) {
       data: data,
       callback: callback
     };
-    this._emitBuffer.push(eventObject);
-    if (this._emitBuffer.length < 2 && this.connected) {
-      this._flushEmitBuffer();
-    } else if (!this._persistentEvents[event]) {
-      // Persistent events should never timeout
+    
+    // Persistent events should never timeout
+    if (!this._persistentEvents[event]) {
       eventObject.timeout = setTimeout(function () {
-        var error = new Error("Event response for '" + event + "' timed out due to failed connection");
+        var error = new Error("Event response for '" + event + "' timed out", eventObject);
+        if (eventObject.cid) {
+          delete self._callbackMap[eventObject.cid];
+        }
+        delete eventObject.callback;
         callback && callback(error, eventObject);
         self.emit('error', error);
       }, this.options.ackTimeout);
+    }
+    this._emitBuffer.push(eventObject);
+    if (this._emitBuffer.length < 2 && this.connected) {
+      this._flushEmitBuffer();
     }
   } else {
     switch (event) {
@@ -544,9 +532,6 @@ SCSocket.prototype.subscribe = function (channelName, callback) {
   
   this.emit('subscribe', channelName, function (err) {
     if (err) {
-      // If it fails, it could be because of a bad connection; so we should leave the 
-      // subscription status as 'pending' - That way, if the connection is the problem,
-      // the socket will automatically retry on reconnect.
       Emitter.prototype.emit.call(self, 'subscribeFail:' + channelName, err, channelName);
     } else {
       self._subscriptions[channelName] = true;
