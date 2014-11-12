@@ -20,28 +20,8 @@ var SCChannel = function (name, socket) {
   Emitter.call(this);
   
   this.name = name;
-  this.active = socket.isSubscribed(this.name);
+  this.active = false;
   this.socket = socket;
-  
-  var subscribeEvent = 'subscribe';
-  var subscribeFailEvent = 'subscribeFail';
-  
-  var unsubscribeEvent = 'unsubscribe';
-  
-  this.socket.on(subscribeEvent + ':' + this.name, function () {
-    if (!self.active) {
-      self.active = true;
-      self.emit(subscribeEvent, self.name);
-    }
-  });
-  this.socket.on(subscribeFailEvent + ':' + this.name, function (err) {
-    self.emit(subscribeFailEvent, err, self.name);
-  });
-  
-  this.socket.on(unsubscribeEvent + ':' + this.name, function () {
-    self.active = false;
-    self.emit(unsubscribeEvent);
-  });
 };
 
 SCChannel.prototype = Object.create(Emitter.prototype);

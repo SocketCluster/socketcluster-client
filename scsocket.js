@@ -172,7 +172,7 @@ var SCSocket = function (options) {
   this._callbackMap = {};
   this._destId = null;
   this._emitBuffer = [];
-  this._subscriptions = {};
+  this._channels = {};
   this._enableAutoReconnect = true;
   this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   
@@ -475,15 +475,16 @@ SCSocket.prototype.emit = function (event, data, callback) {
       callback: callback
     };
     
-    // Persistent events should never timeout
-    if (!this._persistentEvents[event]) {
+    // Persistent events should never timeout.
+    // Also, only set timeout if there is a callback.
+    if (!this._persistentEvents[event] && callback) {
       eventObject.timeout = setTimeout(function () {
         var error = new Error("Event response for '" + event + "' timed out", eventObject);
         if (eventObject.cid) {
           delete self._callbackMap[eventObject.cid];
         }
         delete eventObject.callback;
-        callback && callback(error, eventObject);
+        callback(error, eventObject);
         self.emit('error', error);
       }, this.options.ackTimeout);
     }
@@ -515,6 +516,8 @@ SCSocket.prototype.emit = function (event, data, callback) {
 };
 
 SCSocket.prototype.publish = function (channelName, data, callback) {
+  var self = this;
+  
   var pubData = {
     event: channelName,
     data: data
@@ -527,34 +530,51 @@ SCSocket.prototype.publish = function (channelName, data, callback) {
 SCSocket.prototype.subscribe = function (channelName, callback) {
   var self = this;
   
-  var channel = new SCChannel(channelName, this);
-  this._subscriptions[channelName] = 'pending';
+  var channel = this._channels[channelName];
   
-  this.emit('subscribe', channelName, function (err) {
-    if (err) {
-      Emitter.prototype.emit.call(self, 'subscribeFail:' + channelName, err, channelName);
-    } else {
-      self._subscriptions[channelName] = true;
-      Emitter.prototype.emit.call(self, 'subscribe:' + channelName, channelName);
-    }
-    callback && callback(err);
-  });
+  if (channel) {
+    callback && callback();
+  } else {
+    channel = new SCChannel(channelName, this);
+    this._channels[channelName] = channel;
+    
+    this.emit('subscribe', channelName, function (err) {
+      if (err) {
+        channel.emit('subscribeFail', err, channelName);
+      } else {
+        channel.active = true;
+        channel.emit('subscribe', channelName);
+      }
+      callback && callback(err);
+    });
+  }
   
   return channel;
 };
 
 SCSocket.prototype.unsubscribe = function (channelName, callback) {
-  delete this._subscriptions[channelName];
+  var channel = this._channels[channelName];
   
-  this.emit('unsubscribe', channelName);
-  Emitter.prototype.emit.call(this, 'unsubscribe:' + channelName);
+  if (channel) {
+    channel.active = false;
+    delete this._channels[channelName];
+    
+    // The only case in which unsubscribe can fail is if the connection is closed or dies.
+    // If that's the case, the server will automatically unsubscribe the client so
+    // we don't need to check for failure since this operation can never really fail.
+    
+    this.emit('unsubscribe', channelName);
+    channel.emit('unsubscribe', channelName);
+  }
   callback && callback();
 };
 
 SCSocket.prototype.subscriptions = function () {
   var subs = [];
-  for (var channel in this._subscriptions) {
-    if (this._subscriptions[channel] === true) {
+  var channelObject;
+  for (var channel in this._channels) {
+    channelObject = this._channels[channel];
+    if (channelObject && channelObject.active) {
       subs.push(channel);
     }
   }
@@ -562,14 +582,14 @@ SCSocket.prototype.subscriptions = function () {
 };
 
 SCSocket.prototype.isSubscribed = function (channel) {
-  return this._subscriptions[channel] === true;
+  return this._channels[channel] && this._channels[channel].active;
 };
 
 SCSocket.prototype._resubscribe = function (callback) {
   var self = this;
   
   var events = [];
-  for (var event in this._subscriptions) {
+  for (var event in this._channels) {
     events.push(event);
   }
   var error;
