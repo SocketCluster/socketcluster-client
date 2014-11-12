@@ -11,17 +11,7 @@ var SCChannel = require('./scchannel');
  */
 
 if (!Object.create) {
-  Object.create = (function () {
-    function F() {};
-
-    return function (o) {
-      if (arguments.length != 1) {
-        throw new Error('Object.create implementation only accepts one parameter.');
-      }
-      F.prototype = o;
-      return new F();
-    }
-  })();
+  Object.create = require('./objectcreate');
 }
 
 var Response = function (socket, id) {
@@ -162,7 +152,6 @@ var SCSocket = function (options) {
   
   this._persistentEvents = {
     'subscribe': 1,
-    'unsubscribe': 1,
     'ready': 1
   };
   
@@ -527,62 +516,56 @@ SCSocket.prototype.publish = function (channelName, data, callback) {
   });
 };
 
-SCSocket.prototype.subscribe = function (channelName, callback) {
+SCSocket.prototype.subscribe = function (channelName) {
   var self = this;
   
   var channel = this._channels[channelName];
   
-  if (channel) {
-    callback && callback();
-  } else {
+  if (!channel) {
     channel = new SCChannel(channelName, this);
     this._channels[channelName] = channel;
-    
-    this.emit('subscribe', channelName, function (err) {
-      if (err) {
-        channel.emit('subscribeFail', err, channelName);
-      } else {
-        channel.active = true;
-        channel.emit('subscribe', channelName);
-      }
-      callback && callback(err);
-    });
   }
-  
-  return channel;
+  return channel.subscribe();
 };
 
-SCSocket.prototype.unsubscribe = function (channelName, callback) {
+SCSocket.prototype.unsubscribe = function (channelName) {
   var channel = this._channels[channelName];
   
   if (channel) {
-    channel.active = false;
-    delete this._channels[channelName];
-    
-    // The only case in which unsubscribe can fail is if the connection is closed or dies.
-    // If that's the case, the server will automatically unsubscribe the client so
-    // we don't need to check for failure since this operation can never really fail.
-    
-    this.emit('unsubscribe', channelName);
-    channel.emit('unsubscribe', channelName);
+    channel.unsubscribe();
   }
-  callback && callback();
 };
 
-SCSocket.prototype.subscriptions = function () {
+SCSocket.prototype.channel = function (channelName) {
+  return this._channels[channelName];
+};
+
+SCSocket.prototype.destroyChannel = function (channelName) {
+  var channel = this._channels[channelName];
+  channel.unwatch();
+  this.unsubscribe();
+  delete this._channels[channelName];
+  return this;
+};
+
+SCSocket.prototype.subscriptions = function (includePending) {
   var subs = [];
   var channelObject;
   for (var channel in this._channels) {
     channelObject = this._channels[channel];
-    if (channelObject && channelObject.active) {
+    if (channelObject && (channelObject.subscribed || includePending)) {
       subs.push(channel);
     }
   }
   return subs;
 };
 
-SCSocket.prototype.isSubscribed = function (channel) {
-  return this._channels[channel] && this._channels[channel].active;
+SCSocket.prototype.isSubscribed = function (channel, includePending) {
+  var channel = this._channels[channel];
+  if (includePending) {
+    return !!channel;
+  }
+  return !!channel && channel.subscribed;
 };
 
 SCSocket.prototype._resubscribe = function (callback) {
