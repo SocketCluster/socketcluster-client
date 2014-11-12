@@ -152,6 +152,7 @@ var SCSocket = function (options) {
   
   this._persistentEvents = {
     'subscribe': 1,
+    'unsubscribe': 1,
     'ready': 1
   };
   
@@ -525,14 +526,44 @@ SCSocket.prototype.subscribe = function (channelName) {
     channel = new SCChannel(channelName, this);
     this._channels[channelName] = channel;
   }
-  return channel.subscribe();
+  
+  if (!channel.subscribed && !channel.subscribing) {
+    channel.subscribing = true;
+    this.emit('subscribe', channelName, function (err) {
+      channel.subscribing = false;
+      if (err) {
+        channel.emit('subscribeFail', err, channelName);
+        Emitter.prototype.emit.call(self, 'subscribeFail', err, channelName);
+      } else {
+        channel.subscribed = true;
+        channel.emit('subscribe', channelName);
+        Emitter.prototype.emit.call(self, 'subscribe', channelName);
+      }
+    });
+  }
+  
+  return channel;
 };
 
 SCSocket.prototype.unsubscribe = function (channelName) {
+  var self = this;
+  
   var channel = this._channels[channelName];
   
   if (channel) {
-    channel.unsubscribe();
+    if (channel.subscribed || channel.subscribing) {
+      channel.subscribing = false;
+      channel.subscribed = false;
+      
+      // The only case in which unsubscribe can fail is if the connection is closed or dies.
+      // If that's the case, the server will automatically unsubscribe the client so
+      // we don't need to check for failure since this operation can never really fail.
+      
+      this.emit('unsubscribe', channelName, function (err) {
+        channel.emit('unsubscribe', channelName);
+        Emitter.prototype.emit.call(self, 'unsubscribe', channelName);
+      });
+    }
   }
 };
 
@@ -543,7 +574,7 @@ SCSocket.prototype.channel = function (channelName) {
 SCSocket.prototype.destroyChannel = function (channelName) {
   var channel = this._channels[channelName];
   channel.unwatch();
-  this.unsubscribe();
+  channel.unsubscribe();
   delete this._channels[channelName];
   return this;
 };

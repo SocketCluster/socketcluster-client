@@ -18,41 +18,12 @@ var SCChannel = function (name, socket) {
 SCChannel.prototype = Object.create(Emitter.prototype);
 
 SCChannel.prototype.subscribe = function () {
-  var self = this;
-  
-  if (!this.subscribed && !this.subscribing) {
-    this.subscribing = true;
-    this.socket.emit('subscribe', this.name, function (err) {
-      self.subscribing = false;
-      if (err) {
-        self.emit('subscribeFail', err, self.name);
-        Emitter.prototype.emit.call(self.socket, 'subscribeFail', err, self.name);
-      } else {
-        self.subscribed = true;
-        self.emit('subscribe', self.name);
-        Emitter.prototype.emit.call(self.socket, 'subscribe', self.name);
-      }
-    });
-  }
+  this.socket.subscribe(this.name);
   return this;
 };
 
 SCChannel.prototype.unsubscribe = function () {
-  var self = this;
-  
-  if (this.subscribed || this.subscribing) {
-    this.subscribing = false;
-    this.subscribed = false;
-    
-    // The only case in which unsubscribe can fail is if the connection is closed or dies.
-    // If that's the case, the server will automatically unsubscribe the client so
-    // we don't need to check for failure since this operation can never really fail.
-    
-    this.socket.emit('unsubscribe', this.name, function (err) {
-      self.emit('unsubscribe', self.name);
-      Emitter.prototype.emit.call(self.socket, 'unsubscribe', self.name);
-    });
-  }
+  this.socket.unsubscribe(this.name);
   return this;
 };
 
