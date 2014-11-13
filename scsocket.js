@@ -440,7 +440,14 @@ SCSocket.prototype._emit = function (eventObject) {
   if (eventObject.callback) {
     this._callbackMap[eventObject.cid] = eventObject;
   }
-  Socket.prototype.send.call(this, this.stringify(eventObject));
+  
+  var simpleEventObject = {
+    event: eventObject.event,
+    data: eventObject.data,
+    cid: eventObject.cid
+  };
+  
+  Socket.prototype.send.call(this, this.stringify(simpleEventObject));
 };
 
 SCSocket.prototype._flushEmitBuffer = function () {
