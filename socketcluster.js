@@ -8,7 +8,7 @@ module.exports.Emitter = _dereq_('emitter');
 module.exports.connect = function (options) {
   return new SCSocket(options);
 };
-},{"./scsocket":32,"emitter":3}],2:[function(_dereq_,module,exports){
+},{"./scsocket":34,"emitter":3}],2:[function(_dereq_,module,exports){
 /**
  * socket.io
  * Copyright(c) 2011 LearnBoost <dev@learnboost.com>
@@ -3888,29 +3888,86 @@ function ws(uri, protocols, opts) {
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
 },{}],32:[function(_dereq_,module,exports){
+module.exports.create = (function () {
+  function F() {};
+
+  return function (o) {
+    if (arguments.length != 1) {
+      throw new Error('Object.create implementation only accepts one parameter.');
+    }
+    F.prototype = o;
+    return new F();
+  }
+})();
+},{}],33:[function(_dereq_,module,exports){
+var Emitter = _dereq_('emitter');
+
+if (!Object.create) {
+  Object.create = _dereq_('./objectcreate');
+}
+
+var SCChannel = function (name, socket) {
+  var self = this;
+  
+  Emitter.call(this);
+  
+  this.name = name;
+  this.subscribing = false;
+  this.subscribed = false;
+  this.socket = socket;
+};
+
+SCChannel.prototype = Object.create(Emitter.prototype);
+
+SCChannel.prototype.subscribe = function () {
+  this.socket.subscribe(this.name);
+  return this;
+};
+
+SCChannel.prototype.unsubscribe = function () {
+  this.socket.unsubscribe(this.name);
+  return this;
+};
+
+SCChannel.prototype.isSubscribed = function (includePending) {
+  return this.socket.isSubscribed(this.name, includePending);
+};
+
+SCChannel.prototype.publish = function (data, callback) {
+  this.socket.publish(this.name, data, callback);
+  return this;
+};
+
+SCChannel.prototype.watch = function (handler) {
+  this.socket.watch(this.name, handler);
+  return this;
+};
+
+SCChannel.prototype.unwatch = function (handler) {
+  this.socket.unwatch(this.name, handler);
+  return this;
+};
+
+SCChannel.prototype.destroy = function () {
+  this.socket.destroyChannel(this.name);
+};
+
+module.exports = SCChannel;
+},{"./objectcreate":32,"emitter":3}],34:[function(_dereq_,module,exports){
 /**
  * Module dependencies.
  */
 
 var Emitter = _dereq_('emitter');
 var Socket = _dereq_('engine.io-client');
+var SCChannel = _dereq_('./scchannel');
 
 /**
  * Module exports.
  */
 
 if (!Object.create) {
-  Object.create = (function () {
-    function F() {};
-
-    return function (o) {
-      if (arguments.length != 1) {
-        throw new Error('Object.create implementation only accepts one parameter.');
-      }
-      F.prototype = o;
-      return new F();
-    }
-  })();
+  Object.create = _dereq_('./objectcreate');
 }
 
 var Response = function (socket, id) {
@@ -4049,13 +4106,19 @@ var SCSocket = function (options) {
     'fail': 1
   };
   
+  this._persistentEvents = {
+    'subscribe': 1,
+    'unsubscribe': 1,
+    'ready': 1
+  };
+  
   this._connectAttempts = 0;
   
   this._cid = 1;
   this._callbackMap = {};
   this._destId = null;
   this._emitBuffer = [];
-  this._subscriptions = {};
+  this._channels = {};
   this._enableAutoReconnect = true;
   this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   
@@ -4078,6 +4141,8 @@ var SCSocket = function (options) {
   
   this.connected = false;
   this.connecting = true;
+  
+  this._channelEmitter = new Emitter();
   
   if (isBrowser) {
     activityManager.on('wakeup', function () {
@@ -4137,7 +4202,10 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     this.connecting = true;
     Socket.prototype.open.apply(this, arguments);
     this._resubscribe();
-    this.emit('ready');
+    
+    setTimeout(function () {
+      self.emit('ready');
+    }, 0);
   }
 };
 
@@ -4228,6 +4296,8 @@ SCSocket.prototype.onSCMessage = function (message) {
       var response = new Response(this, e.cid);
       Emitter.prototype.emit.call(this, e.event, e.data, response);
     }
+  } else if (e.channel) {
+    this._channelEmitter.emit(e.channel, e.data);
   } else if (e.cid == null) {
     Emitter.prototype.emit.call(this, 'raw', e);
   } else {
@@ -4320,52 +4390,60 @@ SCSocket.prototype.stringify = function (object) {
   return this.JSON.stringify(this._convertBuffersToBase64(object));
 };
 
-SCSocket.prototype._emit = function (event, data, callback) {
-  var self = this;
-  
-  var eventObject = {
-    event: event
-  };
-  if (data !== undefined) {
-    eventObject.data = data;
-  }
+SCSocket.prototype._emit = function (eventObject) {
   eventObject.cid = this._nextCallId();
   
-  if (callback) {
-    var timeout = setTimeout(function () {
-      var error = new Error("Event response for '" + event + "' timed out");
-      delete self._callbackMap[eventObject.cid];
-      callback(error, eventObject);
-      self.emit('error', error);
-    }, this.options.ackTimeout);
-    
-    this._callbackMap[eventObject.cid] = {callback: callback, timeout: timeout};
+  if (eventObject.callback) {
+    this._callbackMap[eventObject.cid] = eventObject;
   }
-  Socket.prototype.send.call(this, this.stringify(eventObject));
+  
+  var simpleEventObject = {
+    event: eventObject.event,
+    data: eventObject.data,
+    cid: eventObject.cid
+  };
+  
+  Socket.prototype.send.call(this, this.stringify(simpleEventObject));
 };
 
 SCSocket.prototype._flushEmitBuffer = function () {
-  var ev;
   var len = this._emitBuffer.length;
   
   for (var i = 0; i < len; i++) {
-    ev = this._emitBuffer[i];
-    this._emit(ev.event, ev.data, ev.callback);
+    this._emit(this._emitBuffer[i]);
   }
   this._emitBuffer = [];
 };
 
 SCSocket.prototype.emit = function (event, data, callback) {
-
+  var self = this;
+  
   if (this._localEvents[event] == null) {
     if (!this.connected && !this.connecting) {
       this.connect();
     }
-    this._emitBuffer.push({event: event, data: data, callback: callback});
-    if (this._emitBuffer.length < 2) {
-      if (this.connected) {
-        this._flushEmitBuffer();
-      }
+    var eventObject = {
+      event: event,
+      data: data,
+      callback: callback
+    };
+    
+    // Persistent events should never timeout.
+    // Also, only set timeout if there is a callback.
+    if (!this._persistentEvents[event] && callback) {
+      eventObject.timeout = setTimeout(function () {
+        var error = new Error("Event response for '" + event + "' timed out", eventObject);
+        if (eventObject.cid) {
+          delete self._callbackMap[eventObject.cid];
+        }
+        delete eventObject.callback;
+        callback(error, eventObject);
+        self.emit('error', error);
+      }, this.options.ackTimeout);
+    }
+    this._emitBuffer.push(eventObject);
+    if (this._emitBuffer.length < 2 && this.connected) {
+      this._flushEmitBuffer();
     }
   } else {
     switch (event) {
@@ -4390,9 +4468,11 @@ SCSocket.prototype.emit = function (event, data, callback) {
   return this;
 };
 
-SCSocket.prototype.publish = function (event, data, callback) {
+SCSocket.prototype.publish = function (channelName, data, callback) {
+  var self = this;
+  
   var pubData = {
-    event: event,
+    event: channelName,
     data: data
   };
   return this.emit('publish', pubData, function (err) {
@@ -4400,98 +4480,93 @@ SCSocket.prototype.publish = function (event, data, callback) {
   });
 };
 
-SCSocket.prototype._execParallel = function (tasks, count, callback) {
-  var pendingCount = count;
-  var errorCount = 0;
-  var errorMap = {};
+SCSocket.prototype.subscribe = function (channelName) {
+  var self = this;
   
-  for (var i in tasks) {
-    (function (i) {
-      tasks[i](function (err) {
-        pendingCount--;
-        if (err) {
-          errorCount++;
-          errorMap[i] = err;
-        }
-        if (pendingCount < 1 && callback) {
-          if (errorCount) {
-            if (count > 1) {
-              callback(errorMap);
-            } else {
-              callback(errorMap[i]);
-            }
-          } else {
-            callback();
-          }
-        }
+  var channel = this._channels[channelName];
+  
+  if (!channel) {
+    channel = new SCChannel(channelName, this);
+    this._channels[channelName] = channel;
+  }
+  
+  if (!channel.subscribed && !channel.subscribing) {
+    channel.subscribing = true;
+    this.emit('subscribe', channelName, function (err) {
+      channel.subscribing = false;
+      if (err) {
+        channel.emit('subscribeFail', err, channelName);
+        Emitter.prototype.emit.call(self, 'subscribeFail', err, channelName);
+      } else {
+        channel.subscribed = true;
+        channel.emit('subscribe', channelName);
+        Emitter.prototype.emit.call(self, 'subscribe', channelName);
+      }
+    });
+  }
+  
+  return channel;
+};
+
+SCSocket.prototype.unsubscribe = function (channelName) {
+  var self = this;
+  
+  var channel = this._channels[channelName];
+  
+  if (channel) {
+    if (channel.subscribed || channel.subscribing) {
+      channel.subscribing = false;
+      channel.subscribed = false;
+      
+      // The only case in which unsubscribe can fail is if the connection is closed or dies.
+      // If that's the case, the server will automatically unsubscribe the client so
+      // we don't need to check for failure since this operation can never really fail.
+      
+      this.emit('unsubscribe', channelName, function (err) {
+        channel.emit('unsubscribe', channelName);
+        Emitter.prototype.emit.call(self, 'unsubscribe', channelName);
       });
-    })(i);
+    }
   }
 };
 
-SCSocket.prototype.subscribe = function (channels, callback) {
-  var self = this;
-  
-  if (!(channels instanceof Array)) {
-    channels = [channels];
-  }
-  
-  var tasks = {};
-  
-  for (var i in channels) {
-    (function (channel) {
-      tasks[channel] = function (cb) {
-        self.emit('subscribe', channel, function (err) {
-          if (!err) {
-            self._subscriptions[channel] = true;
-          }
-          cb(err);
-        });
-      };
-    })(channels[i]);
-  }
-  
-  this._execParallel(tasks, channels.length, callback);
+SCSocket.prototype.channel = function (channelName) {
+  return this._channels[channelName];
 };
 
-SCSocket.prototype.unsubscribe = function (channels, callback) {
-  var self = this;
-  
-  if (!(channels instanceof Array)) {
-    channels = [channels];
-  }
-  
-  var tasks = {};
-  
-  for (var i in channels) {
-    (function (channel) {
-      tasks[channel] = function (cb) {
-        self.emit('unsubscribe', channel, function (err) {
-          if (!err) {
-            delete self._subscriptions[channel];
-          }
-          cb(err);
-        });
-      };
-    })(channels[i]);
-  }
-  
-  this._execParallel(tasks, channels.length, callback);
+SCSocket.prototype.destroyChannel = function (channelName) {
+  var channel = this._channels[channelName];
+  channel.unwatch();
+  channel.unsubscribe();
+  delete this._channels[channelName];
+  return this;
 };
 
-SCSocket.prototype.subscriptions = function () {
+SCSocket.prototype.subscriptions = function (includePending) {
   var subs = [];
-  for (var channel in this._subscriptions) {
-    subs.push(channel);
+  var channelObject;
+  for (var channel in this._channels) {
+    channelObject = this._channels[channel];
+    if (channelObject && (channelObject.subscribed || includePending)) {
+      subs.push(channel);
+    }
   }
   return subs;
+};
+
+SCSocket.prototype.isSubscribed = function (channel, includePending) {
+  var channel = this._channels[channel];
+  if (includePending) {
+    return !!channel;
+  }
+  return !!channel && channel.subscribed;
 };
 
 SCSocket.prototype._resubscribe = function (callback) {
   var self = this;
   
   var events = [];
-  for (var event in this._subscriptions) {
+  for (var event in this._channels) {
     events.push(event);
   }
   var error;
@@ -4513,6 +4588,24 @@ SCSocket.prototype._resubscribe = function (callback) {
   }
 };
 
+SCSocket.prototype.watch = function (channelName, handler) {
+  this._channelEmitter.on(channelName, handler);
+  return this;
+};
+
+SCSocket.prototype.unwatch = function (channelName, handler) {
+  if (handler) {
+    this._channelEmitter.removeListener(channelName, handler);
+  } else {
+    this._channelEmitter.removeAllListeners(channelName);
+  }
+  return this;
+};
+
+SCSocket.prototype.watchers = function (channelName) {
+  return this._channelEmitter.listeners(channelName);
+};
+
 if (typeof JSON != 'undefined') {
   SCSocket.prototype.JSON = JSON;
 } else {
@@ -4521,6 +4614,6 @@ if (typeof JSON != 'undefined') {
 SCSocket.JSON = SCSocket.prototype.JSON;
 
 module.exports = SCSocket;
-},{"./json":2,"emitter":3,"engine.io-client":5}]},{},[1])
+},{"./json":2,"./objectcreate":32,"./scchannel":33,"emitter":3,"engine.io-client":5}]},{},[1])
 (1)
 });
