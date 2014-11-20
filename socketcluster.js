@@ -4260,7 +4260,8 @@ var SCSocket = function (options) {
     'flush': 1,
     'packetCreate': 1,
     'close': 1,
-    'fail': 1
+    'fail': 1,
+    'kickOut': 1
   };
   
   this._persistentEvents = {
@@ -4445,10 +4446,22 @@ SCSocket.prototype.onSCMessage = function (message) {
       this.connected = false;
       this.connecting = false;
       Emitter.prototype.emit.call(this, 'disconnect');
+      
     } else if (e.event == 'fail') {
       this.connected = false;
       this.connecting = false;
       this.emit('error', e.data);
+      
+    } else if (e.event == 'kickOut') {
+      var kickData = e.data || {};
+      var channelName = kickData.channel;
+      var channel = this._channels[channelName];
+      if (channel) {
+        channel.subscribed = false;
+        Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
+        channel.emit('subscribeFail', kickData.message, channelName);
+        Emitter.prototype.emit.call(this, 'subscribeFail', kickData.message, channelName);
+      }
     } else {
       var response = new Response(this, e.cid);
       Emitter.prototype.emit.call(this, e.event, e.data, response);
@@ -4651,13 +4664,23 @@ SCSocket.prototype.subscribe = function (channelName) {
     channel.subscribing = true;
     this.emit('subscribe', channelName, function (err) {
       channel.subscribing = false;
+      channel.subscribed = !err;
       if (err) {
         channel.emit('subscribeFail', err, channelName);
         Emitter.prototype.emit.call(self, 'subscribeFail', err, channelName);
       } else {
-        channel.subscribed = true;
         channel.emit('subscribe', channelName);
         Emitter.prototype.emit.call(self, 'subscribe', channelName);
+      }
+    });
+  } else {
+    // In this case, the client thinks it's already subscribed - We emit a precautionary
+    // subscribe event in case the client has been kicked out of a channel and is not aware of it.
+    this.emit('subscribe', channelName, function (err) {
+      channel.subscribed = !err;
+      if (err) {
+        channel.emit('subscribeFail', err, channelName);
+        Emitter.prototype.emit.call(self, 'subscribeFail', err, channelName);
       }
     });
   }
@@ -4688,7 +4711,13 @@ SCSocket.prototype.unsubscribe = function (channelName) {
 };
 
 SCSocket.prototype.channel = function (channelName) {
-  return this._channels[channelName];
+  var currentChannel = this._channels[channelName];
+  
+  if (!currentChannel) {
+    currentChannel = new SCChannel(channelName, this);
+    this._channels[channelName] = currentChannel;
+  }
+  return currentChannel;
 };
 
 SCSocket.prototype.destroyChannel = function (channelName) {
