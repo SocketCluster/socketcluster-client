@@ -346,8 +346,8 @@ SCSocket.prototype.onSCMessage = function (message) {
       if (channel) {
         channel.subscribed = false;
         Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
-        channel.emit('subscribeFail', kickData.message, channelName);
-        Emitter.prototype.emit.call(this, 'subscribeFail', kickData.message, channelName);
+        channel.emit('subscriptionDrop', kickData.message, channelName);
+        Emitter.prototype.emit.call(this, 'subscriptionDrop', kickData.message, channelName);
       }
     } else {
       var response = new Response(this, e.cid);
@@ -555,6 +555,8 @@ SCSocket.prototype.subscribe = function (channelName) {
       if (err) {
         channel.emit('subscribeFail', err, channelName);
         Emitter.prototype.emit.call(self, 'subscribeFail', err, channelName);
+        channel.emit('subscriptionDrop', err, channelName);
+        Emitter.prototype.emit.call(this, 'subscriptionDrop', err, channelName);
       } else {
         channel.emit('subscribe', channelName);
         Emitter.prototype.emit.call(self, 'subscribe', channelName);
@@ -566,8 +568,8 @@ SCSocket.prototype.subscribe = function (channelName) {
     this.emit('subscribe', channelName, function (err) {
       channel.subscribed = !err;
       if (err) {
-        channel.emit('subscribeFail', err, channelName);
-        Emitter.prototype.emit.call(self, 'subscribeFail', err, channelName);
+        channel.emit('subscriptionDrop', err, channelName);
+        Emitter.prototype.emit.call(this, 'subscriptionDrop', err, channelName);
       }
     });
   }
