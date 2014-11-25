@@ -346,6 +346,7 @@ SCSocket.prototype.onSCMessage = function (message) {
       if (channel) {
         channel.subscribed = false;
         Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
+        channel.emit(e.event, kickData.message, channelName);
         channel.emit('dropOut', kickData.message, channelName);
         Emitter.prototype.emit.call(this, 'dropOut', kickData.message, channelName);
       }
@@ -529,7 +530,7 @@ SCSocket.prototype.publish = function (channelName, data, callback) {
   var self = this;
   
   var pubData = {
-    event: channelName,
+    channel: channelName,
     data: data
   };
   return this.emit('publish', pubData, function (err) {
