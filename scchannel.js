@@ -9,9 +9,12 @@ var SCChannel = function (name, socket) {
   
   Emitter.call(this);
   
+  this.STATE_SUBSCRIBED = 'subscribed';
+  this.STATE_PENDING = 'pending';
+  this.STATE_UNSUBSCRIBED = 'unsubscribed';
+  
   this.name = name;
-  this.subscribing = false;
-  this.subscribed = false;
+  this.state = this.STATE_UNSUBSCRIBED;
   this.socket = socket;
 };
 
