@@ -4949,7 +4949,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
       }, this.options.ackTimeout);
     }
     this._emitBuffer.push(eventObject);
-    if (this._emitBuffer.length < 2 && this.connected) {
+    if (this.connected) {
       this._flushEmitBuffer();
     }
   } else {
