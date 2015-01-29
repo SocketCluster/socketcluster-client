@@ -1,6 +1,5 @@
 var SCSocket = require('./scsocket');
 module.exports.SCSocket = SCSocket;
-module.exports.JSON = SCSocket.JSON;
 
 module.exports.Emitter = require('emitter');
 

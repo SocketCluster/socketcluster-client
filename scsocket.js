@@ -1,133 +1,41 @@
-/**
- * Module dependencies.
- */
-
+var WebSocket = require('ws');
 var Emitter = require('emitter');
-var Socket = require('engine.io-client');
 var SCChannel = require('./scchannel');
-
-/**
- * Module exports.
- */
+var Response = require('./response').Response;
+var ActivityManager = require('./activitymanager').ActivityManager;
+var querystring = require('querystring');
 
 if (!Object.create) {
   Object.create = require('./objectcreate');
 }
 
-var Response = function (socket, id) {
-  this.socket = socket;
-  this.id = id;
-};
-
-Response.prototype._respond = function (responseData) {
-  this.socket.send(this.socket.JSON.stringify(responseData));
-};
-
-Response.prototype.end = function (data) {
-  if (this.id) {
-    var responseData = {
-      cid: this.id
-    };
-    if (data !== undefined) {
-      responseData.data = data;
-    }
-    this._respond(responseData);
-  }
-};
-
-Response.prototype.error = function (error, data) {
-  if (this.id) {
-    var err;
-    if (error instanceof Error) {
-      err = {name: error.name, message: error.message, stack: error.stack};      
-    } else {
-      err = error;
-    }
-    
-    var responseData = {
-      cid: this.id,
-      error: err
-    };
-    if (data !== undefined) {
-      responseData.data = data;
-    }
-    
-    this._respond(responseData);
-  }
-};
-
 var isBrowser = typeof window != 'undefined';
 
 if (isBrowser) {
-  var ActivityManager = function () {
-    var self = this;
-    
-    this._interval = null;
-    this._intervalDuration = 1000;
-    this._counter = null;
-    
-    if (window.addEventListener) {
-      window.addEventListener('blur', function () {
-        self._triggerBlur();
-      });
-      window.addEventListener('focus', function () {
-        self._triggerFocus();
-      });
-    } else if (window.attachEvent) {
-      window.attachEvent('onblur', function () {
-        self._triggerBlur();
-      });
-      window.attachEvent('onfocus', function () {
-        self._triggerFocus();
-      });
-    } else {
-      throw new Error('The browser does not support proper event handling');
-    }
-  };
-
-  ActivityManager.prototype = Object.create(Emitter.prototype);
-
-  ActivityManager.prototype._triggerBlur = function () {
-    var self = this;
-    
-    var now = (new Date()).getTime();
-    this._counter = now;
-    
-    // If interval skips 2 turns, then client is sleeping
-    this._interval = setInterval(function () {
-      var newCount = (new Date()).getTime();
-      if (newCount - self._counter < self._intervalDuration * 3) {
-        self._counter = newCount;
-      }
-    }, this._intervalDuration);
-    
-    this.emit('deactivate');
-  };
-
-  ActivityManager.prototype._triggerFocus = function () {
-    clearInterval(this._interval);
-    var now = (new Date()).getTime();
-    if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
-      this.emit('wakeup');
-    }
-    
-    this.emit('activate');
-  };
-
   var activityManager = new ActivityManager();
 }
+
 
 var SCSocket = function (options) {
   var self = this;
   
+  // The socket's id is null until a connection has been established
+  this.id = null;
+  
   var opts = {
+    port: null,
     autoReconnect: true,
-    ackTimeout: 10000
+    ackTimeout: 10000,
+    hostname: global.location && location.hostname,
+    path: '/socketcluster/',
+    secure: global.location && location.protocol == 'https:',
+    timestampRequests: false,
+    timestampParam: 't',
+    binaryType: 'arraybuffer'
   };
   for (var i in options) {
     opts[i] = options[i];
   }
-  opts.path = (opts.path || '/socketcluster').replace(/\/$/, '') + '/';
   
   this._localEvents = {
     'connect': 1,
@@ -167,8 +75,6 @@ var SCSocket = function (options) {
   this._enableAutoReconnect = true;
   this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   
-  this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
-  
   this.options = opts;
   
   if (this.options.autoReconnect && this.options.autoReconnectOptions == null) {
@@ -178,14 +84,17 @@ var SCSocket = function (options) {
     };
   }
   
-  if (this.options.url == null) {
-    Socket.call(this, this.options);
-  } else {
-    Socket.call(this, this.options.url, this.options);
-  }
+  this.options.path = this.options.path.replace(/\/$/, '') + '/';
   
-  this.connected = false;
-  this.connecting = true;
+  this.options.query = opts.query || {};
+  if (typeof this.options.query == 'string') {
+    this.options.query = querystring.parse(this.options.query);
+  }
+
+  this.options.port = opts.port || (global.location && location.port ?
+    location.port : (this.options.secure ? 443 : 80));
+  
+  this.connect();
   
   this._channelEmitter = new Emitter();
   
@@ -197,46 +106,29 @@ var SCSocket = function (options) {
   }
 };
 
-SCSocket.prototype = Object.create(Socket.prototype);
+SCSocket.prototype = Object.create(Emitter.prototype);
 
-SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
-  var exdate = null;
-  if (expirySeconds) {
-    exdate = new Date();
-    exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
-  }
-  var value = escape(value) + '; path=/;' + ((exdate == null) ? '' : ' expires=' + exdate.toUTCString() + ';');
-  document.cookie = name + '=' + value;
-};
+SCSocket.prototype.uri = function(){
+  var query = this.options.query || {};
+  var schema = this.options.secure ? 'wss' : 'ws';
+  var port = '';
 
-SCSocket.prototype._getCookie = function (name) {
-  var i, x, y, ARRcookies = document.cookie.split(';');
-  for (i = 0; i < ARRcookies.length; i++) {
-    x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
-    y = ARRcookies[i].substr(ARRcookies[i].indexOf('=') + 1);
-    x = x.replace(/^\s+|\s+$/g, '');
-    if (x == name) {
-      return unescape(y);
-    }
+  if (this.options.port && (('wss' == schema && this.options.port != 443)
+    || ('ws' == schema && this.options.port != 80))) {
+    port = ':' + this.options.port;
   }
-};
 
-SCSocket.prototype._setSessionCookie = function (appName, socketId) {
-  var sessionSegments = socketId.match(this._sessionDestRegex);
-  var soidDest = sessionSegments ? sessionSegments[0] : null;
-  var sessionCookieName = 'n/' + appName + '/ssid';
-  
-  var ssid = this._getCookie(sessionCookieName);
-  var ssidDest = null;
-  if (ssid) {
-    ssidDest = ssid.match(this._sessionDestRegex);
-    ssidDest = ssidDest ? ssidDest[0] : null;
+  if (this.options.timestampRequests) {
+    query[this.options.timestampParam] = (new Date()).getTime();
   }
-  if (!ssid || soidDest != ssidDest) {
-    ssid = socketId;
-    this._setCookie(sessionCookieName, ssid);
+
+  query = querystring.stringify(query);
+
+  if (query.length) {
+    query = '?' + query;
   }
-  return ssid;
+
+  return schema + '://' + this.options.hostname + port + this.options.path + query;
 };
 
 SCSocket.prototype.connect = SCSocket.prototype.open = function () {
@@ -245,21 +137,50 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   if (!this.connected && !this.connecting) {
     this.connected = false;
     this.connecting = true;
-    Socket.prototype.open.apply(this, arguments);
+    
+    var uri = this.uri();
+    this.socket = new WebSocket(uri, null, this.options);
+    this.socket.binaryType = this.options.binaryType;
+    
+    this.socket.onopen = function () {
+      self._onSCOpen();
+    };
+    
+    this.socket.onerror = function (err) {
+      self._onSCError(err);
+    };
+    
+    this.socket.onclose = function (code, message) {
+      self._onSCClose(code, message);
+    };
+    
+    this.socket.onmessage = function (message, flags) {
+      self._onSCMessage(message.data);
+    };
+    
     this._resubscribe();
     
     setTimeout(function () {
       self.emit('ready');
     }, 0);
   }
+  return this;
 };
 
-SCSocket.prototype.disconnect = function () {
+SCSocket.prototype.disconnect = function (code, data) {
+  code = code || 1000;
   this._enableAutoReconnect = false;
-  return Socket.prototype.close.apply(this);
+  this.socket.close(code, data);
+  return this;
 };
 
-SCSocket.prototype.onSCOpen = function () {
+SCSocket.prototype.terminate = function () {
+  this._enableAutoReconnect = false;
+  this.socket.terminate();
+  return this;
+};
+
+SCSocket.prototype._onSCOpen = function () {
   this._connectAttempts = 0;
   this._enableAutoReconnect = true;
 };
@@ -287,7 +208,7 @@ SCSocket.prototype._tryReconnect = function () {
   }
 };
 
-SCSocket.prototype.onSCError = function (err) {
+SCSocket.prototype._onSCError = function (err) {
   this.connecting = false;
   if (!this.connected) {
     this._tryReconnect();
@@ -296,12 +217,15 @@ SCSocket.prototype.onSCError = function (err) {
     setTimeout(function () {
       throw err;
     }, 0);
+  } else {
+    Emitter.prototype.emit.call(this, 'error', err);
   }
 };
 
-SCSocket.prototype.onSCClose = function () {
+SCSocket.prototype._onSCClose = function (code, message) {
   this.connected = false;
   this.connecting = false;
+  this.id = null;
   
   var channel, newState;
   for (var channelName in this._channels) {
@@ -317,14 +241,16 @@ SCSocket.prototype.onSCClose = function () {
   }
   if (!this._connectAttempts) {
     this._tryReconnect();
-    Emitter.prototype.emit.call(this, 'disconnect');
+    Emitter.prototype.emit.call(this, 'disconnect', code, message);
   }
 };
 
-SCSocket.prototype.onSCMessage = function (message) {
+SCSocket.prototype._onSCMessage = function (message) {
+  Emitter.prototype.emit.call(this, 'message', message);
+
   var e;
   try {
-    e = this.JSON.parse(message);
+    e = this.parse(message);
   } catch (err) {
     e = message;
   }
@@ -334,19 +260,11 @@ SCSocket.prototype.onSCMessage = function (message) {
       this.connected = true;
       this.connecting = false;
       
-      if (isBrowser) {
-        this.ssid = this._setSessionCookie(e.data.appName, this.id);
-      } else {
-        this.ssid = this.id;
-      }
+      this.id = e.data.soid;
+      
       Emitter.prototype.emit.call(this, e.event, e.data.soid);
       this._flushEmitBuffer();
-      
-    } else if (e.event == 'disconnect') {
-      this.connected = false;
-      this.connecting = false;
-      Emitter.prototype.emit.call(this, 'disconnect');
-      
+    
     } else if (e.event == 'fail') {
       this.connected = false;
       this.connecting = false;
@@ -426,7 +344,7 @@ SCSocket.prototype._convertBuffersToBase64 = function (object, ancestors) {
   }
   var newAncestors = ancestors.concat([object]);
   
-  if (object instanceof ArrayBuffer) {
+  if (typeof ArrayBuffer != 'undefined' && object instanceof ArrayBuffer) {
     return {
       base64: true,
       data: this._arrayBufferToBase64(object)
@@ -452,11 +370,15 @@ SCSocket.prototype._convertBuffersToBase64 = function (object, ancestors) {
 };
 
 SCSocket.prototype.parse = function (message) {
-  return this.JSON.parse(message);
+  return JSON.parse(message);
 };
 
 SCSocket.prototype.stringify = function (object) {
-  return this.JSON.stringify(this._convertBuffersToBase64(object));
+  return JSON.stringify(this._convertBuffersToBase64(object));
+};
+
+SCSocket.prototype.send = function (data, options, callback) {
+  this.socket.send(data, options, callback);
 };
 
 SCSocket.prototype._emit = function (eventObject) {
@@ -472,7 +394,7 @@ SCSocket.prototype._emit = function (eventObject) {
     cid: eventObject.cid
   };
   
-  Socket.prototype.send.call(this, this.stringify(simpleEventObject));
+  this.send(this.stringify(simpleEventObject));
 };
 
 SCSocket.prototype._flushEmitBuffer = function () {
@@ -515,23 +437,6 @@ SCSocket.prototype.emit = function (event, data, callback) {
       this._flushEmitBuffer();
     }
   } else {
-    switch (event) {
-      case 'message':
-        this.onSCMessage(data);
-        break;
-        
-      case 'open':
-        this.onSCOpen();
-        break;
-        
-      case 'close':
-        this.onSCClose();
-        break;
-
-      case 'error':
-        this.onSCError(data);
-        break;
-    }
     Emitter.prototype.emit.call(this, event, data);
   }
   return this;
@@ -726,12 +631,5 @@ SCSocket.prototype.unwatch = function (channelName, handler) {
 SCSocket.prototype.watchers = function (channelName) {
   return this._channelEmitter.listeners(channelName);
 };
-
-if (typeof JSON != 'undefined') {
-  SCSocket.prototype.JSON = JSON;
-} else {
-  SCSocket.prototype.JSON = require('./json').JSON;
-}
-SCSocket.JSON = SCSocket.prototype.JSON;
 
 module.exports = SCSocket;
