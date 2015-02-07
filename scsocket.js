@@ -426,7 +426,7 @@ SCSocket.prototype._convertBuffersToBase64 = function (object, ancestors) {
   }
   var newAncestors = ancestors.concat([object]);
   
-  if (object instanceof ArrayBuffer) {
+  if (typeof ArrayBuffer != 'undefined' && object instanceof ArrayBuffer) {
     return {
       base64: true,
       data: this._arrayBufferToBase64(object)
