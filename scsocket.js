@@ -108,6 +108,23 @@ var SCSocket = function (options) {
 
 SCSocket.prototype = Object.create(Emitter.prototype);
 
+SCSocket.ignoreStatuses = {
+  1000: 'Socket closed normally',
+  1001: 'Socket hung up'
+};
+
+SCSocket.errorStatuses = {
+  1001: 'Socket was disconnected',
+  1002: 'A WebSocket protocol error was encountered',
+  1003: 'Server terminated socket because it received invalid data',
+  1006: 'Socket connection closed',
+  1007: 'Message format was incorrect',
+  1008: 'Encountered a policy violation',
+  1009: 'Message was too big to process',
+  1010: 'Client ended the connection because the server did not comply with extension requirements',
+  1011: 'Server encountered an unexpected fatal condition'
+};
+
 SCSocket.prototype.uri = function(){
   var query = this.options.query || {};
   var schema = this.options.secure ? 'wss' : 'ws';
@@ -145,13 +162,9 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     this.socket.onopen = function () {
       self._onSCOpen();
     };
-    
-    this.socket.onerror = function (err) {
-      self._onSCError(err);
-    };
-    
-    this.socket.onclose = function (code, message) {
-      self._onSCClose(code, message);
+
+    this.socket.onclose = function (event) {
+      self._onSCClose(event);
     };
     
     this.socket.onmessage = function (message, flags) {
@@ -209,10 +222,6 @@ SCSocket.prototype._tryReconnect = function () {
 };
 
 SCSocket.prototype._onSCError = function (err) {
-  this.connecting = false;
-  if (!this.connected) {
-    this._tryReconnect();
-  }
   if (this.listeners('error').length < 1) {
     setTimeout(function () {
       throw err;
@@ -222,7 +231,9 @@ SCSocket.prototype._onSCError = function (err) {
   }
 };
 
-SCSocket.prototype._onSCClose = function (code, message) {
+SCSocket.prototype._onSCClose = function (event) {
+  var wasConnected = this.connected;
+  
   this.connected = false;
   this.connecting = false;
   this.id = null;
@@ -239,10 +250,17 @@ SCSocket.prototype._onSCClose = function (code, message) {
     }
     this._triggerChannelUnsubscribe(channel, newState);
   }
-  if (!this._connectAttempts) {
-    this._tryReconnect();
-    Emitter.prototype.emit.call(this, 'disconnect', code, message);
+
+  if (wasConnected) {
+    Emitter.prototype.emit.call(this, 'disconnect', event);
   }
+  
+  if (!SCSocket.ignoreStatuses[event.code]) {
+    var err = new Error(SCSocket.errorStatuses[event.code] || 'Socket connection failed for unknown reasons');
+    err.code = event.code;
+    this._onSCError(err);
+  }
+  this._tryReconnect();
 };
 
 SCSocket.prototype._onSCMessage = function (message) {
