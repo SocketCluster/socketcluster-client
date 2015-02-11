@@ -286,7 +286,7 @@ SCSocket.prototype._onSCMessage = function (message) {
     } else if (e.event == 'fail') {
       this.connected = false;
       this.connecting = false;
-      this.emit('error', e.data);
+      this._onSCError(e.data);
       
     } else if (e.event == 'kickOut') {
       var kickData = e.data || {};
@@ -313,7 +313,7 @@ SCSocket.prototype._onSCMessage = function (message) {
       ret.callback(e.error, e.data);
     }
     if (e.error) {
-      this.emit('error', e.error);
+      this._onSCError(e.error);
     }
   }
 };
@@ -396,7 +396,14 @@ SCSocket.prototype.stringify = function (object) {
 };
 
 SCSocket.prototype.send = function (data, options, callback) {
-  this.socket.send(data, options, callback);
+  var self = this;
+  
+  this.socket.send(data, options, function (err) {
+    callback && callback(err);
+    if (err) {
+      self._onSCError(err);
+    }
+  });
 };
 
 SCSocket.prototype._emit = function (eventObject) {
@@ -447,7 +454,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
         }
         delete eventObject.callback;
         callback(error, eventObject);
-        self.emit('error', error);
+        self._onSCError(error);
       }, this.options.ackTimeout);
     }
     this._emitBuffer.push(eventObject);
