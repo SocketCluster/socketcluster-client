@@ -68,6 +68,7 @@ var SCSocket = function (options) {
   this._connectAttempts = 0;
   
   this._cid = 1;
+  this._isReady = false;
   this._callbackMap = {};
   this._destId = null;
   this._emitBuffer = [];
@@ -108,6 +109,12 @@ var SCSocket = function (options) {
 
 SCSocket.prototype = Object.create(Emitter.prototype);
 
+SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = WebSocket.prototype.CONNECTING;
+SCSocket.OPEN = SCSocket.prototype.OPEN = WebSocket.prototype.OPEN;
+SCSocket.CONNECTED = SCSocket.prototype.CONNECTED = SCSocket.OPEN;
+SCSocket.CLOSING = SCSocket.prototype.CLOSING = WebSocket.prototype.CLOSING;
+SCSocket.CLOSED = SCSocket.prototype.CLOSED = WebSocket.prototype.CLOSED;
+
 SCSocket.ignoreStatuses = {
   1000: 'Socket closed normally',
   1001: 'Socket hung up'
@@ -117,7 +124,7 @@ SCSocket.errorStatuses = {
   1001: 'Socket was disconnected',
   1002: 'A WebSocket protocol error was encountered',
   1003: 'Server terminated socket because it received invalid data',
-  1006: 'Socket connection closed',
+  1006: 'Socket connection failed',
   1007: 'Message format was incorrect',
   1008: 'Encountered a policy violation',
   1009: 'Message was too big to process',
@@ -148,15 +155,30 @@ SCSocket.prototype.uri = function(){
   return schema + '://' + this.options.hostname + port + this.options.path + query;
 };
 
+SCSocket.prototype.getState = function () {
+  if (!this.socket) {
+    return this.CLOSED;
+  }
+  var readyState = this.socket.readyState;
+  
+  if (readyState == this.CONNECTED && !this._isReady) {
+    readyState = this.CONNECTING;
+  }
+  return readyState;
+};
+
+SCSocket.prototype.getBytesReceived = function () {
+  return this.socket.bytesReceived;
+};
+
 SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   var self = this;
   
-  if (!this.connected && !this.connecting) {
-    this.connected = false;
-    this.connecting = true;
-    
+  var readyState = this.getState();
+  if (readyState == this.CLOSED || readyState == this.CLOSING) {
     var uri = this.uri();
     this.socket = new WebSocket(uri, null, this.options);
+    this._isReady = false;
     this.socket.binaryType = this.options.binaryType;
     
     this.socket.onopen = function () {
@@ -201,7 +223,8 @@ SCSocket.prototype._onSCOpen = function () {
 SCSocket.prototype._tryReconnect = function () {
   var self = this;
   
-  if (!self.connected && !self.connecting &&
+  var readyState = this.getState();
+  if ((readyState == this.CLOSED || readyState == this.CLOSING) &&
     this.options.autoReconnect && this._enableAutoReconnect) {
     
     this._emitBuffer = [];
@@ -214,7 +237,7 @@ SCSocket.prototype._tryReconnect = function () {
     var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
     var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
     setTimeout(function () {
-      if (!self.connected && !self.connecting) {
+      if (readyState == self.CLOSED || readyState == self.CLOSING) {
         self.connect();
       }
     }, timeout);
@@ -232,10 +255,6 @@ SCSocket.prototype._onSCError = function (err) {
 };
 
 SCSocket.prototype._onSCClose = function (event) {
-  var wasConnected = this.connected;
-  
-  this.connected = false;
-  this.connecting = false;
   this.id = null;
   
   var channel, newState;
@@ -251,7 +270,8 @@ SCSocket.prototype._onSCClose = function (event) {
     this._triggerChannelUnsubscribe(channel, newState);
   }
 
-  if (wasConnected) {
+  if (this._isReady) {
+    this._isReady = false;
     Emitter.prototype.emit.call(this, 'disconnect', event);
   }
   
@@ -275,17 +295,13 @@ SCSocket.prototype._onSCMessage = function (message) {
   
   if (e.event) {
     if (e.event == 'connect') {
-      this.connected = true;
-      this.connecting = false;
-      
       this.id = e.data.soid;
+      this._isReady = true;
       
       Emitter.prototype.emit.call(this, e.event, e.data.soid);
       this._flushEmitBuffer();
     
     } else if (e.event == 'fail') {
-      this.connected = false;
-      this.connecting = false;
       this._onSCError(e.data);
       
     } else if (e.event == 'kickOut') {
@@ -434,8 +450,10 @@ SCSocket.prototype._flushEmitBuffer = function () {
 SCSocket.prototype.emit = function (event, data, callback) {
   var self = this;
   
+  var readyState = this.getState();
+  
   if (this._localEvents[event] == null) {
-    if (!this.connected && !this.connecting) {
+    if (readyState == this.CLOSED || readyState == this.CLOSING) {
       this.connect();
     }
     var eventObject = {
@@ -458,7 +476,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
       }, this.options.ackTimeout);
     }
     this._emitBuffer.push(eventObject);
-    if (this.connected) {
+    if (readyState == this.CONNECTED) {
       this._flushEmitBuffer();
     }
   } else {
