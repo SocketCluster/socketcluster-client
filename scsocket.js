@@ -228,7 +228,10 @@ SCSocket.prototype._tryReconnect = function () {
     }
     var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
     var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
-    setTimeout(function () {
+    
+    clearTimeout(this._reconnectTimeout);
+    
+    this._reconnectTimeout = setTimeout(function () {
       if (readyState == self.CLOSED || readyState == self.CLOSING) {
         self.connect();
       }
