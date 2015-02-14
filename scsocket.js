@@ -19,9 +19,6 @@ if (isBrowser) {
 var SCSocket = function (options) {
   var self = this;
   
-  // The socket's id is null until a connection has been established
-  this.id = null;
-  
   var opts = {
     port: null,
     autoReconnect: true,
@@ -61,14 +58,13 @@ var SCSocket = function (options) {
   
   this._persistentEvents = {
     'subscribe': 1,
-    'unsubscribe': 1,
-    'ready': 1
+    'unsubscribe': 1
   };
   
   this._connectAttempts = 0;
   
   this._cid = 1;
-  this._isReady = false;
+  this._isActive = false;
   this._callbackMap = {};
   this._destId = null;
   this._emitBuffer = [];
@@ -159,12 +155,7 @@ SCSocket.prototype.getState = function () {
   if (!this.socket) {
     return this.CLOSED;
   }
-  var readyState = this.socket.readyState;
-  
-  if (readyState == this.CONNECTED && !this._isReady) {
-    readyState = this.CONNECTING;
-  }
-  return readyState;
+  return this.socket.readyState;
 };
 
 SCSocket.prototype.getBytesReceived = function () {
@@ -178,7 +169,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   if (readyState == this.CLOSED || readyState == this.CLOSING) {
     var uri = this.uri();
     this.socket = new WebSocket(uri, null, this.options);
-    this._isReady = false;
+    this._isActive = false;
     this.socket.binaryType = this.options.binaryType;
     
     this.socket.onopen = function () {
@@ -194,10 +185,6 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     };
     
     this._resubscribe();
-    
-    setTimeout(function () {
-      self.emit('ready');
-    }, 0);
   }
   return this;
 };
@@ -218,6 +205,11 @@ SCSocket.prototype.terminate = function () {
 SCSocket.prototype._onSCOpen = function () {
   this._connectAttempts = 0;
   this._enableAutoReconnect = true;
+
+  this._isActive = true;
+  
+  Emitter.prototype.emit.call(this, 'connect');
+  this._flushEmitBuffer();
 };
 
 SCSocket.prototype._tryReconnect = function () {
@@ -255,8 +247,6 @@ SCSocket.prototype._onSCError = function (err) {
 };
 
 SCSocket.prototype._onSCClose = function (event) {
-  this.id = null;
-  
   var channel, newState;
   for (var channelName in this._channels) {
     channel = this._channels[channelName];
@@ -270,8 +260,8 @@ SCSocket.prototype._onSCClose = function (event) {
     this._triggerChannelUnsubscribe(channel, newState);
   }
 
-  if (this._isReady) {
-    this._isReady = false;
+  if (this._isActive) {
+    this._isActive = false;
     Emitter.prototype.emit.call(this, 'disconnect', event);
   }
   
@@ -280,6 +270,11 @@ SCSocket.prototype._onSCClose = function (event) {
     err.code = event.code;
     this._onSCError(err);
   }
+  
+  delete this.socket.onopen;
+  delete this.socket.onclose;
+  delete this.socket.onmessage;
+  
   this._tryReconnect();
 };
 
@@ -294,14 +289,7 @@ SCSocket.prototype._onSCMessage = function (message) {
   }
   
   if (e.event) {
-    if (e.event == 'connect') {
-      this.id = e.data.soid;
-      this._isReady = true;
-      
-      Emitter.prototype.emit.call(this, e.event, e.data.soid);
-      this._flushEmitBuffer();
-    
-    } else if (e.event == 'fail') {
+    if (e.event == 'fail') {
       this._onSCError(e.data);
       
     } else if (e.event == 'kickOut') {
