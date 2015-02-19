@@ -53,7 +53,9 @@ var SCSocket = function (options) {
     'packetCreate': 1,
     'close': 1,
     'fail': 1,
-    'kickOut': 1
+    'kickOut': 1,
+    'setAuthToken': 1,
+    'ready': 1
   };
   
   this._persistentEvents = {
@@ -71,6 +73,7 @@ var SCSocket = function (options) {
   this._channels = {};
   this._enableAutoReconnect = true;
   this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  this._tokenData = null;
   
   this.options = opts;
   
@@ -253,12 +256,12 @@ SCSocket.prototype._onSCClose = function (event) {
   var channel, newState;
   for (var channelName in this._channels) {
     channel = this._channels[channelName];
-    if (channel.state == channel.STATE_SUBSCRIBED ||
-      channel.state == channel.STATE_PENDING) {
+    if (channel.state == channel.SUBSCRIBED ||
+      channel.state == channel.PENDING) {
       
-      newState = channel.STATE_PENDING;
+      newState = channel.PENDING;
     } else {
-      newState = channel.STATE_UNSUBSCRIBED;
+      newState = channel.UNSUBSCRIBED;
     }
     this._triggerChannelUnsubscribe(channel, newState);
   }
@@ -279,6 +282,28 @@ SCSocket.prototype._onSCClose = function (event) {
   delete this.socket.onmessage;
   
   this._tryReconnect();
+};
+
+SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
+  var exdate = null;
+  if (expirySeconds) {
+    exdate = new Date();
+    exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
+  }
+  var value = escape(value) + '; path=/;' + ((exdate == null) ? '' : ' expires=' + exdate.toUTCString() + ';');
+  document.cookie = name + '=' + value;
+};
+
+SCSocket.prototype._getCookie = function (name) {
+  var i, x, y, ARRcookies = document.cookie.split(';');
+  for (i = 0; i < ARRcookies.length; i++) {
+    x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
+    y = ARRcookies[i].substr(ARRcookies[i].indexOf('=') + 1);
+    x = x.replace(/^\s+|\s+$/g, '');
+    if (x == name) {
+      return unescape(y);
+    }
+  }
 };
 
 SCSocket.prototype._onSCMessage = function (message) {
@@ -303,6 +328,23 @@ SCSocket.prototype._onSCMessage = function (message) {
         Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
         channel.emit(e.event, kickData.message, channelName);
         this._triggerChannelUnsubscribe(channel);
+      }
+    } else if (e.event == 'setAuthToken') {
+      var tokenData = e.data;
+      if (tokenData) {
+        this._tokenData = tokenData;
+        
+        if (tokenData.persistent && tokenData.expiresInMinutes != null) {
+          this._setCookie(tokenData.cookieName, tokenData.token, tokenData.expiresInMinutes * 60);
+        } else {
+          this._setCookie(tokenData.cookieName, tokenData.token);
+        }
+        Emitter.prototype.emit.call(this, e.event, tokenData.token);
+      }
+    } else if (e.event == 'removeAuthToken') {
+      if (this._tokenData) {
+        this._setCookie(this._tokenData.cookieName, null, -1);
+        Emitter.prototype.emit.call(this, e.event);
       }
     } else {
       var response = new Response(this, e.cid);
@@ -498,8 +540,8 @@ SCSocket.prototype.subscribe = function (channelName) {
     this._channels[channelName] = channel;
   }
 
-  if (channel.state == channel.STATE_UNSUBSCRIBED) {
-    channel.state = channel.STATE_PENDING;
+  if (channel.state == channel.UNSUBSCRIBED) {
+    channel.state = channel.PENDING;
     this.emit('subscribe', channelName, function (err) {
       if (err) {
         self._triggerChannelSubscribeFail(err, channel);
@@ -517,7 +559,7 @@ SCSocket.prototype.unsubscribe = function (channelName) {
   var channel = this._channels[channelName];
   
   if (channel) {
-    if (channel.state != channel.STATE_UNSUBSCRIBED) {
+    if (channel.state != channel.UNSUBSCRIBED) {
     
       this._triggerChannelUnsubscribe(channel);
       
@@ -555,10 +597,10 @@ SCSocket.prototype.subscriptions = function (includePending) {
     channel = this._channels[channelName];
     
     if (includePending) {
-      includeChannel = channel && (channel.state == channel.STATE_SUBSCRIBED || 
-        channel.state == channel.STATE_PENDING);
+      includeChannel = channel && (channel.state == channel.SUBSCRIBED || 
+        channel.state == channel.PENDING);
     } else {
-      includeChannel = channel && channel.state == channel.STATE_SUBSCRIBED;
+      includeChannel = channel && channel.state == channel.SUBSCRIBED;
     }
     
     if (includeChannel) {
@@ -571,16 +613,16 @@ SCSocket.prototype.subscriptions = function (includePending) {
 SCSocket.prototype.isSubscribed = function (channel, includePending) {
   var channel = this._channels[channel];
   if (includePending) {
-    return !!channel && (channel.state == channel.STATE_SUBSCRIBED ||
-      channel.state == channel.STATE_PENDING);
+    return !!channel && (channel.state == channel.SUBSCRIBED ||
+      channel.state == channel.PENDING);
   }
-  return !!channel && channel.state == channel.STATE_SUBSCRIBED;
+  return !!channel && channel.state == channel.SUBSCRIBED;
 };
 
 SCSocket.prototype._triggerChannelSubscribe = function (channel) {
   var channelName = channel.name;
   
-  channel.state = channel.STATE_SUBSCRIBED;
+  channel.state = channel.SUBSCRIBED;
   
   channel.emit('subscribe', channelName);
   Emitter.prototype.emit.call(this, 'subscribe', channelName);
@@ -589,7 +631,7 @@ SCSocket.prototype._triggerChannelSubscribe = function (channel) {
 SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel) {
   var channelName = channel.name;
   
-  channel.state = channel.STATE_UNSUBSCRIBED;
+  channel.state = channel.UNSUBSCRIBED;
   
   channel.emit('subscribeFail', err, channelName);
   Emitter.prototype.emit.call(this, 'subscribeFail', err, channelName);
@@ -602,9 +644,9 @@ SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
   if (newState) {
     channel.state = newState;
   } else {
-    channel.state = channel.STATE_UNSUBSCRIBED;
+    channel.state = channel.UNSUBSCRIBED;
   }
-  if (oldState == channel.STATE_SUBSCRIBED) {
+  if (oldState == channel.SUBSCRIBED) {
     channel.emit('unsubscribe', channelName);
     Emitter.prototype.emit.call(this, 'unsubscribe', channelName);
   }
@@ -639,7 +681,7 @@ SCSocket.prototype._resubscribe = function (callback) {
   };
   for (var i in this._channels) {
     (function (channel) {
-      if (channel.state == channel.STATE_PENDING) {
+      if (channel.state == channel.PENDING) {
         self.emit('subscribe', channel.name, function (err) {
           ackHandler(err, channel);
         });
