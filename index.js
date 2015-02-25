@@ -1,4 +1,4 @@
-var SCSocket = require('./scsocket');
+var SCSocket = require('./lib/scsocket');
 module.exports.SCSocket = SCSocket;
 
 module.exports.Emitter = require('emitter');
