@@ -270,7 +270,7 @@ var Response = function (socket, id) {
 };
 
 Response.prototype._respond = function (responseData) {
-  this.socket.send(this.socket.JSON.stringify(responseData));
+  this.socket.send(this.socket.stringify(responseData));
 };
 
 Response.prototype.end = function (data) {
@@ -303,6 +303,14 @@ Response.prototype.error = function (error, data) {
     }
     
     this._respond(responseData);
+  }
+};
+
+Response.prototype.callback = function (error, data) {
+  if (error) {
+    this.error(error, data);
+  } else {
+    this.end(data);
   }
 };
 
@@ -386,6 +394,8 @@ if (isBrowser) {
 var SCSocket = function (options) {
   var self = this;
   
+  Emitter.call(this);
+  
   var opts = {
     port: null,
     autoReconnect: true,
@@ -401,27 +411,19 @@ var SCSocket = function (options) {
     opts[i] = options[i];
   }
   
+  this.id = null;
+  
   this._localEvents = {
+    'open': 1,
+    'close': 1,
     'connect': 1,
     'disconnect': 1,
-    'upgrading': 1,
-    'upgrade': 1,
-    'upgradeError': 1,
-    'open': 1,
     'error': 1,
-    'packet': 1,
-    'heartbeat': 1,
-    'data': 1,
     'raw': 1,
-    'message': 1,
-    'handshake': 1,
-    'drain': 1,
-    'flush': 1,
-    'packetCreate': 1,
-    'close': 1,
     'fail': 1,
     'kickOut': 1,
     'setAuthToken': 1,
+    'removeAuthToken': 1,
     'ready': 1
   };
   
@@ -477,7 +479,6 @@ SCSocket.prototype = Object.create(Emitter.prototype);
 
 SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = WebSocket.prototype.CONNECTING;
 SCSocket.OPEN = SCSocket.prototype.OPEN = WebSocket.prototype.OPEN;
-SCSocket.CONNECTED = SCSocket.prototype.CONNECTED = SCSocket.OPEN;
 SCSocket.CLOSING = SCSocket.prototype.CLOSING = WebSocket.prototype.CLOSING;
 SCSocket.CLOSED = SCSocket.prototype.CLOSED = WebSocket.prototype.CLOSED;
 
@@ -617,6 +618,8 @@ SCSocket.prototype._onSCError = function (err) {
 };
 
 SCSocket.prototype._onSCClose = function (event) {
+  this.id = null;
+
   var channel, newState;
   for (var channelName in this._channels) {
     channel = this._channels[channelName];
@@ -695,6 +698,8 @@ SCSocket.prototype._onSCMessage = function (message) {
       }
     } else if (e.event == 'setAuthToken') {
       var tokenData = e.data;
+      var response = new Response(this, e.cid);
+      
       if (tokenData) {
         this._tokenData = tokenData;
         
@@ -704,15 +709,27 @@ SCSocket.prototype._onSCMessage = function (message) {
           this._setCookie(tokenData.cookieName, tokenData.token);
         }
         Emitter.prototype.emit.call(this, e.event, tokenData.token);
+        response.end();
+      } else {
+        response.error('No token data provided with setAuthToken event');
       }
     } else if (e.event == 'removeAuthToken') {
       if (this._tokenData) {
         this._setCookie(this._tokenData.cookieName, null, -1);
         Emitter.prototype.emit.call(this, e.event);
       }
+      var response = new Response(this, e.cid);
+      response.end();
+    } else if (e.event == 'ready') {
+      if (e.data) {
+        this.id = e.data.id;
+      }
+      Emitter.prototype.emit.call(this, e.event, e.data);
     } else {
       var response = new Response(this, e.cid);
-      Emitter.prototype.emit.call(this, e.event, e.data, response);
+      Emitter.prototype.emit.call(this, e.event, e.data, function (error, data) {
+        response.callback(error, data);
+      });
     }
   } else if (e.channel) {
     this._channelEmitter.emit(e.channel, e.data);
@@ -873,7 +890,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
       }, this.options.ackTimeout);
     }
     this._emitBuffer.push(eventObject);
-    if (readyState == this.CONNECTED) {
+    if (readyState == this.OPEN) {
       this._flushEmitBuffer();
     }
   } else {
