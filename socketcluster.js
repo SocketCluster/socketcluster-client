@@ -1,5 +1,5 @@
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.socketCluster=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var SCSocket = require('./scsocket');
+var SCSocket = require('./lib/scsocket');
 module.exports.SCSocket = SCSocket;
 module.exports.JSON = SCSocket.JSON;
 
@@ -8,7 +8,7 @@ module.exports.Emitter = require('emitter');
 module.exports.connect = function (options) {
   return new SCSocket(options);
 };
-},{"./scsocket":36,"emitter":3}],2:[function(require,module,exports){
+},{"./lib/scsocket":5,"emitter":6}],2:[function(require,module,exports){
 /**
  * socket.io
  * Copyright(c) 2011 LearnBoost <dev@learnboost.com>
@@ -331,6 +331,848 @@ module.exports.connect = function (options) {
   , typeof JSON !== 'undefined' ? JSON : undefined
 );
 },{}],3:[function(require,module,exports){
+module.exports.create = (function () {
+  function F() {};
+
+  return function (o) {
+    if (arguments.length != 1) {
+      throw new Error('Object.create implementation only accepts one parameter.');
+    }
+    F.prototype = o;
+    return new F();
+  }
+})();
+},{}],4:[function(require,module,exports){
+var Emitter = require('emitter');
+
+if (!Object.create) {
+  Object.create = require('./objectcreate');
+}
+
+var SCChannel = function (name, socket) {
+  var self = this;
+  
+  Emitter.call(this);
+  
+  this.SUBSCRIBED = 'subscribed';
+  this.PENDING = 'pending';
+  this.UNSUBSCRIBED = 'unsubscribed';
+  
+  this.name = name;
+  this.state = this.UNSUBSCRIBED;
+  this.socket = socket;
+};
+
+SCChannel.prototype = Object.create(Emitter.prototype);
+
+SCChannel.prototype.getState = function () {
+  return this.state;
+};
+
+SCChannel.prototype.subscribe = function () {
+  this.socket.subscribe(this.name);
+  return this;
+};
+
+SCChannel.prototype.unsubscribe = function () {
+  this.socket.unsubscribe(this.name);
+  return this;
+};
+
+SCChannel.prototype.isSubscribed = function (includePending) {
+  return this.socket.isSubscribed(this.name, includePending);
+};
+
+SCChannel.prototype.publish = function (data, callback) {
+  this.socket.publish(this.name, data, callback);
+  return this;
+};
+
+SCChannel.prototype.watch = function (handler) {
+  this.socket.watch(this.name, handler);
+  return this;
+};
+
+SCChannel.prototype.unwatch = function (handler) {
+  this.socket.unwatch(this.name, handler);
+  return this;
+};
+
+SCChannel.prototype.destroy = function () {
+  this.socket.destroyChannel(this.name);
+};
+
+module.exports = SCChannel;
+},{"./objectcreate":3,"emitter":6}],5:[function(require,module,exports){
+/**
+ * Module dependencies.
+ */
+
+var Emitter = require('emitter');
+var Socket = require('engine.io-client');
+var SCChannel = require('./scchannel');
+
+/**
+ * Module exports.
+ */
+
+if (!Object.create) {
+  Object.create = require('./objectcreate');
+}
+
+var Response = function (socket, id) {
+  this.socket = socket;
+  this.id = id;
+};
+
+Response.prototype._respond = function (responseData) {
+  this.socket.send(this.socket.JSON.stringify(responseData));
+};
+
+Response.prototype.end = function (data) {
+  if (this.id) {
+    var responseData = {
+      cid: this.id
+    };
+    if (data !== undefined) {
+      responseData.data = data;
+    }
+    this._respond(responseData);
+  }
+};
+
+Response.prototype.error = function (error, data) {
+  if (this.id) {
+    var err;
+    if (error instanceof Error) {
+      err = {name: error.name, message: error.message, stack: error.stack};      
+    } else {
+      err = error;
+    }
+    
+    var responseData = {
+      cid: this.id,
+      error: err
+    };
+    if (data !== undefined) {
+      responseData.data = data;
+    }
+    
+    this._respond(responseData);
+  }
+};
+
+Response.prototype.callback = function (error, data) {
+  if (error) {
+    this.error(error, data);
+  } else {
+    this.end(data);
+  }
+};
+
+var isBrowser = typeof window != 'undefined';
+
+if (isBrowser) {
+  var ActivityManager = function () {
+    var self = this;
+    
+    this._interval = null;
+    this._intervalDuration = 1000;
+    this._counter = null;
+    
+    if (window.addEventListener) {
+      window.addEventListener('blur', function () {
+        self._triggerBlur();
+      });
+      window.addEventListener('focus', function () {
+        self._triggerFocus();
+      });
+    } else if (window.attachEvent) {
+      window.attachEvent('onblur', function () {
+        self._triggerBlur();
+      });
+      window.attachEvent('onfocus', function () {
+        self._triggerFocus();
+      });
+    } else {
+      throw new Error('The browser does not support proper event handling');
+    }
+  };
+
+  ActivityManager.prototype = Object.create(Emitter.prototype);
+
+  ActivityManager.prototype._triggerBlur = function () {
+    var self = this;
+    
+    var now = (new Date()).getTime();
+    this._counter = now;
+    
+    // If interval skips 2 turns, then client is sleeping
+    this._interval = setInterval(function () {
+      var newCount = (new Date()).getTime();
+      if (newCount - self._counter < self._intervalDuration * 3) {
+        self._counter = newCount;
+      }
+    }, this._intervalDuration);
+    
+    this.emit('deactivate');
+  };
+
+  ActivityManager.prototype._triggerFocus = function () {
+    clearInterval(this._interval);
+    var now = (new Date()).getTime();
+    if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
+      this.emit('wakeup');
+    }
+    
+    this.emit('activate');
+  };
+
+  var activityManager = new ActivityManager();
+}
+
+var SCSocket = function (options) {
+  var self = this;
+  
+  Emitter.call(this);
+  
+  var opts = {
+    autoReconnect: true,
+    ackTimeout: 10000
+  };
+  for (var i in options) {
+    opts[i] = options[i];
+  }
+  opts.path = (opts.path || '/socketcluster').replace(/\/$/, '') + '/';
+  
+  this.id = null;
+  
+  this._localEvents = {
+    'connect': 1,
+    'disconnect': 1,
+    'upgrading': 1,
+    'upgrade': 1,
+    'upgradeError': 1,
+    'open': 1,
+    'error': 1,
+    'packet': 1,
+    'heartbeat': 1,
+    'data': 1,
+    'raw': 1,
+    'message': 1,
+    'handshake': 1,
+    'drain': 1,
+    'flush': 1,
+    'packetCreate': 1,
+    'close': 1,
+    'fail': 1,
+    'kickOut': 1,
+    'setAuthToken': 1,
+    'removeAuthToken': 1,
+    'ready': 1
+  };
+  
+  this._persistentEvents = {
+    'subscribe': 1,
+    'unsubscribe': 1
+  };
+  
+  this._connectAttempts = 0;
+  
+  this._cid = 1;
+  this._callbackMap = {};
+  this._destId = null;
+  this._emitBuffer = [];
+  this._channels = {};
+  this._enableAutoReconnect = true;
+  this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  this._tokenData = null;
+  
+  this.options = opts;
+  
+  if (this.options.autoReconnect && this.options.autoReconnectOptions == null) {
+    this.options.autoReconnectOptions = {
+      delay: 10000,
+      randomness: 10000
+    };
+  }
+  
+  if (this.options.url == null) {
+    Socket.call(this, this.options);
+  } else {
+    Socket.call(this, this.options.url, this.options);
+  }
+  
+  this.connected = false;
+  this.connecting = true;
+  
+  this._channelEmitter = new Emitter();
+  
+  if (isBrowser) {
+    activityManager.on('wakeup', function () {
+      self.close();
+      self.connect();
+    });
+  }
+};
+
+SCSocket.prototype = Object.create(Socket.prototype);
+
+SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = 0;
+SCSocket.OPEN = SCSocket.prototype.OPEN = 1;
+SCSocket.CLOSING = SCSocket.prototype.CLOSING = 2;
+SCSocket.CLOSED = SCSocket.prototype.CLOSED = 3;
+
+SCSocket.prototype.getState = function () {
+  if (this.connecting) {
+    return this.CONNECTING;
+  } else if (this.connected) {
+    return this.OPEN;
+  }
+  return this.CLOSED;
+};
+
+SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
+  var exdate = null;
+  if (expirySeconds) {
+    exdate = new Date();
+    exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
+  }
+  var value = escape(value) + '; path=/;' + ((exdate == null) ? '' : ' expires=' + exdate.toUTCString() + ';');
+  document.cookie = name + '=' + value;
+};
+
+SCSocket.prototype._getCookie = function (name) {
+  var i, x, y, ARRcookies = document.cookie.split(';');
+  for (i = 0; i < ARRcookies.length; i++) {
+    x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
+    y = ARRcookies[i].substr(ARRcookies[i].indexOf('=') + 1);
+    x = x.replace(/^\s+|\s+$/g, '');
+    if (x == name) {
+      return unescape(y);
+    }
+  }
+};
+
+SCSocket.prototype.connect = SCSocket.prototype.open = function () {
+  var self = this;
+  
+  if (!this.connected && !this.connecting) {
+    this.connected = false;
+    this.connecting = true;
+    Socket.prototype.open.apply(this, arguments);
+    this._resubscribe();
+  }
+};
+
+SCSocket.prototype.disconnect = function () {
+  this._enableAutoReconnect = false;
+  return Socket.prototype.close.apply(this);
+};
+
+SCSocket.prototype.onSCOpen = function () {
+  this._connectAttempts = 0;
+  this._enableAutoReconnect = true;
+  
+  this.connected = true;
+  this.connecting = false;
+  
+  Emitter.prototype.emit.call(this, 'connect');
+  this._flushEmitBuffer();
+};
+
+SCSocket.prototype._tryReconnect = function () {
+  var self = this;
+  
+  if (!this.connected && !this.connecting &&
+    this.options.autoReconnect && this._enableAutoReconnect) {
+    
+    this._emitBuffer = [];
+    
+    var reconnectOptions = this.options.autoReconnectOptions;
+    var exponent = this._connectAttempts++;
+    if (exponent > 5) {
+      exponent = 5;
+    }
+    var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
+    var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
+    
+    clearTimeout(this._reconnectTimeout);
+    
+    this._reconnectTimeout = setTimeout(function () {
+      if (!self.connected && !self.connecting) {
+        self.connect();
+      }
+    }, timeout);
+  }
+};
+
+SCSocket.prototype.onSCError = function (err) {
+  this.connecting = false;
+  if (!this.connected) {
+    this._tryReconnect();
+  }
+  if (this.listeners('error').length < 1) {
+    setTimeout(function () {
+      throw err;
+    }, 0);
+  }
+};
+
+SCSocket.prototype.onSCClose = function () {
+  this.id = null;
+
+  this.connected = false;
+  this.connecting = false;
+  
+  var channel, newState;
+  for (var channelName in this._channels) {
+    channel = this._channels[channelName];
+    if (channel.state == channel.SUBSCRIBED ||
+      channel.state == channel.PENDING) {
+      
+      newState = channel.PENDING;
+    } else {
+      newState = channel.UNSUBSCRIBED;
+    }
+    this._triggerChannelUnsubscribe(channel, newState);
+  }
+  if (!this._connectAttempts) {
+    this._tryReconnect();
+    Emitter.prototype.emit.call(this, 'disconnect');
+  }
+};
+
+SCSocket.prototype.onSCMessage = function (message) {
+  var e;
+  try {
+    e = this.JSON.parse(message);
+  } catch (err) {
+    e = message;
+  }
+  
+  if (e.event) {
+    if (e.event == 'disconnect') {
+      this.connected = false;
+      this.connecting = false;
+      Emitter.prototype.emit.call(this, 'disconnect');
+      
+    } else if (e.event == 'fail') {
+      this.connected = false;
+      this.connecting = false;
+      this.emit('error', e.data);
+      
+    } else if (e.event == 'kickOut') {
+      var kickData = e.data || {};
+      var channelName = kickData.channel;
+      var channel = this._channels[channelName];
+      if (channel) {
+        Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
+        channel.emit(e.event, kickData.message, channelName);
+        this._triggerChannelUnsubscribe(channel);
+      }
+    } else if (e.event == 'setAuthToken') {
+      var tokenData = e.data;
+      var response = new Response(this, e.cid);
+      
+      if (tokenData) {
+        this._tokenData = tokenData;
+        
+        if (tokenData.persistent && tokenData.expiresInMinutes != null) {
+          this._setCookie(tokenData.cookieName, tokenData.token, tokenData.expiresInMinutes * 60);
+        } else {
+          this._setCookie(tokenData.cookieName, tokenData.token);
+        }
+        Emitter.prototype.emit.call(this, e.event, tokenData.token);
+        response.end();
+      } else {
+        response.error('No token data provided with setAuthToken event');
+      }
+    } else if (e.event == 'removeAuthToken') {
+      if (this._tokenData) {
+        this._setCookie(this._tokenData.cookieName, null, -1);
+        Emitter.prototype.emit.call(this, e.event);
+      }
+      var response = new Response(this, e.cid);
+      response.end();
+    } else if (e.event == 'ready') {
+      if (e.data) {
+        this.id = e.data.id;
+      }
+      Emitter.prototype.emit.call(this, e.event, e.data);
+    } else {
+      var response = new Response(this, e.cid);
+      Emitter.prototype.emit.call(this, e.event, e.data, function (error, data) {
+        response.callback(error, data);
+      });
+    }
+  } else if (e.channel) {
+    this._channelEmitter.emit(e.channel, e.data);
+  } else if (e.cid == null) {
+    Emitter.prototype.emit.call(this, 'raw', e);
+  } else {
+    var ret = this._callbackMap[e.cid];
+    if (ret) {
+      clearTimeout(ret.timeout);
+      delete this._callbackMap[e.cid];
+      ret.callback(e.error, e.data);
+    }
+    if (e.error) {
+      this.emit('error', e.error);
+    }
+  }
+};
+
+SCSocket.prototype._nextCallId = function () {
+  return this._cid++;
+};
+
+SCSocket.prototype._isOwnDescendant = function (object, ancestors) {
+  for (var i in ancestors) {
+    if (ancestors[i] === object) {
+      return true;
+    }
+  }
+  return false;
+};
+
+SCSocket.prototype._arrayBufferToBase64 = function (arraybuffer) {
+  var chars = this._base64Chars;
+  var bytes = new Uint8Array(arraybuffer);
+  var len = bytes.length;
+  var base64 = '';
+
+  for (var i = 0; i < len; i += 3) {
+    base64 += chars[bytes[i] >> 2];
+    base64 += chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+    base64 += chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+    base64 += chars[bytes[i + 2] & 63];
+  }
+
+  if ((len % 3) === 2) {
+    base64 = base64.substring(0, base64.length - 1) + '=';
+  } else if (len % 3 === 1) {
+    base64 = base64.substring(0, base64.length - 2) + '==';
+  }
+
+  return base64;
+};
+
+SCSocket.prototype._convertBuffersToBase64 = function (object, ancestors) {
+  if (!ancestors) {
+    ancestors = [];
+  }
+  if (this._isOwnDescendant(object, ancestors)) {
+    throw new Error('Cannot traverse circular structure');
+  }
+  var newAncestors = ancestors.concat([object]);
+  
+  if (typeof ArrayBuffer != 'undefined' && object instanceof ArrayBuffer) {
+    return {
+      base64: true,
+      data: this._arrayBufferToBase64(object)
+    };
+  }
+  
+  if (object instanceof Array) {
+    var base64Array = [];
+    for (var i in object) {
+      base64Array[i] = this._convertBuffersToBase64(object[i], newAncestors);
+    }
+    return base64Array;
+  }
+  if (object instanceof Object) {
+    var base64Object = {};
+    for (var j in object) {
+      base64Object[j] = this._convertBuffersToBase64(object[j], newAncestors);
+    }
+    return base64Object;
+  }
+  
+  return object;
+};
+
+SCSocket.prototype.parse = function (message) {
+  return this.JSON.parse(message);
+};
+
+SCSocket.prototype.stringify = function (object) {
+  return this.JSON.stringify(this._convertBuffersToBase64(object));
+};
+
+SCSocket.prototype._emit = function (eventObject) {
+  eventObject.cid = this._nextCallId();
+  
+  if (eventObject.callback) {
+    this._callbackMap[eventObject.cid] = eventObject;
+  }
+  
+  var simpleEventObject = {
+    event: eventObject.event,
+    data: eventObject.data,
+    cid: eventObject.cid
+  };
+  
+  Socket.prototype.send.call(this, this.stringify(simpleEventObject));
+};
+
+SCSocket.prototype._flushEmitBuffer = function () {
+  var len = this._emitBuffer.length;
+  
+  for (var i = 0; i < len; i++) {
+    this._emit(this._emitBuffer[i]);
+  }
+  this._emitBuffer = [];
+};
+
+SCSocket.prototype.emit = function (event, data, callback) {
+  var self = this;
+  
+  if (this._localEvents[event] == null) {
+    if (!this.connected && !this.connecting) {
+      this.connect();
+    }
+    var eventObject = {
+      event: event,
+      data: data,
+      callback: callback
+    };
+    
+    // Persistent events should never timeout.
+    // Also, only set timeout if there is a callback.
+    if (!this._persistentEvents[event] && callback) {
+      eventObject.timeout = setTimeout(function () {
+        var error = new Error("Event response for '" + event + "' timed out", eventObject);
+        if (eventObject.cid) {
+          delete self._callbackMap[eventObject.cid];
+        }
+        delete eventObject.callback;
+        callback(error, eventObject);
+        self.emit('error', error);
+      }, this.options.ackTimeout);
+    }
+    this._emitBuffer.push(eventObject);
+    if (this.connected) {
+      this._flushEmitBuffer();
+    }
+  } else {
+    switch (event) {
+      case 'message':
+        this.onSCMessage(data);
+        break;
+        
+      case 'open':
+        this.onSCOpen();
+        break;
+        
+      case 'close':
+        this.onSCClose();
+        break;
+
+      case 'error':
+        this.onSCError(data);
+        break;
+    }
+    Emitter.prototype.emit.call(this, event, data);
+  }
+};
+
+SCSocket.prototype.publish = function (channelName, data, callback) {
+  var self = this;
+  
+  var pubData = {
+    channel: channelName,
+    data: data
+  };
+  this.emit('publish', pubData, function (err) {
+    callback && callback(err);
+  });
+};
+
+SCSocket.prototype.subscribe = function (channelName) {
+  var self = this;
+  
+  var channel = this._channels[channelName];
+  
+  if (!channel) {
+    channel = new SCChannel(channelName, this);
+    this._channels[channelName] = channel;
+  }
+
+  if (channel.state == channel.UNSUBSCRIBED) {
+    channel.state = channel.PENDING;
+    this.emit('subscribe', channelName, function (err) {
+      if (err) {
+        self._triggerChannelSubscribeFail(err, channel);
+      } else {
+        self._triggerChannelSubscribe(channel);
+      }
+    });
+  }
+  
+  return channel;
+};
+
+SCSocket.prototype.unsubscribe = function (channelName) {
+
+  var channel = this._channels[channelName];
+  
+  if (channel) {
+    if (channel.state != channel.UNSUBSCRIBED) {
+    
+      this._triggerChannelUnsubscribe(channel);
+      
+      // The only case in which unsubscribe can fail is if the connection is closed or dies.
+      // If that's the case, the server will automatically unsubscribe the client so
+      // we don't need to check for failure since this operation can never really fail.
+      
+      this.emit('unsubscribe', channelName);
+    }
+  }
+};
+
+SCSocket.prototype.channel = function (channelName) {
+  var currentChannel = this._channels[channelName];
+  
+  if (!currentChannel) {
+    currentChannel = new SCChannel(channelName, this);
+    this._channels[channelName] = currentChannel;
+  }
+  return currentChannel;
+};
+
+SCSocket.prototype.destroyChannel = function (channelName) {
+  var channel = this._channels[channelName];
+  channel.unwatch();
+  channel.unsubscribe();
+  delete this._channels[channelName];
+};
+
+SCSocket.prototype.subscriptions = function (includePending) {
+  var subs = [];
+  var channel, includeChannel;
+  for (var channelName in this._channels) {
+    channel = this._channels[channelName];
+    
+    if (includePending) {
+      includeChannel = channel && (channel.state == channel.SUBSCRIBED || 
+        channel.state == channel.PENDING);
+    } else {
+      includeChannel = channel && channel.state == channel.SUBSCRIBED;
+    }
+    
+    if (includeChannel) {
+      subs.push(channelName);
+    }
+  }
+  return subs;
+};
+
+SCSocket.prototype.isSubscribed = function (channel, includePending) {
+  var channel = this._channels[channel];
+  if (includePending) {
+    return !!channel && (channel.state == channel.SUBSCRIBED ||
+      channel.state == channel.PENDING);
+  }
+  return !!channel && channel.state == channel.SUBSCRIBED;
+};
+
+SCSocket.prototype._triggerChannelSubscribe = function (channel) {
+  var channelName = channel.name;
+  
+  channel.state = channel.SUBSCRIBED;
+  
+  channel.emit('subscribe', channelName);
+  Emitter.prototype.emit.call(this, 'subscribe', channelName);
+};
+
+SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel) {
+  var channelName = channel.name;
+  
+  channel.state = channel.UNSUBSCRIBED;
+  
+  channel.emit('subscribeFail', err, channelName);
+  Emitter.prototype.emit.call(this, 'subscribeFail', err, channelName);
+};
+
+SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
+  var channelName = channel.name;
+  var oldState = channel.state;
+  
+  if (newState) {
+    channel.state = newState;
+  } else {
+    channel.state = channel.UNSUBSCRIBED;
+  }
+  if (oldState == channel.SUBSCRIBED) {
+    channel.emit('unsubscribe', channelName);
+    Emitter.prototype.emit.call(this, 'unsubscribe', channelName);
+  }
+};
+
+SCSocket.prototype._resubscribe = function (callback) {
+  var self = this;
+  
+  var channels = [];
+  for (var channelName in this._channels) {
+    channels.push(channelName);
+  }
+  var error;
+  var ackCount = 0;
+  
+  var ackHandler = function (err, channel) {
+    ackCount++;
+    
+    if (err) {
+      self._triggerChannelSubscribeFail(err, channel);
+    } else {
+      self._triggerChannelSubscribe(channel);
+    }
+    if (!error) {
+      if (err) {
+        error = err;
+        callback && callback(err);
+      } else if (ackCount >= channels.length) {
+        callback && callback();
+      }
+    }
+  };
+  for (var i in this._channels) {
+    (function (channel) {
+      if (channel.state == channel.PENDING) {
+        self.emit('subscribe', channel.name, function (err) {
+          ackHandler(err, channel);
+        });
+      }
+    })(this._channels[i]);
+  }
+};
+
+SCSocket.prototype.watch = function (channelName, handler) {
+  this._channelEmitter.on(channelName, handler);
+};
+
+SCSocket.prototype.unwatch = function (channelName, handler) {
+  if (handler) {
+    this._channelEmitter.removeListener(channelName, handler);
+  } else {
+    this._channelEmitter.removeAllListeners(channelName);
+  }
+};
+
+SCSocket.prototype.watchers = function (channelName) {
+  return this._channelEmitter.listeners(channelName);
+};
+
+if (typeof JSON != 'undefined') {
+  SCSocket.prototype.JSON = JSON;
+} else {
+  SCSocket.prototype.JSON = require('./json').JSON;
+}
+SCSocket.JSON = SCSocket.prototype.JSON;
+
+module.exports = SCSocket;
+},{"./json":2,"./objectcreate":3,"./scchannel":4,"emitter":6,"engine.io-client":8}],6:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -494,7 +1336,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{"indexof":4}],4:[function(require,module,exports){
+},{"indexof":7}],7:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -505,11 +1347,11 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],5:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 
 module.exports =  require('./lib/');
 
-},{"./lib/":6}],6:[function(require,module,exports){
+},{"./lib/":9}],9:[function(require,module,exports){
 
 module.exports = require('./socket');
 
@@ -521,7 +1363,7 @@ module.exports = require('./socket');
  */
 module.exports.parser = require('engine.io-parser');
 
-},{"./socket":7,"engine.io-parser":20}],7:[function(require,module,exports){
+},{"./socket":10,"engine.io-parser":23}],10:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -1208,7 +2050,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./transport":8,"./transports":9,"component-emitter":15,"debug":17,"engine.io-parser":20,"indexof":29,"parsejson":30,"parseqs":31,"parseuri":32}],8:[function(require,module,exports){
+},{"./transport":11,"./transports":12,"component-emitter":18,"debug":20,"engine.io-parser":23,"indexof":32,"parsejson":33,"parseqs":34,"parseuri":35}],11:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -1360,7 +2202,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"component-emitter":15,"engine.io-parser":20}],9:[function(require,module,exports){
+},{"component-emitter":18,"engine.io-parser":23}],12:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies
@@ -1417,7 +2259,7 @@ function polling(opts){
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling-jsonp":10,"./polling-xhr":11,"./websocket":13,"xmlhttprequest":14}],10:[function(require,module,exports){
+},{"./polling-jsonp":13,"./polling-xhr":14,"./websocket":16,"xmlhttprequest":17}],13:[function(require,module,exports){
 (function (global){
 
 /**
@@ -1654,7 +2496,7 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":12,"component-inherit":16}],11:[function(require,module,exports){
+},{"./polling":15,"component-inherit":19}],14:[function(require,module,exports){
 (function (global){
 /**
  * Module requirements.
@@ -2009,7 +2851,7 @@ function unloadHandler() {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":12,"component-emitter":15,"component-inherit":16,"debug":17,"xmlhttprequest":14}],12:[function(require,module,exports){
+},{"./polling":15,"component-emitter":18,"component-inherit":19,"debug":20,"xmlhttprequest":17}],15:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -2256,7 +3098,7 @@ Polling.prototype.uri = function(){
   return schema + '://' + this.hostname + port + this.path + query;
 };
 
-},{"../transport":8,"component-inherit":16,"debug":17,"engine.io-parser":20,"parseqs":31,"xmlhttprequest":14}],13:[function(require,module,exports){
+},{"../transport":11,"component-inherit":19,"debug":20,"engine.io-parser":23,"parseqs":34,"xmlhttprequest":17}],16:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -2487,7 +3329,7 @@ WS.prototype.check = function(){
   return !!WebSocket && !('__initialize' in WebSocket && this.name === WS.prototype.name);
 };
 
-},{"../transport":8,"component-inherit":16,"debug":17,"engine.io-parser":20,"parseqs":31,"ws":33}],14:[function(require,module,exports){
+},{"../transport":11,"component-inherit":19,"debug":20,"engine.io-parser":23,"parseqs":34,"ws":36}],17:[function(require,module,exports){
 // browser shim for xmlhttprequest module
 var hasCORS = require('has-cors');
 
@@ -2525,7 +3367,7 @@ module.exports = function(opts) {
   }
 }
 
-},{"has-cors":27}],15:[function(require,module,exports){
+},{"has-cors":30}],18:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -2691,7 +3533,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],16:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 
 module.exports = function(a, b){
   var fn = function(){};
@@ -2699,7 +3541,7 @@ module.exports = function(a, b){
   a.prototype = new fn;
   a.prototype.constructor = a;
 };
-},{}],17:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 
 /**
  * This is the web browser implementation of `debug()`.
@@ -2848,7 +3690,7 @@ function load() {
 
 exports.enable(load());
 
-},{"./debug":18}],18:[function(require,module,exports){
+},{"./debug":21}],21:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -3047,7 +3889,7 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":19}],19:[function(require,module,exports){
+},{"ms":22}],22:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -3160,7 +4002,7 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],20:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -3730,7 +4572,7 @@ exports.decodePayloadAsBinary = function (data, binaryType, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./keys":21,"after":22,"arraybuffer.slice":23,"base64-arraybuffer":24,"blob":25,"utf8":26}],21:[function(require,module,exports){
+},{"./keys":24,"after":25,"arraybuffer.slice":26,"base64-arraybuffer":27,"blob":28,"utf8":29}],24:[function(require,module,exports){
 
 /**
  * Gets the keys for an object.
@@ -3751,7 +4593,7 @@ module.exports = Object.keys || function keys (obj){
   return arr;
 };
 
-},{}],22:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 module.exports = after
 
 function after(count, callback, err_cb) {
@@ -3781,7 +4623,7 @@ function after(count, callback, err_cb) {
 
 function noop() {}
 
-},{}],23:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /**
  * An abstraction for slicing an arraybuffer even when
  * ArrayBuffer.prototype.slice is not supported
@@ -3812,7 +4654,7 @@ module.exports = function(arraybuffer, start, end) {
   return result.buffer;
 };
 
-},{}],24:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /*
  * base64-arraybuffer
  * https://github.com/niklasvh/base64-arraybuffer
@@ -3873,7 +4715,7 @@ module.exports = function(arraybuffer, start, end) {
   };
 })("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
-},{}],25:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 (function (global){
 /**
  * Create a blob builder even when vendor prefixes exist
@@ -3926,7 +4768,7 @@ module.exports = (function() {
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],26:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/utf8js v2.0.0 by @mathias */
 ;(function(root) {
@@ -4169,7 +5011,7 @@ module.exports = (function() {
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],27:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -4194,7 +5036,7 @@ try {
   module.exports = false;
 }
 
-},{"global":28}],28:[function(require,module,exports){
+},{"global":31}],31:[function(require,module,exports){
 
 /**
  * Returns `this`. Execute this without a "context" (i.e. without it being
@@ -4204,9 +5046,9 @@ try {
 
 module.exports = (function () { return this; })();
 
-},{}],29:[function(require,module,exports){
-module.exports=require(4)
-},{"C:\\node\\sc\\node_modules\\socketcluster-client\\node_modules\\emitter\\node_modules\\indexof\\index.js":4}],30:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
+module.exports=require(7)
+},{"C:\\node\\sc\\node_modules\\socketcluster-client\\node_modules\\emitter\\node_modules\\indexof\\index.js":7}],33:[function(require,module,exports){
 (function (global){
 /**
  * JSON parse.
@@ -4241,7 +5083,7 @@ module.exports = function parsejson(data) {
   }
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],31:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -4280,7 +5122,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],32:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /**
  * Parses an URI
  *
@@ -4321,7 +5163,7 @@ module.exports = function parseuri(str) {
     return uri;
 };
 
-},{}],33:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -4366,812 +5208,5 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}],34:[function(require,module,exports){
-module.exports.create = (function () {
-  function F() {};
-
-  return function (o) {
-    if (arguments.length != 1) {
-      throw new Error('Object.create implementation only accepts one parameter.');
-    }
-    F.prototype = o;
-    return new F();
-  }
-})();
-},{}],35:[function(require,module,exports){
-var Emitter = require('emitter');
-
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
-
-var SCChannel = function (name, socket) {
-  var self = this;
-  
-  Emitter.call(this);
-  
-  this.STATE_SUBSCRIBED = 'subscribed';
-  this.STATE_PENDING = 'pending';
-  this.STATE_UNSUBSCRIBED = 'unsubscribed';
-  
-  this.name = name;
-  this.state = this.STATE_UNSUBSCRIBED;
-  this.socket = socket;
-};
-
-SCChannel.prototype = Object.create(Emitter.prototype);
-
-SCChannel.prototype.subscribe = function () {
-  this.socket.subscribe(this.name);
-  return this;
-};
-
-SCChannel.prototype.unsubscribe = function () {
-  this.socket.unsubscribe(this.name);
-  return this;
-};
-
-SCChannel.prototype.isSubscribed = function (includePending) {
-  return this.socket.isSubscribed(this.name, includePending);
-};
-
-SCChannel.prototype.publish = function (data, callback) {
-  this.socket.publish(this.name, data, callback);
-  return this;
-};
-
-SCChannel.prototype.watch = function (handler) {
-  this.socket.watch(this.name, handler);
-  return this;
-};
-
-SCChannel.prototype.unwatch = function (handler) {
-  this.socket.unwatch(this.name, handler);
-  return this;
-};
-
-SCChannel.prototype.destroy = function () {
-  this.socket.destroyChannel(this.name);
-};
-
-module.exports = SCChannel;
-},{"./objectcreate":34,"emitter":3}],36:[function(require,module,exports){
-/**
- * Module dependencies.
- */
-
-var Emitter = require('emitter');
-var Socket = require('engine.io-client');
-var SCChannel = require('./scchannel');
-
-/**
- * Module exports.
- */
-
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
-
-var Response = function (socket, id) {
-  this.socket = socket;
-  this.id = id;
-};
-
-Response.prototype._respond = function (responseData) {
-  this.socket.send(this.socket.JSON.stringify(responseData));
-};
-
-Response.prototype.end = function (data) {
-  if (this.id) {
-    var responseData = {
-      cid: this.id
-    };
-    if (data !== undefined) {
-      responseData.data = data;
-    }
-    this._respond(responseData);
-  }
-};
-
-Response.prototype.error = function (error, data) {
-  if (this.id) {
-    var err;
-    if (error instanceof Error) {
-      err = {name: error.name, message: error.message, stack: error.stack};      
-    } else {
-      err = error;
-    }
-    
-    var responseData = {
-      cid: this.id,
-      error: err
-    };
-    if (data !== undefined) {
-      responseData.data = data;
-    }
-    
-    this._respond(responseData);
-  }
-};
-
-var isBrowser = typeof window != 'undefined';
-
-if (isBrowser) {
-  var ActivityManager = function () {
-    var self = this;
-    
-    this._interval = null;
-    this._intervalDuration = 1000;
-    this._counter = null;
-    
-    if (window.addEventListener) {
-      window.addEventListener('blur', function () {
-        self._triggerBlur();
-      });
-      window.addEventListener('focus', function () {
-        self._triggerFocus();
-      });
-    } else if (window.attachEvent) {
-      window.attachEvent('onblur', function () {
-        self._triggerBlur();
-      });
-      window.attachEvent('onfocus', function () {
-        self._triggerFocus();
-      });
-    } else {
-      throw new Error('The browser does not support proper event handling');
-    }
-  };
-
-  ActivityManager.prototype = Object.create(Emitter.prototype);
-
-  ActivityManager.prototype._triggerBlur = function () {
-    var self = this;
-    
-    var now = (new Date()).getTime();
-    this._counter = now;
-    
-    // If interval skips 2 turns, then client is sleeping
-    this._interval = setInterval(function () {
-      var newCount = (new Date()).getTime();
-      if (newCount - self._counter < self._intervalDuration * 3) {
-        self._counter = newCount;
-      }
-    }, this._intervalDuration);
-    
-    this.emit('deactivate');
-  };
-
-  ActivityManager.prototype._triggerFocus = function () {
-    clearInterval(this._interval);
-    var now = (new Date()).getTime();
-    if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
-      this.emit('wakeup');
-    }
-    
-    this.emit('activate');
-  };
-
-  var activityManager = new ActivityManager();
-}
-
-var SCSocket = function (options) {
-  var self = this;
-  
-  var opts = {
-    autoReconnect: true,
-    ackTimeout: 10000
-  };
-  for (var i in options) {
-    opts[i] = options[i];
-  }
-  opts.path = (opts.path || '/socketcluster').replace(/\/$/, '') + '/';
-  
-  this._localEvents = {
-    'connect': 1,
-    'disconnect': 1,
-    'upgrading': 1,
-    'upgrade': 1,
-    'upgradeError': 1,
-    'open': 1,
-    'error': 1,
-    'packet': 1,
-    'heartbeat': 1,
-    'data': 1,
-    'raw': 1,
-    'message': 1,
-    'handshake': 1,
-    'drain': 1,
-    'flush': 1,
-    'packetCreate': 1,
-    'close': 1,
-    'fail': 1,
-    'kickOut': 1
-  };
-  
-  this._persistentEvents = {
-    'subscribe': 1,
-    'unsubscribe': 1,
-    'ready': 1
-  };
-  
-  this._connectAttempts = 0;
-  
-  this._cid = 1;
-  this._callbackMap = {};
-  this._destId = null;
-  this._emitBuffer = [];
-  this._channels = {};
-  this._enableAutoReconnect = true;
-  this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  
-  this._sessionDestRegex = /^([^_]*)_([^_]*)_([^_]*)_([^_]*)_/;
-  
-  this.options = opts;
-  
-  if (this.options.autoReconnect && this.options.autoReconnectOptions == null) {
-    this.options.autoReconnectOptions = {
-      delay: 10000,
-      randomness: 10000
-    };
-  }
-  
-  if (this.options.url == null) {
-    Socket.call(this, this.options);
-  } else {
-    Socket.call(this, this.options.url, this.options);
-  }
-  
-  this.connected = false;
-  this.connecting = true;
-  
-  this._channelEmitter = new Emitter();
-  
-  if (isBrowser) {
-    activityManager.on('wakeup', function () {
-      self.close();
-      self.connect();
-    });
-  }
-};
-
-SCSocket.prototype = Object.create(Socket.prototype);
-
-SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
-  var exdate = null;
-  if (expirySeconds) {
-    exdate = new Date();
-    exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
-  }
-  var value = escape(value) + '; path=/;' + ((exdate == null) ? '' : ' expires=' + exdate.toUTCString() + ';');
-  document.cookie = name + '=' + value;
-};
-
-SCSocket.prototype._getCookie = function (name) {
-  var i, x, y, ARRcookies = document.cookie.split(';');
-  for (i = 0; i < ARRcookies.length; i++) {
-    x = ARRcookies[i].substr(0, ARRcookies[i].indexOf('='));
-    y = ARRcookies[i].substr(ARRcookies[i].indexOf('=') + 1);
-    x = x.replace(/^\s+|\s+$/g, '');
-    if (x == name) {
-      return unescape(y);
-    }
-  }
-};
-
-SCSocket.prototype._setSessionCookie = function (appName, socketId) {
-  var sessionSegments = socketId.match(this._sessionDestRegex);
-  var soidDest = sessionSegments ? sessionSegments[0] : null;
-  var sessionCookieName = 'n/' + appName + '/ssid';
-  
-  var ssid = this._getCookie(sessionCookieName);
-  var ssidDest = null;
-  if (ssid) {
-    ssidDest = ssid.match(this._sessionDestRegex);
-    ssidDest = ssidDest ? ssidDest[0] : null;
-  }
-  if (!ssid || soidDest != ssidDest) {
-    ssid = socketId;
-    this._setCookie(sessionCookieName, ssid);
-  }
-  return ssid;
-};
-
-SCSocket.prototype.connect = SCSocket.prototype.open = function () {
-  var self = this;
-  
-  if (!this.connected && !this.connecting) {
-    this.connected = false;
-    this.connecting = true;
-    Socket.prototype.open.apply(this, arguments);
-    this._resubscribe();
-    
-    setTimeout(function () {
-      self.emit('ready');
-    }, 0);
-  }
-};
-
-SCSocket.prototype.disconnect = function () {
-  this._enableAutoReconnect = false;
-  return Socket.prototype.close.apply(this);
-};
-
-SCSocket.prototype.onSCOpen = function () {
-  this._connectAttempts = 0;
-  this._enableAutoReconnect = true;
-};
-
-SCSocket.prototype._tryReconnect = function () {
-  var self = this;
-  
-  if (!self.connected && !self.connecting &&
-    this.options.autoReconnect && this._enableAutoReconnect) {
-    
-    this._emitBuffer = [];
-    
-    var reconnectOptions = this.options.autoReconnectOptions;
-    var exponent = this._connectAttempts++;
-    if (exponent > 5) {
-      exponent = 5;
-    }
-    var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
-    var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
-    setTimeout(function () {
-      if (!self.connected && !self.connecting) {
-        self.connect();
-      }
-    }, timeout);
-  }
-};
-
-SCSocket.prototype.onSCError = function (err) {
-  this.connecting = false;
-  if (!this.connected) {
-    this._tryReconnect();
-  }
-  if (this.listeners('error').length < 1) {
-    setTimeout(function () {
-      throw err;
-    }, 0);
-  }
-};
-
-SCSocket.prototype.onSCClose = function () {
-  this.connected = false;
-  this.connecting = false;
-  
-  var channel, newState;
-  for (var channelName in this._channels) {
-    channel = this._channels[channelName];
-    if (channel.state == channel.STATE_SUBSCRIBED ||
-      channel.state == channel.STATE_PENDING) {
-      
-      newState = channel.STATE_PENDING;
-    } else {
-      newState = channel.STATE_UNSUBSCRIBED;
-    }
-    this._triggerChannelUnsubscribe(channel, newState);
-  }
-  if (!this._connectAttempts) {
-    this._tryReconnect();
-    Emitter.prototype.emit.call(this, 'disconnect');
-  }
-};
-
-SCSocket.prototype.onSCMessage = function (message) {
-  var e;
-  try {
-    e = this.JSON.parse(message);
-  } catch (err) {
-    e = message;
-  }
-  
-  if (e.event) {
-    if (e.event == 'connect') {
-      this.connected = true;
-      this.connecting = false;
-      
-      if (isBrowser) {
-        this.ssid = this._setSessionCookie(e.data.appName, this.id);
-      } else {
-        this.ssid = this.id;
-      }
-      Emitter.prototype.emit.call(this, e.event, e.data.soid);
-      this._flushEmitBuffer();
-      
-    } else if (e.event == 'disconnect') {
-      this.connected = false;
-      this.connecting = false;
-      Emitter.prototype.emit.call(this, 'disconnect');
-      
-    } else if (e.event == 'fail') {
-      this.connected = false;
-      this.connecting = false;
-      this.emit('error', e.data);
-      
-    } else if (e.event == 'kickOut') {
-      var kickData = e.data || {};
-      var channelName = kickData.channel;
-      var channel = this._channels[channelName];
-      if (channel) {
-        Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
-        channel.emit(e.event, kickData.message, channelName);
-        this._triggerChannelUnsubscribe(channel);
-      }
-    } else {
-      var response = new Response(this, e.cid);
-      Emitter.prototype.emit.call(this, e.event, e.data, response);
-    }
-  } else if (e.channel) {
-    this._channelEmitter.emit(e.channel, e.data);
-  } else if (e.cid == null) {
-    Emitter.prototype.emit.call(this, 'raw', e);
-  } else {
-    var ret = this._callbackMap[e.cid];
-    if (ret) {
-      clearTimeout(ret.timeout);
-      delete this._callbackMap[e.cid];
-      ret.callback(e.error, e.data);
-    }
-    if (e.error) {
-      this.emit('error', e.error);
-    }
-  }
-};
-
-SCSocket.prototype._nextCallId = function () {
-  return this._cid++;
-};
-
-SCSocket.prototype._isOwnDescendant = function (object, ancestors) {
-  for (var i in ancestors) {
-    if (ancestors[i] === object) {
-      return true;
-    }
-  }
-  return false;
-};
-
-SCSocket.prototype._arrayBufferToBase64 = function (arraybuffer) {
-  var chars = this._base64Chars;
-  var bytes = new Uint8Array(arraybuffer);
-  var len = bytes.length;
-  var base64 = '';
-
-  for (var i = 0; i < len; i += 3) {
-    base64 += chars[bytes[i] >> 2];
-    base64 += chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
-    base64 += chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
-    base64 += chars[bytes[i + 2] & 63];
-  }
-
-  if ((len % 3) === 2) {
-    base64 = base64.substring(0, base64.length - 1) + '=';
-  } else if (len % 3 === 1) {
-    base64 = base64.substring(0, base64.length - 2) + '==';
-  }
-
-  return base64;
-};
-
-SCSocket.prototype._convertBuffersToBase64 = function (object, ancestors) {
-  if (!ancestors) {
-    ancestors = [];
-  }
-  if (this._isOwnDescendant(object, ancestors)) {
-    throw new Error('Cannot traverse circular structure');
-  }
-  var newAncestors = ancestors.concat([object]);
-  
-  if (object instanceof ArrayBuffer) {
-    return {
-      base64: true,
-      data: this._arrayBufferToBase64(object)
-    };
-  }
-  
-  if (object instanceof Array) {
-    var base64Array = [];
-    for (var i in object) {
-      base64Array[i] = this._convertBuffersToBase64(object[i], newAncestors);
-    }
-    return base64Array;
-  }
-  if (object instanceof Object) {
-    var base64Object = {};
-    for (var j in object) {
-      base64Object[j] = this._convertBuffersToBase64(object[j], newAncestors);
-    }
-    return base64Object;
-  }
-  
-  return object;
-};
-
-SCSocket.prototype.parse = function (message) {
-  return this.JSON.parse(message);
-};
-
-SCSocket.prototype.stringify = function (object) {
-  return this.JSON.stringify(this._convertBuffersToBase64(object));
-};
-
-SCSocket.prototype._emit = function (eventObject) {
-  eventObject.cid = this._nextCallId();
-  
-  if (eventObject.callback) {
-    this._callbackMap[eventObject.cid] = eventObject;
-  }
-  
-  var simpleEventObject = {
-    event: eventObject.event,
-    data: eventObject.data,
-    cid: eventObject.cid
-  };
-  
-  Socket.prototype.send.call(this, this.stringify(simpleEventObject));
-};
-
-SCSocket.prototype._flushEmitBuffer = function () {
-  var len = this._emitBuffer.length;
-  
-  for (var i = 0; i < len; i++) {
-    this._emit(this._emitBuffer[i]);
-  }
-  this._emitBuffer = [];
-};
-
-SCSocket.prototype.emit = function (event, data, callback) {
-  var self = this;
-  
-  if (this._localEvents[event] == null) {
-    if (!this.connected && !this.connecting) {
-      this.connect();
-    }
-    var eventObject = {
-      event: event,
-      data: data,
-      callback: callback
-    };
-    
-    // Persistent events should never timeout.
-    // Also, only set timeout if there is a callback.
-    if (!this._persistentEvents[event] && callback) {
-      eventObject.timeout = setTimeout(function () {
-        var error = new Error("Event response for '" + event + "' timed out", eventObject);
-        if (eventObject.cid) {
-          delete self._callbackMap[eventObject.cid];
-        }
-        delete eventObject.callback;
-        callback(error, eventObject);
-        self.emit('error', error);
-      }, this.options.ackTimeout);
-    }
-    this._emitBuffer.push(eventObject);
-    if (this.connected) {
-      this._flushEmitBuffer();
-    }
-  } else {
-    switch (event) {
-      case 'message':
-        this.onSCMessage(data);
-        break;
-        
-      case 'open':
-        this.onSCOpen();
-        break;
-        
-      case 'close':
-        this.onSCClose();
-        break;
-
-      case 'error':
-        this.onSCError(data);
-        break;
-    }
-    Emitter.prototype.emit.call(this, event, data);
-  }
-  return this;
-};
-
-SCSocket.prototype.publish = function (channelName, data, callback) {
-  var self = this;
-  
-  var pubData = {
-    channel: channelName,
-    data: data
-  };
-  return this.emit('publish', pubData, function (err) {
-    callback && callback(err);
-  });
-};
-
-SCSocket.prototype.subscribe = function (channelName) {
-  var self = this;
-  
-  var channel = this._channels[channelName];
-  
-  if (!channel) {
-    channel = new SCChannel(channelName, this);
-    this._channels[channelName] = channel;
-  }
-
-  if (channel.state == channel.STATE_UNSUBSCRIBED) {
-    channel.state = channel.STATE_PENDING;
-    this.emit('subscribe', channelName, function (err) {
-      if (err) {
-        self._triggerChannelSubscribeFail(err, channel);
-      } else {
-        self._triggerChannelSubscribe(channel);
-      }
-    });
-  }
-  
-  return channel;
-};
-
-SCSocket.prototype.unsubscribe = function (channelName) {
-
-  var channel = this._channels[channelName];
-  
-  if (channel) {
-    if (channel.state != channel.STATE_UNSUBSCRIBED) {
-    
-      this._triggerChannelUnsubscribe(channel);
-      
-      // The only case in which unsubscribe can fail is if the connection is closed or dies.
-      // If that's the case, the server will automatically unsubscribe the client so
-      // we don't need to check for failure since this operation can never really fail.
-      
-      this.emit('unsubscribe', channelName);
-    }
-  }
-};
-
-SCSocket.prototype.channel = function (channelName) {
-  var currentChannel = this._channels[channelName];
-  
-  if (!currentChannel) {
-    currentChannel = new SCChannel(channelName, this);
-    this._channels[channelName] = currentChannel;
-  }
-  return currentChannel;
-};
-
-SCSocket.prototype.destroyChannel = function (channelName) {
-  var channel = this._channels[channelName];
-  channel.unwatch();
-  channel.unsubscribe();
-  delete this._channels[channelName];
-  return this;
-};
-
-SCSocket.prototype.subscriptions = function (includePending) {
-  var subs = [];
-  var channel, includeChannel;
-  for (var channelName in this._channels) {
-    channel = this._channels[channelName];
-    
-    if (includePending) {
-      includeChannel = channel && (channel.state == channel.STATE_SUBSCRIBED || 
-        channel.state == channel.STATE_PENDING);
-    } else {
-      includeChannel = channel && channel.state == channel.STATE_SUBSCRIBED;
-    }
-    
-    if (includeChannel) {
-      subs.push(channelName);
-    }
-  }
-  return subs;
-};
-
-SCSocket.prototype.isSubscribed = function (channel, includePending) {
-  var channel = this._channels[channel];
-  if (includePending) {
-    return !!channel && (channel.state == channel.STATE_SUBSCRIBED ||
-      channel.state == channel.STATE_PENDING);
-  }
-  return !!channel && channel.state == channel.STATE_SUBSCRIBED;
-};
-
-SCSocket.prototype._triggerChannelSubscribe = function (channel) {
-  var channelName = channel.name;
-  
-  channel.state = channel.STATE_SUBSCRIBED;
-  
-  channel.emit('subscribe', channelName);
-  Emitter.prototype.emit.call(this, 'subscribe', channelName);
-};
-
-SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel) {
-  var channelName = channel.name;
-  
-  channel.state = channel.STATE_UNSUBSCRIBED;
-  
-  channel.emit('subscribeFail', err, channelName);
-  Emitter.prototype.emit.call(this, 'subscribeFail', err, channelName);
-};
-
-SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
-  var channelName = channel.name;
-  var oldState = channel.state;
-  
-  if (newState) {
-    channel.state = newState;
-  } else {
-    channel.state = channel.STATE_UNSUBSCRIBED;
-  }
-  if (oldState == channel.STATE_SUBSCRIBED) {
-    channel.emit('unsubscribe', channelName);
-    Emitter.prototype.emit.call(this, 'unsubscribe', channelName);
-  }
-};
-
-SCSocket.prototype._resubscribe = function (callback) {
-  var self = this;
-  
-  var channels = [];
-  for (var channelName in this._channels) {
-    channels.push(channelName);
-  }
-  var error;
-  var ackCount = 0;
-  
-  var ackHandler = function (err, channel) {
-    ackCount++;
-    
-    if (err) {
-      self._triggerChannelSubscribeFail(err, channel);
-    } else {
-      self._triggerChannelSubscribe(channel);
-    }
-    if (!error) {
-      if (err) {
-        error = err;
-        callback && callback(err);
-      } else if (ackCount >= channels.length) {
-        callback && callback();
-      }
-    }
-  };
-  for (var i in this._channels) {
-    (function (channel) {
-      if (channel.state == channel.STATE_PENDING) {
-        self.emit('subscribe', channel.name, function (err) {
-          ackHandler(err, channel);
-        });
-      }
-    })(this._channels[i]);
-  }
-};
-
-SCSocket.prototype.watch = function (channelName, handler) {
-  this._channelEmitter.on(channelName, handler);
-  return this;
-};
-
-SCSocket.prototype.unwatch = function (channelName, handler) {
-  if (handler) {
-    this._channelEmitter.removeListener(channelName, handler);
-  } else {
-    this._channelEmitter.removeAllListeners(channelName);
-  }
-  return this;
-};
-
-SCSocket.prototype.watchers = function (channelName) {
-  return this._channelEmitter.listeners(channelName);
-};
-
-if (typeof JSON != 'undefined') {
-  SCSocket.prototype.JSON = JSON;
-} else {
-  SCSocket.prototype.JSON = require('./json').JSON;
-}
-SCSocket.JSON = SCSocket.prototype.JSON;
-
-module.exports = SCSocket;
-},{"./json":2,"./objectcreate":34,"./scchannel":35,"emitter":3,"engine.io-client":5}]},{},[1])(1)
+},{}]},{},[1])(1)
 });
