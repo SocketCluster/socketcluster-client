@@ -499,7 +499,8 @@ SCSocket.errorStatuses = {
   1009: 'Message was too big to process',
   1010: 'Client ended the connection because the server did not comply with extension requirements',
   1011: 'Server encountered an unexpected fatal condition',
-  4000: 'Socket pong timed out'
+  4000: 'Server ping timed out',
+  4001: 'Client pong timed out'
 };
 
 SCSocket.prototype.uri = function(){
@@ -725,6 +726,7 @@ SCSocket.prototype._onSCMessage = function (message) {
         this.id = e.data.id;
         this.pingTimeout = e.data.pingTimeout;
       }
+      this._resetPingTimeout();
       Emitter.prototype.emit.call(this, e.event, e.data);
     } else {
       var response = new Response(this, e.cid);
@@ -757,7 +759,7 @@ SCSocket.prototype._resetPingTimeout = function () {
   
   clearTimeout(this._pingTimeoutTicker);
   this._pingTimeoutTicker = setTimeout(function () {
-    self.disconnect(4000);
+    self.socket.close(4000);
   }, this.pingTimeout);
 };
 
