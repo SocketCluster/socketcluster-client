@@ -639,17 +639,17 @@ SCSocket.prototype._onSCClose = function (event) {
     Emitter.prototype.emit.call(this, 'disconnect', event);
   }
   
-  if (!SCSocket.ignoreStatuses[event.code]) {
-    var err = new Error(SCSocket.errorStatuses[event.code] || 'Socket connection failed for unknown reasons');
-    err.code = event.code;
-    this._onSCError(err);
-  }
-  
   delete this.socket.onopen;
   delete this.socket.onclose;
   delete this.socket.onmessage;
   
   this._tryReconnect();
+  
+  if (!SCSocket.ignoreStatuses[event.code]) {
+    var err = new Error(SCSocket.errorStatuses[event.code] || 'Socket connection failed for unknown reasons');
+    err.code = event.code;
+    this._onSCError(err);
+  }
 };
 
 SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
