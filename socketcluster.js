@@ -421,6 +421,7 @@ var SCSocket = function (options) {
     'open': 1,
     'close': 1,
     'connect': 1,
+    'disconnect': 1,
     'error': 1,
     'raw': 1,
     'fail': 1,
@@ -578,7 +579,11 @@ SCSocket.prototype.disconnect = function (code, data) {
   
   if (this.state == this.OPEN) {
     this._enableAutoReconnect = false;
-    this.emit('disconnect', code, data);
+    this.emitRaw({
+      disconnect: 1,
+      code: code,
+      data: data
+    });
     this.state = this.CLOSING;
     this.socket.close(code);
     Emitter.prototype.emit.call(this, 'disconnect', code, data);
@@ -752,6 +757,9 @@ SCSocket.prototype._onSCMessage = function (message) {
     this.emitRaw({pong: 1});
   } else if (e.channel) {
     this._channelEmitter.emit(e.channel, e.data);
+  } else if (e.disconnect) {
+    this.state = this.CLOSING;
+    Emitter.prototype.emit.call(this, 'disconnect', e.code, e.data);
   } else if (e.cid == null) {
     Emitter.prototype.emit.call(this, 'raw', e);
   } else {
