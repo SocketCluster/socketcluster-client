@@ -741,23 +741,18 @@ SCSocket.prototype._resetPingTimeout = function (socket) {
     timeDiff = now - this._lastPingResetTime;
   }
   this._lastPingResetTime = now;
-  clearTimeout(this._pingTimeoutTicker);
   
   // If the time difference since last reset is greater 
   // than pingTimeout, then we know that the client
   // was inactive and some resets were skipped - In this
-  // case we will force a ping timeout on the next tick
+  // case we will ignore the current ping reset
   
   if (timeDiff <= this.pingTimeout) {
+    clearTimeout(this._pingTimeoutTicker);
     this._pingTimeoutTicker = setTimeout(function () {
       socket.close();
       self._onSCClose(socket, 4000);
     }, this.pingTimeout);
-  } else {
-    setTimeout(function () {
-      socket.close();
-      self._onSCClose(socket, 4000);
-    }, 0);
   }
 };
 
