@@ -349,6 +349,7 @@ var SCSocket = function (options) {
   this._localEvents = {
     'open': 1,
     'connect': 1,
+    'connectFail': 1,
     'disconnect': 1,
     'error': 1,
     'raw': 1,
@@ -476,7 +477,6 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     var uri = this.uri();
     var socket = new WebSocket(uri, null, this.options);
     socket.binaryType = this.options.binaryType;
-    socket.enableAutoReconnect = true;
     this.socket = socket;
     
     socket.onopen = function () {
@@ -504,8 +504,6 @@ SCSocket.prototype.disconnect = function (code, data) {
   code = code || 1000;
   
   if (this.state == this.OPEN) {
-    this.socket.enableAutoReconnect = false;
-    
     this.sendObject({
       disconnect: 1,
       code: code,
@@ -520,14 +518,13 @@ SCSocket.prototype.disconnect = function (code, data) {
 SCSocket.prototype._onSCOpen = function (socket) {
   this.state = this.OPEN;
   this._connectAttempts = 0;
-  socket.enableAutoReconnect = true;
 
   Emitter.prototype.emit.call(this, 'connect');
   this._flushEmitBuffer(socket);
   this._resetPingTimeout(socket);
 };
 
-SCSocket.prototype._tryReconnect = function () {
+SCSocket.prototype._tryReconnect = function (delay) {
   var self = this;
   
   this._emitBuffer = [];
@@ -538,8 +535,14 @@ SCSocket.prototype._tryReconnect = function () {
     exponent = 5;
   }
   
-  var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
-  var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
+  var timeout;
+  if (delay == null) {
+    var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
+    timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
+  } else {
+    timeout = delay;
+  }
+ 
   
   clearTimeout(this._reconnectTimeout);
   
@@ -551,13 +554,17 @@ SCSocket.prototype._tryReconnect = function () {
 };
 
 SCSocket.prototype._onSCError = function (err) {
-  if (this.listeners('error').length < 1) {
-    setTimeout(function () {
-      throw err;
-    }, 0);
-  } else {
-    Emitter.prototype.emit.call(this, 'error', err);
-  }
+  var self = this;
+  
+  // Throw error in different stack frame so that error handling
+  // cannot interfere with a reconnect action.
+  setTimeout(function () {
+    if (self.listeners('error').length < 1) {
+        throw err;
+    } else {
+      Emitter.prototype.emit.call(self, 'error', err);
+    }
+  }, 0);
 };
 
 SCSocket.prototype._suspendSubscriptions = function () {
@@ -577,6 +584,8 @@ SCSocket.prototype._suspendSubscriptions = function () {
 
 SCSocket.prototype._onSCClose = function (socket, code, data) {
   if (this.state != this.CLOSED) {
+    var oldState = this.state;
+    
     this.id = null;
     
     clearTimeout(this._pingTimeoutTicker);
@@ -588,10 +597,21 @@ SCSocket.prototype._onSCClose = function (socket, code, data) {
     delete socket.onclose;
     delete socket.onmessage;
     
-    Emitter.prototype.emit.call(this, 'disconnect', code, data);
+    if (oldState == this.OPEN) {
+      Emitter.prototype.emit.call(this, 'disconnect', code, data);
+    } else if (oldState == this.CONNECTING) {
+      Emitter.prototype.emit.call(this, 'connectFail', code, data);
+    }
     
-    if (this.options.autoReconnect && socket.enableAutoReconnect) {
-      this._tryReconnect();
+    // Try to reconnect if the socket hung up (1006)
+    // or in case of ping timeout (4000)
+    if (this.options.autoReconnect) {
+      var hungUp = code == 1006;
+      var pingTimedOut = code == 4000;
+      if (hungUp || pingTimedOut) {
+        // If ping timeout, don't wait before trying to reconnect
+        this._tryReconnect(pingTimedOut ? 0 : null);
+      }
     }
     
     if (!SCSocket.ignoreStatuses[code]) {
@@ -711,20 +731,12 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
 SCSocket.prototype._resetPingTimeout = function (socket) {
   var self = this;
   
+  // Ping timeout can be caused either by
+  // network failure or client-side inactivity
   clearTimeout(this._pingTimeoutTicker);
   this._pingTimeoutTicker = setTimeout(function () {
-    // If autoReconnect is on, then we will reconnect immediately
-    // - In the case of a ping timeout, we ignore the reconnect delay
-    if (self.options.autoReconnect) {
-      // We will do the reconnect manually here
-      socket.enableAutoReconnect = false;
-      self._onSCClose(socket, 4000);
-      socket.close(4000);
-      self.connect();
-    } else {
-      self._onSCClose(socket, 4000);
-      socket.close();
-    }
+    socket.close();
+    self._onSCClose(socket, 4000);
   }, this.pingTimeout);
 };
 
