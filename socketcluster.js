@@ -376,7 +376,6 @@ var SCSocket = function (options) {
   this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   this._tokenData = null;
   this._pingTimeoutTicker = null;
-  this._lastPingResetTime = null;
   
   this.options = opts;
   
@@ -729,28 +728,11 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
 SCSocket.prototype._resetPingTimeout = function (socket) {
   var self = this;
   
-  // Ping timeout can be caused either by
-  // network failure or client-side inactivity
-  
-  var now = (new Date()).getTime();
-  var timeDiff = 0;
-  if (this._lastPingResetTime != null) {
-    timeDiff = now - this._lastPingResetTime;
-  }
-  this._lastPingResetTime = now;
-  
-  // If the time difference since last reset is greater 
-  // than pingTimeout, then we know that the client
-  // was inactive and some resets were skipped - In this
-  // case we will ignore the current ping reset
-  
-  if (timeDiff <= this.pingTimeout) {
-    clearTimeout(this._pingTimeoutTicker);
-    this._pingTimeoutTicker = setTimeout(function () {
-      socket.close(4000);
-      self._onSCClose(socket, 4000);
-    }, this.pingTimeout);
-  }
+  clearTimeout(this._pingTimeoutTicker);
+  this._pingTimeoutTicker = setTimeout(function () {
+    socket.close(4000);
+    self._onSCClose(socket, 4000);
+  }, this.pingTimeout);
 };
 
 SCSocket.prototype._nextCallId = function () {
