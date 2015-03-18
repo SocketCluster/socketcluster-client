@@ -507,8 +507,8 @@ SCSocket.prototype.disconnect = function (code, data) {
       data: data
     });
     
-    this._onSCClose(this.socket, code, data);
     this.socket.close(code);
+    this._onSCClose(this.socket, code, data);
   }
 };
 
@@ -578,7 +578,9 @@ SCSocket.prototype._suspendSubscriptions = function () {
 };
 
 SCSocket.prototype._onSCClose = function (socket, code, data) {
-  if (this.state != this.CLOSED) {
+  // Code 4001 is the client pong timeout - Since this is the client,
+  // we only care about the server ping timeout
+  if (this.state != this.CLOSED && code != 4001) {
     var oldState = this.state;
     
     this.id = null;
@@ -600,10 +602,9 @@ SCSocket.prototype._onSCClose = function (socket, code, data) {
     
     // Try to reconnect if the socket hung up (1006)
     // or in case of server ping timeout (4000)
-    // or in case of client pong timeout (4001)
     if (this.options.autoReconnect) {
-      if (code == 4000 || code == 4001) {
-        // If ping or pong timeout, don't wait before trying to reconnect
+      if (code == 4000) {
+        // If ping timeout, don't wait before trying to reconnect
         this._tryReconnect(0);
         
       } else if (code == 1006){
@@ -747,6 +748,7 @@ SCSocket.prototype._resetPingTimeout = function (socket) {
     clearTimeout(this._pingTimeoutTicker);
     this._pingTimeoutTicker = setTimeout(function () {
       socket.close(4000);
+      self._onSCClose(socket, 4000);
     }, this.pingTimeout);
   }
 };
