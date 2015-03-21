@@ -522,21 +522,21 @@ SCSocket.prototype._onSCOpen = function (socket) {
   this._resetPingTimeout(socket);
 };
 
-SCSocket.prototype._tryReconnect = function (delay) {
+SCSocket.prototype._tryReconnect = function (initialDelay) {
   var self = this;
   
-  var reconnectOptions = this.options.autoReconnectOptions;
   var exponent = this._connectAttempts++;
   if (exponent > 5) {
     exponent = 5;
   }
   
   var timeout;
-  if (delay == null) {
+  if (initialDelay == null || exponent > 0) {
+    var reconnectOptions = this.options.autoReconnectOptions;
     var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
     timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
   } else {
-    timeout = delay;
+    timeout = initialDelay;
   }
   
   clearTimeout(this._reconnectTimeout);
@@ -576,14 +576,12 @@ SCSocket.prototype._suspendSubscriptions = function () {
 };
 
 SCSocket.prototype._onSCClose = function (socket, code, data) {
-  // Code 4001 is the client pong timeout - Since this is the client,
-  // we only care about the server ping timeout
-  if (this.state != this.CLOSED && code != 4001) {
+  clearTimeout(this._pingTimeoutTicker);
+  
+  if (this.state != this.CLOSED) {
     var oldState = this.state;
     
     this.id = null;
-    
-    clearTimeout(this._pingTimeoutTicker);
 
     this._suspendSubscriptions();
     this.state = this.CLOSED;
@@ -598,13 +596,15 @@ SCSocket.prototype._onSCClose = function (socket, code, data) {
       Emitter.prototype.emit.call(this, 'connectFail', code, data);
     }
     
-    // Try to reconnect if the socket hung up (1006),
-    // or on server ping timeout (4000)
+    // Try to reconnect
+    // on server ping timeout (4000)
+    // or on client pong timeout (4001)
     // or on close without status (1005)
+    // or on socket hung up (1006)
     if (this.options.autoReconnect) {
-      if (code == 4000 || code == 1005) {
-        // If there is a ping timeout or socket closes without 
-        // status (IE), don't wait before trying to reconnect
+      if (code == 4000 || code == 4001 || code == 1005) {
+        // If there is a ping or pong timeout or socket closes without 
+        // status, don't wait before trying to reconnect
         this._tryReconnect(0);
         
       } else if (code == 1006){
@@ -816,7 +816,11 @@ SCSocket.prototype.stringify = function (object) {
 };
 
 SCSocket.prototype._send = function (socket, data, options) {
-  socket.send(data, options);
+  if (!socket || socket.readyState != socket.OPEN) {
+    this._onSCClose(socket, 1005);
+  } else {
+    socket.send(data, options);
+  }
 };
 
 SCSocket.prototype._sendObject = function (socket, object, options) {
@@ -864,7 +868,7 @@ SCSocket.prototype._emit = function (socket, event, data, callback) {
   var self = this;
   
   if (this._localEvents[event] == null) {
-    if (this.state == this.CLOSED) {
+    if (this.state == this.CLOSED || socket.readyState == socket.CLOSED) {
       this.connect();
     }
     var eventObject = {
