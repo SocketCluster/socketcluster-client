@@ -470,66 +470,6 @@ Response.prototype.callback = function (error, data) {
   }
 };
 
-var isBrowser = typeof window != 'undefined';
-
-if (isBrowser) {
-  var ActivityManager = function () {
-    var self = this;
-    
-    this._interval = null;
-    this._intervalDuration = 1000;
-    this._counter = null;
-    
-    if (window.addEventListener) {
-      window.addEventListener('blur', function () {
-        self._triggerBlur();
-      });
-      window.addEventListener('focus', function () {
-        self._triggerFocus();
-      });
-    } else if (window.attachEvent) {
-      window.attachEvent('onblur', function () {
-        self._triggerBlur();
-      });
-      window.attachEvent('onfocus', function () {
-        self._triggerFocus();
-      });
-    } else {
-      throw new Error('The browser does not support proper event handling');
-    }
-  };
-
-  ActivityManager.prototype = Object.create(Emitter.prototype);
-
-  ActivityManager.prototype._triggerBlur = function () {
-    var self = this;
-    
-    var now = (new Date()).getTime();
-    this._counter = now;
-    
-    // If interval skips 2 turns, then client is sleeping
-    this._interval = setInterval(function () {
-      var newCount = (new Date()).getTime();
-      if (newCount - self._counter < self._intervalDuration * 3) {
-        self._counter = newCount;
-      }
-    }, this._intervalDuration);
-    
-    this.emit('deactivate');
-  };
-
-  ActivityManager.prototype._triggerFocus = function () {
-    clearInterval(this._interval);
-    var now = (new Date()).getTime();
-    if (this._counter != null && now - this._counter >= this._intervalDuration * 3) {
-      this.emit('wakeup');
-    }
-    
-    this.emit('activate');
-  };
-
-  var activityManager = new ActivityManager();
-}
 
 var SCSocket = function (options) {
   var self = this;
@@ -550,6 +490,7 @@ var SCSocket = function (options) {
   this._localEvents = {
     'connect': 1,
     'disconnect': 1,
+    'pingTimeout': 1,
     'upgrading': 1,
     'upgrade': 1,
     'upgradeError': 1,
@@ -607,21 +548,14 @@ var SCSocket = function (options) {
   this.connecting = true;
   
   this._channelEmitter = new Emitter();
-  
-  if (isBrowser) {
-    activityManager.on('wakeup', function () {
-      self.close();
-      self.connect();
-    });
-  }
 };
 
 SCSocket.prototype = Object.create(Socket.prototype);
 
-SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = 0;
-SCSocket.OPEN = SCSocket.prototype.OPEN = 1;
-SCSocket.CLOSING = SCSocket.prototype.CLOSING = 2;
-SCSocket.CLOSED = SCSocket.prototype.CLOSED = 3;
+SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = 'connecting';
+SCSocket.OPEN = SCSocket.prototype.OPEN = 'open';
+SCSocket.CLOSING = SCSocket.prototype.CLOSING = 'closing';
+SCSocket.CLOSED = SCSocket.prototype.CLOSED = 'closed';
 
 SCSocket.prototype.getState = function () {
   if (this.connecting) {
@@ -681,7 +615,7 @@ SCSocket.prototype.onSCOpen = function () {
   this._flushEmitBuffer();
 };
 
-SCSocket.prototype._tryReconnect = function () {
+SCSocket.prototype._tryReconnect = function (initialDelay) {
   var self = this;
   
   if (!this.connected && !this.connecting &&
@@ -689,13 +623,19 @@ SCSocket.prototype._tryReconnect = function () {
     
     this._emitBuffer = [];
     
-    var reconnectOptions = this.options.autoReconnectOptions;
     var exponent = this._connectAttempts++;
     if (exponent > 5) {
       exponent = 5;
     }
-    var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
-    var timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
+
+    var timeout;
+    if (initialDelay == null || exponent > 0) {
+      var reconnectOptions = this.options.autoReconnectOptions;
+      var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
+      timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
+    } else {
+      timeout = initialDelay;
+    }
     
     clearTimeout(this._reconnectTimeout);
     
@@ -719,7 +659,7 @@ SCSocket.prototype.onSCError = function (err) {
   }
 };
 
-SCSocket.prototype.onSCClose = function () {
+SCSocket.prototype.onSCClose = function (reason) {
   this.id = null;
 
   this.connected = false;
@@ -738,7 +678,11 @@ SCSocket.prototype.onSCClose = function () {
     this._triggerChannelUnsubscribe(channel, newState);
   }
   if (!this._connectAttempts) {
-    this._tryReconnect();
+    if (reason == 'ping timeout') {
+      this._tryReconnect(0);
+    } else {
+      this._tryReconnect();
+    }
     Emitter.prototype.emit.call(this, 'disconnect');
   }
 };
@@ -800,6 +744,8 @@ SCSocket.prototype.onSCMessage = function (message) {
         this.id = e.data.id;
       }
       Emitter.prototype.emit.call(this, e.event, e.data);
+    } else if (e.event == 'pingTimeout') {
+      this.onSCClose('ping timeout');
     } else {
       var response = new Response(this, e.cid);
       Emitter.prototype.emit.call(this, e.event, e.data, function (error, data) {
@@ -966,7 +912,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
         break;
         
       case 'close':
-        this.onSCClose();
+        this.onSCClose(data);
         break;
 
       case 'error':
