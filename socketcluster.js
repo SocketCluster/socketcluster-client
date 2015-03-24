@@ -432,7 +432,7 @@ Response.prototype._respond = function (responseData) {
 Response.prototype.end = function (data) {
   if (this.id) {
     var responseData = {
-      cid: this.id
+      rid: this.id
     };
     if (data !== undefined) {
       responseData.data = data;
@@ -451,7 +451,7 @@ Response.prototype.error = function (error, data) {
     }
     
     var responseData = {
-      cid: this.id,
+      rid: this.id,
       error: err
     };
     if (data !== undefined) {
@@ -688,36 +688,36 @@ SCSocket.prototype.onSCClose = function (reason) {
 };
 
 SCSocket.prototype.onSCMessage = function (message) {
-  var e;
+  var obj;
   try {
-    e = this.JSON.parse(message);
+    obj = this.JSON.parse(message);
   } catch (err) {
-    e = message;
+    obj = message;
   }
   
-  if (e.event) {
-    if (e.event == 'disconnect') {
+  if (obj.event) {
+    if (obj.event == 'disconnect') {
       this.connected = false;
       this.connecting = false;
       Emitter.prototype.emit.call(this, 'disconnect');
       
-    } else if (e.event == 'fail') {
+    } else if (obj.event == 'fail') {
       this.connected = false;
       this.connecting = false;
-      this.emit('error', e.data);
+      this.emit('error', obj.data);
       
-    } else if (e.event == 'kickOut') {
-      var kickData = e.data || {};
+    } else if (obj.event == 'kickOut') {
+      var kickData = obj.data || {};
       var channelName = kickData.channel;
       var channel = this._channels[channelName];
       if (channel) {
-        Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
-        channel.emit(e.event, kickData.message, channelName);
+        Emitter.prototype.emit.call(this, obj.event, kickData.message, channelName);
+        channel.emit(obj.event, kickData.message, channelName);
         this._triggerChannelUnsubscribe(channel);
       }
-    } else if (e.event == 'setAuthToken') {
-      var tokenData = e.data;
-      var response = new Response(this, e.cid);
+    } else if (obj.event == 'setAuthToken') {
+      var tokenData = obj.data;
+      var response = new Response(this, obj.cid);
       
       if (tokenData) {
         this._tokenData = tokenData;
@@ -727,45 +727,45 @@ SCSocket.prototype.onSCMessage = function (message) {
         } else {
           this._setCookie(tokenData.cookieName, tokenData.token);
         }
-        Emitter.prototype.emit.call(this, e.event, tokenData.token);
+        Emitter.prototype.emit.call(this, obj.event, tokenData.token);
         response.end();
       } else {
         response.error('No token data provided with setAuthToken event');
       }
-    } else if (e.event == 'removeAuthToken') {
+    } else if (obj.event == 'removeAuthToken') {
       if (this._tokenData) {
         this._setCookie(this._tokenData.cookieName, null, -1);
-        Emitter.prototype.emit.call(this, e.event);
+        Emitter.prototype.emit.call(this, obj.event);
       }
-      var response = new Response(this, e.cid);
+      var response = new Response(this, obj.cid);
       response.end();
-    } else if (e.event == 'ready') {
-      if (e.data) {
-        this.id = e.data.id;
+    } else if (obj.event == 'ready') {
+      if (obj.data) {
+        this.id = obj.data.id;
       }
-      Emitter.prototype.emit.call(this, e.event, e.data);
-    } else if (e.event == 'pingTimeout') {
+      Emitter.prototype.emit.call(this, obj.event, obj.data);
+    } else if (obj.event == 'pingTimeout') {
       this.onSCClose('ping timeout');
     } else {
-      var response = new Response(this, e.cid);
-      Emitter.prototype.emit.call(this, e.event, e.data, function (error, data) {
+      var response = new Response(this, obj.cid);
+      Emitter.prototype.emit.call(this, obj.event, obj.data, function (error, data) {
         response.callback(error, data);
       });
     }
-  } else if (e.channel) {
-    this._channelEmitter.emit(e.channel, e.data);
-  } else if (e.cid == null) {
-    Emitter.prototype.emit.call(this, 'raw', e);
-  } else {
-    var ret = this._callbackMap[e.cid];
+  } else if (obj.channel) {
+    this._channelEmitter.emit(obj.channel, obj.data);
+  } else if (obj.rid != null) {
+    var ret = this._callbackMap[obj.rid];
     if (ret) {
       clearTimeout(ret.timeout);
-      delete this._callbackMap[e.cid];
-      ret.callback(e.error, e.data);
+      delete this._callbackMap[obj.rid];
+      ret.callback(obj.error, obj.data);
     }
-    if (e.error) {
-      this.emit('error', e.error);
+    if (obj.error) {
+      this.emit('error', obj.error);
     }
+  } else {
+    Emitter.prototype.emit.call(this, 'raw', obj);
   }
 };
 
