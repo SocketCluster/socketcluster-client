@@ -212,7 +212,7 @@ Response.prototype._respond = function (responseData) {
 Response.prototype.end = function (data) {
   if (this.id) {
     var responseData = {
-      cid: this.id
+      rid: this.id
     };
     if (data !== undefined) {
       responseData.data = data;
@@ -231,7 +231,7 @@ Response.prototype.error = function (error, data) {
     }
     
     var responseData = {
-      cid: this.id,
+      rid: this.id,
       error: err
     };
     if (data !== undefined) {
@@ -645,29 +645,29 @@ SCSocket.prototype._getCookie = function (name) {
 SCSocket.prototype._onSCMessage = function (socket, message) {
   Emitter.prototype.emit.call(this, 'message', message);
 
-  var e;
+  var obj;
   try {
-    e = this.parse(message);
+    obj = this.parse(message);
   } catch (err) {
-    e = message;
+    obj = message;
   }
   
-  if (e.event) {
-    if (e.event == 'fail') {
-      this._onSCError(e.data);
+  if (obj.event) {
+    if (obj.event == 'fail') {
+      this._onSCError(obj.data);
       
-    } else if (e.event == 'kickOut') {
-      var kickData = e.data || {};
+    } else if (obj.event == 'kickOut') {
+      var kickData = obj.data || {};
       var channelName = kickData.channel;
       var channel = this._channels[channelName];
       if (channel) {
-        Emitter.prototype.emit.call(this, e.event, kickData.message, channelName);
-        channel.emit(e.event, kickData.message, channelName);
+        Emitter.prototype.emit.call(this, obj.event, kickData.message, channelName);
+        channel.emit(obj.event, kickData.message, channelName);
         this._triggerChannelUnsubscribe(channel);
       }
-    } else if (e.event == 'setAuthToken') {
-      var tokenData = e.data;
-      var response = new Response(this, e.cid);
+    } else if (obj.event == 'setAuthToken') {
+      var tokenData = obj.data;
+      var response = new Response(this, obj.cid);
       
       if (tokenData) {
         this._tokenData = tokenData;
@@ -677,52 +677,52 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
         } else {
           this._setCookie(tokenData.cookieName, tokenData.token);
         }
-        Emitter.prototype.emit.call(this, e.event, tokenData.token);
+        Emitter.prototype.emit.call(this, obj.event, tokenData.token);
         response.end();
       } else {
         response.error('No token data provided with setAuthToken event');
       }
-    } else if (e.event == 'removeAuthToken') {
+    } else if (obj.event == 'removeAuthToken') {
       if (this._tokenData) {
         this._setCookie(this._tokenData.cookieName, null, -1);
-        Emitter.prototype.emit.call(this, e.event);
+        Emitter.prototype.emit.call(this, obj.event);
       }
-      var response = new Response(this, e.cid);
+      var response = new Response(this, obj.cid);
       response.end();
-    } else if (e.event == 'ready') {
-      if (e.data) {
-        this.id = e.data.id;
-        this.pingTimeout = e.data.pingTimeout;
+    } else if (obj.event == 'ready') {
+      if (obj.data) {
+        this.id = obj.data.id;
+        this.pingTimeout = obj.data.pingTimeout;
       }
       this._resetPingTimeout(socket);
-      Emitter.prototype.emit.call(this, e.event, e.data);
+      Emitter.prototype.emit.call(this, obj.event, obj.data);
     } else {
-      var response = new Response(this, e.cid);
-      Emitter.prototype.emit.call(this, e.event, e.data, function (error, data) {
+      var response = new Response(this, obj.cid);
+      Emitter.prototype.emit.call(this, obj.event, obj.data, function (error, data) {
         response.callback(error, data);
       });
     }
-  } else if (e.ping) {
+  } else if (obj.ping) {
     this._resetPingTimeout(socket);
     if (this.state == this.OPEN) {
       this.sendObject({pong: 1});
     }
-  } else if (e.channel) {
-    this._channelEmitter.emit(e.channel, e.data);
-  } else if (e.disconnect) {
-    this._onSCClose(socket, e.code, e.data);
-  } else if (e.cid == null) {
-    Emitter.prototype.emit.call(this, 'raw', e);
-  } else {
-    var ret = this._callbackMap[e.cid];
+  } else if (obj.channel) {
+    this._channelEmitter.emit(obj.channel, obj.data);
+  } else if (obj.disconnect) {
+    this._onSCClose(socket, obj.code, obj.data);
+  } else if (obj.rid != null) {
+    var ret = this._callbackMap[obj.rid];
     if (ret) {
       clearTimeout(ret.timeout);
-      delete this._callbackMap[e.cid];
-      ret.callback(e.error, e.data);
+      delete this._callbackMap[obj.rid];
+      ret.callback(obj.error, obj.data);
     }
-    if (e.error) {
-      this._onSCError(e.error);
+    if (obj.error) {
+      this._onSCError(obj.error);
     }
+  } else {
+    Emitter.prototype.emit.call(this, 'raw', obj);
   }
 };
 
