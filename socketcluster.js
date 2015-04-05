@@ -563,14 +563,13 @@ SCSocket.prototype.disconnect = function (code, data) {
 SCSocket.prototype._onSCOpen = function (socket) {
   var self = this;
   
-  this._resubscribe(socket);
-  
   this.state = this.OPEN;
   this._connectAttempts = 0;
 
+  this._resubscribe(socket);
   Emitter.prototype.emit.call(this, 'connect');
-  this._flushEmitBuffer(socket);
   
+  this._flushEmitBuffer(socket);
   this._resetPingTimeout(socket);
   
   clearTimeout(this._initTimeoutTicker);
@@ -951,49 +950,77 @@ SCSocket.prototype._flushEmitBuffer = function (socket) {
   }
 };
 
+SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
+  var error = new Error("Event response for '" + eventObject.event + "' timed out");
+  error.type = 'timeout';
+  
+  if (eventObject.cid) {
+    delete self._callbackMap[eventObject.cid];
+  }
+  delete eventObject.callback;
+  if (eventNode) {
+    eventNode.detach();
+  }
+  callback.call(eventObject, error, eventObject);
+  self._onSCError(error);
+};
+
+// Emit directly without appending to emitBuffer
+SCSocket.prototype._emitDirect = function (socket, event, data, callback) {
+  var self = this;
+  
+  var eventObject = {
+    event: event,
+    data: data,
+    callback: callback
+  };
+  
+  // Events which do not have a callback will be treated as volatile
+  if (callback) {
+    eventObject.timeout = setTimeout(function () {
+      self._handleEventAckTimeout(eventObject);
+    }, this.ackTimeout);
+  }
+  
+  if (this.state == this.OPEN) {
+    this._emitRaw(socket, eventObject);
+  }
+};
+
 SCSocket.prototype._emit = function (socket, event, data, callback) {
   var self = this;
   
-  if (this._localEvents[event] == null) {
-    if (this.state == this.CLOSED || socket.readyState == socket.CLOSED) {
-      this.connect();
-    }
-    var eventObject = {
-      event: event,
-      data: data,
-      callback: callback
-    };
-    
-    var eventNode = new LinkedList.Item();
-    eventNode.data = eventObject;
-    
-    // Events which do not have a callback will be treated as volatile
-    if (callback) {
-      eventObject.timeout = setTimeout(function () {
-        var error = new Error("Event response for '" + event + "' timed out", eventObject);
-        error.type = 'timeout';
-        
-        if (eventObject.cid) {
-          delete self._callbackMap[eventObject.cid];
-        }
-        delete eventObject.callback;
-        eventNode.detach();
-        callback.call(eventObject, error, eventObject);
-        self._onSCError(error);
-      }, this.ackTimeout);
-    }
-    this._emitBuffer.append(eventNode);
-    
-    if (this.state == this.OPEN) {
-      this._flushEmitBuffer(socket);
-    }
-  } else {
-    Emitter.prototype.emit.call(this, event, data);
+  if (this.state == this.CLOSED || socket.readyState == socket.CLOSED) {
+    this.connect();
+  }
+  var eventObject = {
+    event: event,
+    data: data,
+    callback: callback
+  };
+  
+  var eventNode = new LinkedList.Item();
+  eventNode.data = eventObject;
+  
+  // Events which do not have a callback will be treated as volatile
+  if (callback) {
+    eventObject.timeout = setTimeout(function () {
+      self._handleEventAckTimeout(eventObject, eventNode);
+    }, this.ackTimeout);
+  }
+  this._emitBuffer.append(eventNode);
+  
+  if (this.state == this.OPEN) {
+    this._flushEmitBuffer(socket);
   }
 };
 
 SCSocket.prototype.emit = function (event, data, callback) {
-  this._emit(this.socket, event, data, callback);
+  if (this._localEvents[event] == null) {
+    this._emit(this.socket, event, data, callback);
+  } else {
+    Emitter.prototype.emit.call(this, event, data);
+  }
 };
 
 // publish(channelName, [data, isVolatile, callback])
@@ -1026,43 +1053,45 @@ SCSocket.prototype.publish = function () {
 SCSocket.prototype._retrySubscribe = function (socket, channel) {
   var self = this;
   
-  if (channel.subscribeAttempts == null) {
-    channel.subscribeAttempts = 0;
-  }
-  
-  var resubscribeOptions = this.options.autoResubscribeOptions;
-  var initialTimeout = Math.round(resubscribeOptions.initialDelay + (resubscribeOptions.randomness || 0) * Math.random());
-  var timeout = Math.round(initialTimeout * Math.pow(resubscribeOptions.multiplier, channel.subscribeAttempts));
-  channel.subscribeAttempts++;
-  
-  if (timeout > resubscribeOptions.maxDelay) {
-    timeout = resubscribeOptions.maxDelay;
-  }
-  
-  clearTimeout(channel.retrySubscribeTimeoutTicker);
-  channel.retrySubscribeTimeoutTicker = setTimeout(function () {
-    if (channel.state == channel.PENDING) {
-      self._subscribe(socket, channel);
+  if (this.state == this.OPEN) {
+    if (channel.subscribeAttempts == null) {
+      channel.subscribeAttempts = 0;
     }
-  }, timeout);
+    
+    var resubscribeOptions = this.options.autoResubscribeOptions;
+    var initialTimeout = Math.round(resubscribeOptions.initialDelay + (resubscribeOptions.randomness || 0) * Math.random());
+    var timeout = Math.round(initialTimeout * Math.pow(resubscribeOptions.multiplier, channel.subscribeAttempts));
+    channel.subscribeAttempts++;
+    
+    if (timeout > resubscribeOptions.maxDelay) {
+      timeout = resubscribeOptions.maxDelay;
+    }
+    
+    clearTimeout(channel.retrySubscribeTimeoutTicker);
+    channel.retrySubscribeTimeoutTicker = setTimeout(function () {
+      if (channel.state == channel.PENDING) {
+        self._trySubscribe(socket, channel);
+      }
+    }, timeout);
+  }
 };
 
-SCSocket.prototype._subscribe = function (socket, channel) {
+SCSocket.prototype._trySubscribe = function (socket, channel) {
   var self = this;
   
-  this._emit(socket, 'subscribe', channel.name, function (err) {
-    if (err) {
-      if (err.type == 'timeout') {
-        if (self.state == self.OPEN) {
+  if (this.state == this.OPEN) {
+    this._emitDirect(socket, 'subscribe', channel.name, function (err) {
+      if (err) {
+        if (err.type == 'timeout') {
           self._retrySubscribe(socket, channel);
+        } else {
+          self._triggerChannelSubscribeFail(err, channel);
         }
       } else {
-        self._triggerChannelSubscribeFail(err, channel);
+        self._triggerChannelSubscribe(channel);
       }
-    } else {
-      self._triggerChannelSubscribe(channel);
-    }
-  });
+    });
+  }
 };
 
 SCSocket.prototype.subscribe = function (channelName) {
@@ -1076,10 +1105,8 @@ SCSocket.prototype.subscribe = function (channelName) {
   if (channel.state == channel.UNSUBSCRIBED) {
     channel.state = channel.PENDING;
     
-    if (this.state == this.OPEN) {
-      channel.subscribeAttempts = 0;
-      this._subscribe(this.socket, channel);
-    }
+    channel.subscribeAttempts = 0;
+    this._trySubscribe(this.socket, channel);
   }
   
   return channel;
@@ -1201,7 +1228,7 @@ SCSocket.prototype._resubscribe = function (socket) {
     (function (channel) {
       if (channel.state == channel.PENDING) {
         channel.subscribeAttempts = 0;
-        self._subscribe(socket, channel);
+        self._trySubscribe(socket, channel);
       }
     })(this._channels[i]);
   }
