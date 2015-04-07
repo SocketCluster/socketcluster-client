@@ -955,14 +955,14 @@ SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
   error.type = 'timeout';
   
   if (eventObject.cid) {
-    delete self._callbackMap[eventObject.cid];
+    delete this._callbackMap[eventObject.cid];
   }
   delete eventObject.callback;
   if (eventNode) {
     eventNode.detach();
   }
   callback.call(eventObject, error, eventObject);
-  self._onSCError(error);
+  this._onSCError(error);
 };
 
 // Emit directly without appending to emitBuffer
