@@ -290,8 +290,18 @@ SCChannel.prototype.isSubscribed = function (includePending) {
   return this.socket.isSubscribed(this.name, includePending);
 };
 
-SCChannel.prototype.publish = function (data, callback) {
-  this.socket.publish(this.name, data, callback);
+// publish([data, serviceLevel, callback])
+SCChannel.prototype.publish = function () {
+  var data = arguments[0];
+  var serviceLevel, callback;
+  if (arguments[1] instanceof Function) {
+    serviceLevel = 0;
+    callback = arguments[1];
+  } else {
+    serviceLevel = arguments[1] || 0;
+    callback = arguments[2];
+  }
+  this.socket.publish(this.name, data, serviceLevel, callback);
 };
 
 SCChannel.prototype.watch = function (handler) {
@@ -1023,18 +1033,18 @@ SCSocket.prototype.emit = function (event, data, callback) {
   }
 };
 
-// publish(channelName, [data, isVolatile, callback])
+// publish(channelName, [data, serviceLevel, callback])
 SCSocket.prototype.publish = function () {
   var self = this;
   
   var channelName = arguments[0];
   var data = arguments[1];
-  var isVolatile;
+  var serviceLevel, callback;
   if (arguments[2] instanceof Function) {
-    isVolatile = false;
+    serviceLevel = 0;
     callback = arguments[2];
   } else {
-    isVolatile = !!arguments[2];
+    serviceLevel = arguments[2] || 0;
     callback = arguments[3];
   }
   
@@ -1042,7 +1052,7 @@ SCSocket.prototype.publish = function () {
     channel: channelName,
     data: data
   };
-  if (!isVolatile) {
+  if (serviceLevel > 0) {
     pubData.mid = uuid.v4();
   }
   this.emit('publish', pubData, function (err) {
