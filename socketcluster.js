@@ -397,10 +397,6 @@ var SCSocket = function (options) {
   this._pingTimeoutTicker = null;
   this._alreadyReceivedManager = new ExpiryManager();
   
-  this._alreadyDeliveredCleanupInterval = setInterval(function () {
-    self._cleanupAlreadyDelivered();
-  }, this.deliveryTrackingCheckInterval);
-  
   this.options = opts;
   
   if (this.options.autoReconnect) {
@@ -522,7 +518,7 @@ SCSocket.prototype.getState = function () {
   return this.state;
 };
 
-SCSocket.prototype._cleanupAlreadyDelivered = function () {
+SCSocket.prototype._cleanupAlreadyReceived = function () {
   this._alreadyReceivedManager.extractExpiredKeys();
 };
 
@@ -575,6 +571,10 @@ SCSocket.prototype._onSCOpen = function (socket) {
   
   this.state = this.OPEN;
   this._connectAttempts = 0;
+  
+  this._alreadyReceivedCleanupInterval = setInterval(function () {
+    self._cleanupAlreadyReceived();
+  }, this.deliveryTrackingCheckInterval);
 
   this._resubscribe(socket);
   Emitter.prototype.emit.call(this, 'connect');
@@ -648,6 +648,8 @@ SCSocket.prototype._suspendSubscriptions = function () {
 
 SCSocket.prototype._onSCClose = function (socket, code, data) {
   clearTimeout(this._pingTimeoutTicker);
+  clearInterval(this._alreadyReceivedCleanupInterval);
+  this._alreadyReceivedManager.clear();
   
   if (this.state != this.CLOSED) {
     var oldState = this.state;
