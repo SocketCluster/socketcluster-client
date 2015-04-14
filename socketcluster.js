@@ -290,18 +290,18 @@ SCChannel.prototype.isSubscribed = function (includePending) {
   return this.socket.isSubscribed(this.name, includePending);
 };
 
-// publish([data, serviceLevel, callback])
+// publish([data, guaranteeDelivery, callback])
 SCChannel.prototype.publish = function () {
   var data = arguments[0];
-  var serviceLevel, callback;
+  var guaranteeDelivery, callback;
   if (arguments[1] instanceof Function) {
-    serviceLevel = 0;
+    guaranteeDelivery = false;
     callback = arguments[1];
   } else {
-    serviceLevel = arguments[1] || 0;
+    guaranteeDelivery = arguments[1];
     callback = arguments[2];
   }
-  this.socket.publish(this.name, data, serviceLevel, callback);
+  this.socket.publish(this.name, data, guaranteeDelivery, callback);
 };
 
 SCChannel.prototype.watch = function (handler) {
@@ -396,6 +396,8 @@ var SCSocket = function (options) {
   this._tokenData = null;
   this._pingTimeoutTicker = null;
   this._alreadyReceivedManager = new ExpiryManager();
+  this._pendingReceptionMap = {};
+  this._lastSeq = -1;
   
   this.options = opts;
   
@@ -571,6 +573,7 @@ SCSocket.prototype._onSCOpen = function (socket) {
   
   this.state = this.OPEN;
   this._connectAttempts = 0;
+  this._lastSeq = -1;
   
   this._alreadyReceivedCleanupInterval = setInterval(function () {
     self._cleanupAlreadyReceived();
@@ -743,12 +746,29 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
       } else if (obj.event == 'publish') {
         var publishData = obj.data;
         var mid = publishData.mid;
+        var seq = publishData.seq;
         
         if (this.deliveryTrackingDuration && mid != null) {
           var response = new Response(this, obj.cid);
           var isAlreadyDelivered = this._alreadyReceivedManager.getExpiry(mid) != null;
           if (!isAlreadyDelivered) {
-            this._channelEmitter.emit(publishData.channel, publishData.data);
+            var i;
+            // If seq is 0, then we reset to a fresh sequence of messages
+            if (seq == 0) {
+               i = 0;
+               this._pendingReceptionMap = {};
+            } else {
+              i = this._lastSeq + 1;
+            }
+            this._pendingReceptionMap[seq] = publishData;
+            var pendingPublishData = this._pendingReceptionMap[i];
+            
+            while (pendingPublishData) {
+              this._lastSeq = i;
+              delete this._pendingReceptionMap[i];
+              this._channelEmitter.emit(pendingPublishData.channel, pendingPublishData.data);
+              pendingPublishData = this._pendingReceptionMap[++i];
+            }
             this._alreadyReceivedManager.expire([mid], Math.round(this.deliveryTrackingDuration / 1000));
           }
           response.end(mid);
@@ -1035,18 +1055,18 @@ SCSocket.prototype.emit = function (event, data, callback) {
   }
 };
 
-// publish(channelName, [data, serviceLevel, callback])
+// publish(channelName, [data, guaranteeDelivery, callback])
 SCSocket.prototype.publish = function () {
   var self = this;
   
   var channelName = arguments[0];
   var data = arguments[1];
-  var serviceLevel, callback;
+  var guaranteeDelivery, callback;
   if (arguments[2] instanceof Function) {
-    serviceLevel = 0;
+    guaranteeDelivery = false;
     callback = arguments[2];
   } else {
-    serviceLevel = arguments[2] || 0;
+    guaranteeDelivery = arguments[2];
     callback = arguments[3];
   }
   
@@ -1054,7 +1074,7 @@ SCSocket.prototype.publish = function () {
     channel: channelName,
     data: data
   };
-  if (serviceLevel > 0) {
+  if (guaranteeDelivery) {
     pubData.mid = uuid.v4();
   }
   this.emit('publish', pubData, function (err) {
