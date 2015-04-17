@@ -1,7 +1,7 @@
 {
   "name": "sc2-client",
   "description": "Client side of SocketCluster",
-  "version": "2.1.6",
+  "version": "2.1.7",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {

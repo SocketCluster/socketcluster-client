@@ -421,22 +421,22 @@ var SCSocket = function (options) {
     }
   }
   
-  if (this.options.autoResubscribeOptions == null) {
-    this.options.autoResubscribeOptions = {};
+  if (this.options.subscriptionRetryOptions == null) {
+    this.options.subscriptionRetryOptions = {};
   }
   
-  var resubscribeOptions = this.options.autoResubscribeOptions;
-  if (resubscribeOptions.initialDelay == null) {
-    resubscribeOptions.initialDelay = 5000;
+  var subscriptionOptions = this.options.subscriptionRetryOptions;
+  if (subscriptionOptions.initialDelay == null) {
+    subscriptionOptions.initialDelay = 5000;
   }
-  if (resubscribeOptions.randomness == null) {
-    resubscribeOptions.randomness = 0;
+  if (subscriptionOptions.randomness == null) {
+    subscriptionOptions.randomness = 0;
   }
-  if (resubscribeOptions.multiplier == null) {
-    resubscribeOptions.multiplier = 1.5;
+  if (subscriptionOptions.multiplier == null) {
+    subscriptionOptions.multiplier = 1.5;
   }
-  if (resubscribeOptions.maxDelay == null) {
-    resubscribeOptions.maxDelay = 20000;
+  if (subscriptionOptions.maxDelay == null) {
+    subscriptionOptions.maxDelay = 20000;
   }
   
   this.options.path = this.options.path.replace(/\/$/, '') + '/';
@@ -748,10 +748,12 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
         var mid = publishData.mid;
         var seq = publishData.seq;
         
+        var isSubscribed = this.isSubscribed(publishData.channel, true);
+        
         if (this.deliveryTrackingDuration && mid != null) {
           var response = new Response(this, obj.cid);
           var isAlreadyDelivered = this._alreadyReceivedManager.getExpiry(mid) != null;
-          if (!isAlreadyDelivered) {
+          if (!isAlreadyDelivered && isSubscribed) {
             var i;
             // If seq is 0, then we reset to a fresh sequence of messages
             if (seq == 0) {
@@ -772,7 +774,7 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
             this._alreadyReceivedManager.expire([mid], Math.round(this.deliveryTrackingDuration / 1000));
           }
           response.end(mid);
-        } else {
+        } else if (isSubscribed) {
           this._channelEmitter.emit(publishData.channel, publishData.data);
         }
       } else if (obj.event == 'kickOut') {
@@ -983,12 +985,17 @@ SCSocket.prototype._flushEmitBuffer = function (socket) {
 };
 
 SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
-  var error = new Error("Event response for '" + eventObject.event + "' timed out");
+  var errorMessage = "Event response for '" + eventObject.event + "' timed out";
+  if (eventObject.errorDetails) {
+    errorMessage += ' - ' + eventObject.errorDetails;
+  }
+  var error = new Error(errorMessage);
   error.type = 'timeout';
   
   if (eventObject.cid) {
     delete this._callbackMap[eventObject.cid];
   }
+  var callback = eventObject.callback;
   delete eventObject.callback;
   if (eventNode) {
     eventNode.detach();
@@ -998,14 +1005,33 @@ SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
 };
 
 // Emit directly without appending to emitBuffer
-SCSocket.prototype._emitDirect = function (socket, event, data, callback) {
+// The last two optional arguments (a and b) can be options and/or callback
+SCSocket.prototype._emitDirect = function (socket, event, data, a, b) {
   var self = this;
+  
+  var callback, options;
+  
+  if (b) {
+    options = a;
+    callback = b;
+  } else {
+    if (a instanceof Function) {
+      callback = a;
+    } else {
+      options = a;
+    }
+  }
   
   var eventObject = {
     event: event,
     data: data,
     callback: callback
   };
+  
+  // Message to provide in case of error
+  if (options && options.errorDetails) {
+    eventObject.errorDetails = options.errorDetails;
+  }
   
   // Events which do not have a callback will be treated as volatile
   if (callback) {
@@ -1090,13 +1116,13 @@ SCSocket.prototype._retrySubscribe = function (socket, channel) {
       channel.subscribeAttempts = 0;
     }
     
-    var resubscribeOptions = this.options.autoResubscribeOptions;
-    var initialTimeout = Math.round(resubscribeOptions.initialDelay + (resubscribeOptions.randomness || 0) * Math.random());
-    var timeout = Math.round(initialTimeout * Math.pow(resubscribeOptions.multiplier, channel.subscribeAttempts));
+    var subscriptionOptions = this.options.subscriptionRetryOptions;
+    var initialTimeout = Math.round(subscriptionOptions.initialDelay + (subscriptionOptions.randomness || 0) * Math.random());
+    var timeout = Math.round(initialTimeout * Math.pow(subscriptionOptions.multiplier, channel.subscribeAttempts));
     channel.subscribeAttempts++;
     
-    if (timeout > resubscribeOptions.maxDelay) {
-      timeout = resubscribeOptions.maxDelay;
+    if (timeout > subscriptionOptions.maxDelay) {
+      timeout = subscriptionOptions.maxDelay;
     }
     
     clearTimeout(channel.retrySubscribeTimeoutTicker);
@@ -1112,7 +1138,10 @@ SCSocket.prototype._trySubscribe = function (socket, channel) {
   var self = this;
   
   if (this.state == this.OPEN) {
-    this._emitDirect(socket, 'subscribe', channel.name, function (err) {
+    var options = {
+      errorDetails: 'Channel: ' + channel.name
+    };
+    this._emitDirect(socket, 'subscribe', channel.name, options, function (err) {
       if (err) {
         if (err.type == 'timeout') {
           self._retrySubscribe(socket, channel);
@@ -1120,6 +1149,7 @@ SCSocket.prototype._trySubscribe = function (socket, channel) {
           self._triggerChannelSubscribeFail(err, channel);
         }
       } else {
+        channel.subscribeAttempts = 0;
         self._triggerChannelSubscribe(channel);
       }
     });
@@ -1133,6 +1163,7 @@ SCSocket.prototype.subscribe = function (channelName) {
     channel = new SCChannel(channelName, this);
     this._channels[channelName] = channel;
   }
+  clearTimeout(channel.retryUnsubscribeTimeoutTicker);
 
   if (channel.state == channel.UNSUBSCRIBED) {
     channel.state = channel.PENDING;
@@ -1144,6 +1175,50 @@ SCSocket.prototype.subscribe = function (channelName) {
   return channel;
 };
 
+SCSocket.prototype._retryUnsubscribe = function (socket, channel) {
+  var self = this;
+  
+  if (this.state == this.OPEN) {
+    if (channel.unsubscribeAttempts == null) {
+      channel.unsubscribeAttempts = 0;
+    }
+    
+    var subscriptionOptions = this.options.subscriptionRetryOptions;
+    var initialTimeout = Math.round(subscriptionOptions.initialDelay + (subscriptionOptions.randomness || 0) * Math.random());
+    var timeout = Math.round(initialTimeout * Math.pow(subscriptionOptions.multiplier, channel.unsubscribeAttempts));
+    channel.unsubscribeAttempts++;
+    
+    if (timeout > subscriptionOptions.maxDelay) {
+      timeout = subscriptionOptions.maxDelay;
+    }
+    
+    clearTimeout(channel.retryUnsubscribeTimeoutTicker);
+    channel.retryUnsubscribeTimeoutTicker = setTimeout(function () {
+      // Only unsubscribe from server if client channel is in UNSUBSCRIBED state
+      if (channel.state == channel.UNSUBSCRIBED) {
+        self._tryUnsubscribe(socket, channel);
+      }
+    }, timeout);
+  }
+};
+
+SCSocket.prototype._tryUnsubscribe = function (socket, channel) {
+  var self = this;
+  
+  if (this.state == this.OPEN) {
+    var options = {
+      errorDetails: 'Channel: ' + channel.name
+    };
+    this._emitDirect(socket, 'unsubscribe', channel.name, options, function (err) {
+      if (err) {
+        self._retryUnsubscribe(socket, channel);
+      } else {
+        channel.unsubscribeAttempts = 0;
+      }
+    });
+  }
+};
+
 SCSocket.prototype.unsubscribe = function (channelName) {
 
   var channel = this._channels[channelName];
@@ -1153,12 +1228,8 @@ SCSocket.prototype.unsubscribe = function (channelName) {
     
       this._triggerChannelUnsubscribe(channel);
       
-      if (this.state == this.OPEN) {
-        // The only case in which unsubscribe can fail is if the connection is closed or dies.
-        // If that's the case, the server will automatically unsubscribe the client so
-        // we don't need to check for failure since this operation can never really fail.
-        this.emit('unsubscribe', channelName);
-      }
+      channel.unsubscribeAttempts = 0;
+      this._tryUnsubscribe(this.socket, channel);
     }
   }
 };
