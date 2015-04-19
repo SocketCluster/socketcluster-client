@@ -1,4 +1,183 @@
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.socketCluster=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+// If obj.hasOwnProperty has been overridden, then calling
+// obj.hasOwnProperty(prop) will break.
+// See: https://github.com/joyent/node/issues/1707
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+module.exports = function(qs, sep, eq, options) {
+  sep = sep || '&';
+  eq = eq || '=';
+  var obj = {};
+
+  if (typeof qs !== 'string' || qs.length === 0) {
+    return obj;
+  }
+
+  var regexp = /\+/g;
+  qs = qs.split(sep);
+
+  var maxKeys = 1000;
+  if (options && typeof options.maxKeys === 'number') {
+    maxKeys = options.maxKeys;
+  }
+
+  var len = qs.length;
+  // maxKeys <= 0 means that we should not limit keys count
+  if (maxKeys > 0 && len > maxKeys) {
+    len = maxKeys;
+  }
+
+  for (var i = 0; i < len; ++i) {
+    var x = qs[i].replace(regexp, '%20'),
+        idx = x.indexOf(eq),
+        kstr, vstr, k, v;
+
+    if (idx >= 0) {
+      kstr = x.substr(0, idx);
+      vstr = x.substr(idx + 1);
+    } else {
+      kstr = x;
+      vstr = '';
+    }
+
+    k = decodeURIComponent(kstr);
+    v = decodeURIComponent(vstr);
+
+    if (!hasOwnProperty(obj, k)) {
+      obj[k] = v;
+    } else if (isArray(obj[k])) {
+      obj[k].push(v);
+    } else {
+      obj[k] = [obj[k], v];
+    }
+  }
+
+  return obj;
+};
+
+var isArray = Array.isArray || function (xs) {
+  return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+},{}],2:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+var stringifyPrimitive = function(v) {
+  switch (typeof v) {
+    case 'string':
+      return v;
+
+    case 'boolean':
+      return v ? 'true' : 'false';
+
+    case 'number':
+      return isFinite(v) ? v : '';
+
+    default:
+      return '';
+  }
+};
+
+module.exports = function(obj, sep, eq, name) {
+  sep = sep || '&';
+  eq = eq || '=';
+  if (obj === null) {
+    obj = undefined;
+  }
+
+  if (typeof obj === 'object') {
+    return map(objectKeys(obj), function(k) {
+      var ks = encodeURIComponent(stringifyPrimitive(k)) + eq;
+      if (isArray(obj[k])) {
+        return map(obj[k], function(v) {
+          return ks + encodeURIComponent(stringifyPrimitive(v));
+        }).join(sep);
+      } else {
+        return ks + encodeURIComponent(stringifyPrimitive(obj[k]));
+      }
+    }).join(sep);
+
+  }
+
+  if (!name) return '';
+  return encodeURIComponent(stringifyPrimitive(name)) + eq +
+         encodeURIComponent(stringifyPrimitive(obj));
+};
+
+var isArray = Array.isArray || function (xs) {
+  return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+function map (xs, f) {
+  if (xs.map) return xs.map(f);
+  var res = [];
+  for (var i = 0; i < xs.length; i++) {
+    res.push(f(xs[i], i));
+  }
+  return res;
+}
+
+var objectKeys = Object.keys || function (obj) {
+  var res = [];
+  for (var key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) res.push(key);
+  }
+  return res;
+};
+
+},{}],3:[function(require,module,exports){
+'use strict';
+
+exports.decode = exports.parse = require('./decode');
+exports.encode = exports.stringify = require('./encode');
+
+},{"./decode":1,"./encode":2}],4:[function(require,module,exports){
 var SCSocket = require('./lib/scsocket');
 module.exports.SCSocket = SCSocket;
 module.exports.JSON = SCSocket.JSON;
@@ -8,7 +187,7 @@ module.exports.Emitter = require('emitter');
 module.exports.connect = function (options) {
   return new SCSocket(options);
 };
-},{"./lib/scsocket":5,"emitter":6}],2:[function(require,module,exports){
+},{"./lib/scsocket":8,"emitter":9}],5:[function(require,module,exports){
 /**
  * socket.io
  * Copyright(c) 2011 LearnBoost <dev@learnboost.com>
@@ -330,7 +509,7 @@ module.exports.connect = function (options) {
     'undefined' != typeof io ? io : module.exports
   , typeof JSON !== 'undefined' ? JSON : undefined
 );
-},{}],3:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 module.exports.create = (function () {
   function F() {};
 
@@ -342,7 +521,7 @@ module.exports.create = (function () {
     return new F();
   }
 })();
-},{}],4:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 var Emitter = require('emitter');
 
 if (!Object.create) {
@@ -403,22 +582,20 @@ SCChannel.prototype.destroy = function () {
 };
 
 module.exports = SCChannel;
-},{"./objectcreate":3,"emitter":6}],5:[function(require,module,exports){
-/**
- * Module dependencies.
- */
 
+},{"./objectcreate":6,"emitter":9}],8:[function(require,module,exports){
 var Emitter = require('emitter');
 var Socket = require('engine.io-client');
 var SCChannel = require('./scchannel');
-
-/**
- * Module exports.
- */
+var ExpiryManager = require('expirymanager').ExpiryManager;
+var querystring = require('querystring');
+var LinkedList = require('linked-list');
+var uuid = require('node-uuid');
 
 if (!Object.create) {
   Object.create = require('./objectcreate');
 }
+
 
 var Response = function (socket, id) {
   this.socket = socket;
@@ -477,8 +654,13 @@ var SCSocket = function (options) {
   Emitter.call(this);
   
   var opts = {
+    port: null,
     autoReconnect: true,
-    ackTimeout: 10000
+    ackTimeout: 10000,
+    initTimeout: 9000,
+    deliveryTrackingDefaultDuration: 120000,
+    deliveryTrackingCheckInterval: 10000,
+    binaryType: 'arraybuffer'
   };
   for (var i in options) {
     opts[i] = options[i];
@@ -486,6 +668,12 @@ var SCSocket = function (options) {
   opts.path = (opts.path || '/socketcluster').replace(/\/$/, '') + '/';
   
   this.id = null;
+  this.state = this.CLOSED;
+  
+  this.ackTimeout = opts.ackTimeout;
+  this.initTimeout = opts.initTimeout;
+  this.deliveryTrackingDuration = opts.deliveryTrackingDefaultDuration;
+  this.deliveryTrackingCheckInterval = opts.deliveryTrackingCheckInterval;
   
   this._localEvents = {
     'connect': 1,
@@ -513,57 +701,241 @@ var SCSocket = function (options) {
     'ready': 1
   };
   
-  this._persistentEvents = {
-    'subscribe': 1,
-    'unsubscribe': 1
-  };
-  
   this._connectAttempts = 0;
   
   this._cid = 1;
   this._callbackMap = {};
   this._destId = null;
-  this._emitBuffer = [];
+  this._emitBuffer = new LinkedList();
   this._channels = {};
-  this._enableAutoReconnect = true;
   this._base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   this._tokenData = null;
+  this._alreadyReceivedManager = new ExpiryManager();
+  this._pendingReceptionMap = {};
+  this._lastSeq = -1;
   
   this.options = opts;
   
-  if (this.options.autoReconnect && this.options.autoReconnectOptions == null) {
-    this.options.autoReconnectOptions = {
-      delay: 10000,
-      randomness: 10000
-    };
+  if (this.options.autoReconnect) {
+    if (this.options.autoReconnectOptions == null) {
+      this.options.autoReconnectOptions = {};
+    }
+    
+    var reconnectOptions = this.options.autoReconnectOptions;
+    if (reconnectOptions.initialDelay == null) {
+      reconnectOptions.initialDelay = 10000;
+    }
+    if (reconnectOptions.randomness == null) {
+      reconnectOptions.randomness = 10000;
+    }
+    if (reconnectOptions.multiplier == null) {
+      reconnectOptions.multiplier = 1.5;
+    }
+    if (reconnectOptions.maxDelay == null) {
+      reconnectOptions.maxDelay = 60000;
+    }
   }
   
-  if (this.options.url == null) {
-    Socket.call(this, this.options);
-  } else {
-    Socket.call(this, this.options.url, this.options);
+  if (this.options.subscriptionRetryOptions == null) {
+    this.options.subscriptionRetryOptions = {};
   }
   
-  this.connected = false;
-  this.connecting = true;
+  var subscriptionOptions = this.options.subscriptionRetryOptions;
+  if (subscriptionOptions.initialDelay == null) {
+    subscriptionOptions.initialDelay = 5000;
+  }
+  if (subscriptionOptions.randomness == null) {
+    subscriptionOptions.randomness = 0;
+  }
+  if (subscriptionOptions.multiplier == null) {
+    subscriptionOptions.multiplier = 1.5;
+  }
+  if (subscriptionOptions.maxDelay == null) {
+    subscriptionOptions.maxDelay = 20000;
+  }
+  
+  this.connect();
   
   this._channelEmitter = new Emitter();
 };
 
-SCSocket.prototype = Object.create(Socket.prototype);
+SCSocket.prototype = Object.create(Emitter.prototype);
 
 SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = 'connecting';
 SCSocket.OPEN = SCSocket.prototype.OPEN = 'open';
-SCSocket.CLOSING = SCSocket.prototype.CLOSING = 'closing';
 SCSocket.CLOSED = SCSocket.prototype.CLOSED = 'closed';
 
+SCSocket.RECONNECT_IMMEDIATE = SCSocket.prototype.RECONNECT_IMMEDIATE = 'immediate';
+SCSocket.RECONNECT_DELAYED = SCSocket.prototype.RECONNECT_DELAYED = 'delayed';
+
 SCSocket.prototype.getState = function () {
-  if (this.connecting) {
-    return this.CONNECTING;
-  } else if (this.connected) {
-    return this.OPEN;
+  return this.state;
+};
+
+SCSocket.prototype.connect = SCSocket.prototype.open = function () {
+  var self = this;
+  
+  if (this.state == this.CLOSED) {
+    this.state = this.CONNECTING;
+    
+    var socket;
+    if (this.options.url == null) {
+      socket = new Socket(this.options);
+    } else {
+      socket = new Socket(this.options.url, this.options);
+    }
+    socket.binaryType = this.options.binaryType;
+    this.socket = socket;
+    
+    socket.on('open', function () {
+      self._onSCOpen(socket);
+    });
+    
+    socket.on('error', function (err) {
+      self._onSCError(err);
+    });
+    
+    socket.on('close', function () {
+      self._onSCClose(socket, self.RECONNECT_DELAYED);
+    });
+    
+    socket.on('message', function (message) {
+      self._onSCMessage(socket, message);
+    });
   }
-  return this.CLOSED;
+};
+
+SCSocket.prototype.disconnect = function (reason) {
+  if (this.state == this.OPEN) {
+    this._onSCClose(this.socket);
+    this.socket.close();
+  }
+};
+
+SCSocket.prototype._cleanupAlreadyReceived = function () {
+  this._alreadyReceivedManager.extractExpiredKeys();
+};
+
+SCSocket.prototype._onSCOpen = function (socket) {
+  var self = this;
+  
+  this.state = this.OPEN;
+  this._connectAttempts = 0;
+  this._lastSeq = -1;
+  
+  this._alreadyReceivedCleanupInterval = setInterval(function () {
+    self._cleanupAlreadyReceived();
+  }, this.deliveryTrackingCheckInterval);
+
+  this._resubscribe(socket);
+  Emitter.prototype.emit.call(this, 'connect');
+  
+  this._flushEmitBuffer(socket);
+  
+  clearTimeout(this._initTimeoutTicker);
+  
+  // In case 'ready' event isn't triggered on time
+  this._initTimeoutTicker = setTimeout(function () {
+    socket.close();
+    var error = new Error("Client socket initialization timed out - Client did not receive a 'ready' event");
+    error.type = 'timeout';
+    
+    self._onSCError(error);
+    self._onSCClose(socket, self.RECONNECT_DELAYED);
+  }, this.initTimeout);
+};
+
+SCSocket.prototype._tryReconnect = function (initialDelay) {
+  var self = this;
+  
+  var exponent = this._connectAttempts++;
+  var reconnectOptions = this.options.autoReconnectOptions;
+  var timeout;
+  
+  if (initialDelay == null || exponent > 0) {
+    var initialTimeout = Math.round(reconnectOptions.initialDelay + (reconnectOptions.randomness || 0) * Math.random());
+    
+    timeout = Math.round(initialTimeout * Math.pow(reconnectOptions.multiplier, exponent));
+  } else {
+    timeout = initialDelay;
+  }
+  
+  if (timeout > reconnectOptions.maxDelay) {
+    timeout = reconnectOptions.maxDelay;
+  }
+  
+  clearTimeout(this._reconnectTimeout);
+  
+  this._reconnectTimeout = setTimeout(function () {
+    self.connect();
+  }, timeout);
+};
+
+SCSocket.prototype._onSCError = function (err) {
+  var self = this;
+  
+  // Throw error in different stack frame so that error handling
+  // cannot interfere with a reconnect action.
+  setTimeout(function () {
+    if (self.listeners('error').length < 1) {
+        throw err;
+    } else {
+      Emitter.prototype.emit.call(self, 'error', err);
+    }
+  }, 0);
+};
+
+SCSocket.prototype._suspendSubscriptions = function () {
+  var channel, newState;
+  for (var channelName in this._channels) {
+    channel = this._channels[channelName];
+    if (channel.state == channel.SUBSCRIBED ||
+      channel.state == channel.PENDING) {
+      
+      newState = channel.PENDING;
+    } else {
+      newState = channel.UNSUBSCRIBED;
+    }
+    this._triggerChannelUnsubscribe(channel, newState);
+  }
+};
+
+// The reconnect argument can be:
+// RECONNECT_IMMEDIATE: 'immediate'
+// RECONNECT_DELAYED: 'delayed'
+// or null (no reconnect)
+SCSocket.prototype._onSCClose = function (socket, reconnect) {
+  clearInterval(this._alreadyReceivedCleanupInterval);
+  this._alreadyReceivedManager.clear();
+  
+  if (this.state != this.CLOSED) {
+    var oldState = this.state;
+    
+    this.id = null;
+
+    this._suspendSubscriptions();
+    this.state = this.CLOSED;
+
+    socket.removeListener('open');
+    socket.removeListener('error');
+    socket.removeListener('close');
+    socket.removeListener('message');
+    
+    if (oldState == this.OPEN) {
+      Emitter.prototype.emit.call(this, 'disconnect');
+    } else if (oldState == this.CONNECTING) {
+      Emitter.prototype.emit.call(this, 'connectFail');
+    }
+    
+    // Try to reconnect if applicable
+    if (this.options.autoReconnect) {
+      if (reconnect == this.RECONNECT_IMMEDIATE) {
+        this._tryReconnect(0);
+      } else if (reconnect == this.RECONNECT_DELAYED) {
+        this._tryReconnect();
+      }
+    }
+  }
 };
 
 SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
@@ -588,124 +960,54 @@ SCSocket.prototype._getCookie = function (name) {
   }
 };
 
-SCSocket.prototype.connect = SCSocket.prototype.open = function () {
-  var self = this;
-  
-  if (!this.connected && !this.connecting) {
-    this.connected = false;
-    this.connecting = true;
-    Socket.prototype.open.apply(this, arguments);
-    this._resubscribe();
-  }
-};
+SCSocket.prototype._onSCMessage = function (socket, message) {
+  Emitter.prototype.emit.call(this, 'message', message);
 
-SCSocket.prototype.disconnect = function () {
-  this._enableAutoReconnect = false;
-  return Socket.prototype.close.apply(this);
-};
-
-SCSocket.prototype.onSCOpen = function () {
-  this._connectAttempts = 0;
-  this._enableAutoReconnect = true;
-  
-  this.connected = true;
-  this.connecting = false;
-  
-  Emitter.prototype.emit.call(this, 'connect');
-  this._flushEmitBuffer();
-};
-
-SCSocket.prototype._tryReconnect = function (initialDelay) {
-  var self = this;
-  
-  if (!this.connected && !this.connecting &&
-    this.options.autoReconnect && this._enableAutoReconnect) {
-    
-    this._emitBuffer = [];
-    
-    var exponent = this._connectAttempts++;
-    if (exponent > 5) {
-      exponent = 5;
-    }
-
-    var timeout;
-    if (initialDelay == null || exponent > 0) {
-      var reconnectOptions = this.options.autoReconnectOptions;
-      var initialTimeout = Math.round(reconnectOptions.delay + (reconnectOptions.randomness || 0) * Math.random());
-      timeout = Math.round(initialTimeout * Math.pow(1.5, exponent));
-    } else {
-      timeout = initialDelay;
-    }
-    
-    clearTimeout(this._reconnectTimeout);
-    
-    this._reconnectTimeout = setTimeout(function () {
-      if (!self.connected && !self.connecting) {
-        self.connect();
-      }
-    }, timeout);
-  }
-};
-
-SCSocket.prototype.onSCError = function (err) {
-  this.connecting = false;
-  if (!this.connected) {
-    this._tryReconnect();
-  }
-  if (this.listeners('error').length < 1) {
-    setTimeout(function () {
-      throw err;
-    }, 0);
-  }
-};
-
-SCSocket.prototype.onSCClose = function (reason) {
-  this.id = null;
-
-  this.connected = false;
-  this.connecting = false;
-  
-  var channel, newState;
-  for (var channelName in this._channels) {
-    channel = this._channels[channelName];
-    if (channel.state == channel.SUBSCRIBED ||
-      channel.state == channel.PENDING) {
-      
-      newState = channel.PENDING;
-    } else {
-      newState = channel.UNSUBSCRIBED;
-    }
-    this._triggerChannelUnsubscribe(channel, newState);
-  }
-  if (!this._connectAttempts) {
-    if (reason == 'ping timeout') {
-      this._tryReconnect(0);
-    } else {
-      this._tryReconnect();
-    }
-    Emitter.prototype.emit.call(this, 'disconnect');
-  }
-};
-
-SCSocket.prototype.onSCMessage = function (message) {
   var obj;
   try {
-    obj = this.JSON.parse(message);
+    obj = this.parse(message);
   } catch (err) {
     obj = message;
   }
   
   if (obj.event) {
-    if (obj.event == 'disconnect') {
-      this.connected = false;
-      this.connecting = false;
-      Emitter.prototype.emit.call(this, 'disconnect');
+    if (obj.event == 'fail') {
+      this._onSCError(obj.data);
       
-    } else if (obj.event == 'fail') {
-      this.connected = false;
-      this.connecting = false;
-      this.emit('error', obj.data);
+    } else if (obj.event == 'publish') {
+      var publishData = obj.data;
+      var mid = publishData.mid;
+      var seq = publishData.seq;
       
+      var isSubscribed = this.isSubscribed(publishData.channel, true);
+      
+      if (this.deliveryTrackingDuration && mid != null) {
+        var response = new Response(this, obj.cid);
+        var isAlreadyDelivered = this._alreadyReceivedManager.getExpiry(mid) != null;
+        if (!isAlreadyDelivered && isSubscribed) {
+          var i;
+          // If seq is 0, then we reset to a fresh sequence of messages
+          if (seq == 0) {
+             i = 0;
+             this._pendingReceptionMap = {};
+          } else {
+            i = this._lastSeq + 1;
+          }
+          this._pendingReceptionMap[seq] = publishData;
+          var pendingPublishData = this._pendingReceptionMap[i];
+          
+          while (pendingPublishData) {
+            this._lastSeq = i;
+            delete this._pendingReceptionMap[i];
+            this._channelEmitter.emit(pendingPublishData.channel, pendingPublishData.data);
+            pendingPublishData = this._pendingReceptionMap[++i];
+          }
+          this._alreadyReceivedManager.expire([mid], Math.round(this.deliveryTrackingDuration / 1000));
+        }
+        response.end(mid);
+      } else if (isSubscribed) {
+        this._channelEmitter.emit(publishData.channel, publishData.data);
+      }
     } else if (obj.event == 'kickOut') {
       var kickData = obj.data || {};
       var channelName = kickData.channel;
@@ -742,18 +1044,23 @@ SCSocket.prototype.onSCMessage = function (message) {
     } else if (obj.event == 'ready') {
       if (obj.data) {
         this.id = obj.data.id;
+        // Optimize the deliveryTrackingExpiry to be the shortest amount of time necessary
+        // in order to guarantee exactly-once delivery of published messages.
+        // We add ackTimeout to account for latency (margin of error).
+        this.deliveryTrackingDuration = obj.data.deliveryTimeout + this.ackTimeout;
       }
+      clearTimeout(this._initTimeoutTicker);
       Emitter.prototype.emit.call(this, obj.event, obj.data);
     } else if (obj.event == 'pingTimeout') {
-      this.onSCClose('ping timeout');
+      this._onSCClose(socket, this.RECONNECT_IMMEDIATE);
     } else {
       var response = new Response(this, obj.cid);
       Emitter.prototype.emit.call(this, obj.event, obj.data, function (error, data) {
         response.callback(error, data);
       });
     }
-  } else if (obj.channel) {
-    this._channelEmitter.emit(obj.channel, obj.data);
+  } else if (obj.disconnect) {
+    this._onSCClose(socket);
   } else if (obj.rid != null) {
     var ret = this._callbackMap[obj.rid];
     if (ret) {
@@ -762,7 +1069,7 @@ SCSocket.prototype.onSCMessage = function (message) {
       ret.callback(obj.error, obj.data);
     }
     if (obj.error) {
-      this.emit('error', obj.error);
+      this._onSCError(obj.error);
     }
   } else {
     Emitter.prototype.emit.call(this, 'raw', obj);
@@ -846,7 +1153,29 @@ SCSocket.prototype.stringify = function (object) {
   return this.JSON.stringify(this._convertBuffersToBase64(object));
 };
 
-SCSocket.prototype._emit = function (eventObject) {
+SCSocket.prototype._send = function (socket, data, options) {
+  if (!socket || socket.readyState != this.OPEN) {
+    var error = new Error('Failed to send - Underlying connection was not open');
+    this._onSCError(error);
+    this._onSCClose(socket, this.RECONNECT_DELAYED);
+  } else {
+    socket.send(data, options);
+  }
+};
+
+SCSocket.prototype._sendObject = function (socket, object, options) {
+  this._send(socket, this.stringify(object), options);
+};
+
+SCSocket.prototype.send = function (data, options) {
+  this._send(this.socket, data, options);
+};
+
+SCSocket.prototype.sendObject = function (object, options) {
+  this._sendObject(this.socket, object, options);
+};
+
+SCSocket.prototype._emitRaw = function (socket, eventObject) {
   eventObject.cid = this._nextCallId();
   
   if (eventObject.callback) {
@@ -859,104 +1188,255 @@ SCSocket.prototype._emit = function (eventObject) {
     cid: eventObject.cid
   };
   
-  Socket.prototype.send.call(this, this.stringify(simpleEventObject));
+  this._sendObject(socket, simpleEventObject);
 };
 
-SCSocket.prototype._flushEmitBuffer = function () {
-  var len = this._emitBuffer.length;
-  
-  for (var i = 0; i < len; i++) {
-    this._emit(this._emitBuffer[i]);
+SCSocket.prototype._flushEmitBuffer = function (socket) {
+  var currentNode = this._emitBuffer.head;
+  var nextNode;
+
+  while (currentNode) {
+    nextNode = currentNode.next;
+    var eventObject = currentNode.data;
+    currentNode.detach();
+    this._emitRaw(socket, eventObject);
+    currentNode = nextNode;
   }
-  this._emitBuffer = [];
+};
+
+SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
+  var errorMessage = "Event response for '" + eventObject.event + "' timed out";
+  if (eventObject.errorDetails) {
+    errorMessage += ' - ' + eventObject.errorDetails;
+  }
+  var error = new Error(errorMessage);
+  error.type = 'timeout';
+  
+  if (eventObject.cid) {
+    delete this._callbackMap[eventObject.cid];
+  }
+  var callback = eventObject.callback;
+  delete eventObject.callback;
+  if (eventNode) {
+    eventNode.detach();
+  }
+  callback.call(eventObject, error, eventObject);
+  this._onSCError(error);
+};
+
+// Emit directly without appending to emitBuffer
+// The last two optional arguments (a and b) can be options and/or callback
+SCSocket.prototype._emitDirect = function (socket, event, data, a, b) {
+  var self = this;
+  
+  var callback, options;
+  
+  if (b) {
+    options = a;
+    callback = b;
+  } else {
+    if (a instanceof Function) {
+      callback = a;
+    } else {
+      options = a;
+    }
+  }
+  
+  var eventObject = {
+    event: event,
+    data: data,
+    callback: callback
+  };
+  
+  // Message to provide in case of error
+  if (options && options.errorDetails) {
+    eventObject.errorDetails = options.errorDetails;
+  }
+  
+  // Events which do not have a callback will be treated as volatile
+  if (callback) {
+    eventObject.timeout = setTimeout(function () {
+      self._handleEventAckTimeout(eventObject);
+    }, this.ackTimeout);
+  }
+  
+  if (this.state == this.OPEN) {
+    this._emitRaw(socket, eventObject);
+  }
+};
+
+SCSocket.prototype._emit = function (socket, event, data, callback) {
+  var self = this;
+  
+  if (this.state == this.CLOSED || socket.readyState == socket.CLOSED) {
+    this.connect();
+  }
+  var eventObject = {
+    event: event,
+    data: data,
+    callback: callback
+  };
+  
+  var eventNode = new LinkedList.Item();
+  eventNode.data = eventObject;
+  
+  // Events which do not have a callback will be treated as volatile
+  if (callback) {
+    eventObject.timeout = setTimeout(function () {
+      self._handleEventAckTimeout(eventObject, eventNode);
+    }, this.ackTimeout);
+  }
+  this._emitBuffer.append(eventNode);
+  
+  if (this.state == this.OPEN) {
+    this._flushEmitBuffer(socket);
+  }
 };
 
 SCSocket.prototype.emit = function (event, data, callback) {
-  var self = this;
-  
   if (this._localEvents[event] == null) {
-    if (!this.connected && !this.connecting) {
-      this.connect();
-    }
-    var eventObject = {
-      event: event,
-      data: data,
-      callback: callback
-    };
-    
-    // Persistent events should never timeout.
-    // Also, only set timeout if there is a callback.
-    if (!this._persistentEvents[event] && callback) {
-      eventObject.timeout = setTimeout(function () {
-        var error = new Error("Event response for '" + event + "' timed out", eventObject);
-        if (eventObject.cid) {
-          delete self._callbackMap[eventObject.cid];
-        }
-        delete eventObject.callback;
-        callback(error, eventObject);
-        self.emit('error', error);
-      }, this.options.ackTimeout);
-    }
-    this._emitBuffer.push(eventObject);
-    if (this.connected) {
-      this._flushEmitBuffer();
-    }
+    this._emit(this.socket, event, data, callback);
   } else {
-    switch (event) {
-      case 'message':
-        this.onSCMessage(data);
-        break;
-        
-      case 'open':
-        this.onSCOpen();
-        break;
-        
-      case 'close':
-        this.onSCClose(data);
-        break;
-
-      case 'error':
-        this.onSCError(data);
-        break;
-    }
     Emitter.prototype.emit.call(this, event, data);
   }
 };
 
-SCSocket.prototype.publish = function (channelName, data, callback) {
+// publish(channelName, [data, guaranteeDelivery, callback])
+SCSocket.prototype.publish = function () {
   var self = this;
+  
+  var channelName = arguments[0];
+  var data = arguments[1];
+  var guaranteeDelivery, callback;
+  if (arguments[2] instanceof Function) {
+    guaranteeDelivery = false;
+    callback = arguments[2];
+  } else {
+    guaranteeDelivery = arguments[2];
+    callback = arguments[3];
+  }
   
   var pubData = {
     channel: channelName,
     data: data
   };
+  if (guaranteeDelivery) {
+    pubData.mid = uuid.v4();
+  }
   this.emit('publish', pubData, function (err) {
     callback && callback(err);
   });
 };
 
-SCSocket.prototype.subscribe = function (channelName) {
+SCSocket.prototype._retrySubscribe = function (socket, channel) {
   var self = this;
   
+  if (this.state == this.OPEN) {
+    if (channel.subscribeAttempts == null) {
+      channel.subscribeAttempts = 0;
+    }
+    
+    var subscriptionOptions = this.options.subscriptionRetryOptions;
+    var initialTimeout = Math.round(subscriptionOptions.initialDelay + (subscriptionOptions.randomness || 0) * Math.random());
+    var timeout = Math.round(initialTimeout * Math.pow(subscriptionOptions.multiplier, channel.subscribeAttempts));
+    channel.subscribeAttempts++;
+    
+    if (timeout > subscriptionOptions.maxDelay) {
+      timeout = subscriptionOptions.maxDelay;
+    }
+    
+    clearTimeout(channel.retrySubscribeTimeoutTicker);
+    channel.retrySubscribeTimeoutTicker = setTimeout(function () {
+      if (channel.state == channel.PENDING) {
+        self._trySubscribe(socket, channel);
+      }
+    }, timeout);
+  }
+};
+
+SCSocket.prototype._trySubscribe = function (socket, channel) {
+  var self = this;
+  
+  if (this.state == this.OPEN) {
+    var options = {
+      errorDetails: 'Channel: ' + channel.name
+    };
+    this._emitDirect(socket, 'subscribe', channel.name, options, function (err) {
+      if (err) {
+        if (err.type == 'timeout') {
+          self._retrySubscribe(socket, channel);
+        } else {
+          self._triggerChannelSubscribeFail(err, channel);
+        }
+      } else {
+        channel.subscribeAttempts = 0;
+        self._triggerChannelSubscribe(channel);
+      }
+    });
+  }
+};
+
+SCSocket.prototype.subscribe = function (channelName) {
   var channel = this._channels[channelName];
   
   if (!channel) {
     channel = new SCChannel(channelName, this);
     this._channels[channelName] = channel;
   }
+  clearTimeout(channel.retryUnsubscribeTimeoutTicker);
 
   if (channel.state == channel.UNSUBSCRIBED) {
     channel.state = channel.PENDING;
-    this.emit('subscribe', channelName, function (err) {
-      if (err) {
-        self._triggerChannelSubscribeFail(err, channel);
-      } else {
-        self._triggerChannelSubscribe(channel);
-      }
-    });
+    
+    channel.subscribeAttempts = 0;
+    this._trySubscribe(this.socket, channel);
   }
   
   return channel;
+};
+
+SCSocket.prototype._retryUnsubscribe = function (socket, channel) {
+  var self = this;
+  
+  if (this.state == this.OPEN) {
+    if (channel.unsubscribeAttempts == null) {
+      channel.unsubscribeAttempts = 0;
+    }
+    
+    var subscriptionOptions = this.options.subscriptionRetryOptions;
+    var initialTimeout = Math.round(subscriptionOptions.initialDelay + (subscriptionOptions.randomness || 0) * Math.random());
+    var timeout = Math.round(initialTimeout * Math.pow(subscriptionOptions.multiplier, channel.unsubscribeAttempts));
+    channel.unsubscribeAttempts++;
+    
+    if (timeout > subscriptionOptions.maxDelay) {
+      timeout = subscriptionOptions.maxDelay;
+    }
+    
+    clearTimeout(channel.retryUnsubscribeTimeoutTicker);
+    channel.retryUnsubscribeTimeoutTicker = setTimeout(function () {
+      // Only unsubscribe from server if client channel is in UNSUBSCRIBED state
+      if (channel.state == channel.UNSUBSCRIBED) {
+        self._tryUnsubscribe(socket, channel);
+      }
+    }, timeout);
+  }
+};
+
+SCSocket.prototype._tryUnsubscribe = function (socket, channel) {
+  var self = this;
+  
+  if (this.state == this.OPEN) {
+    var options = {
+      errorDetails: 'Channel: ' + channel.name
+    };
+    this._emitDirect(socket, 'unsubscribe', channel.name, options, function (err) {
+      if (err) {
+        self._retryUnsubscribe(socket, channel);
+      } else {
+        channel.unsubscribeAttempts = 0;
+      }
+    });
+  }
 };
 
 SCSocket.prototype.unsubscribe = function (channelName) {
@@ -968,11 +1448,8 @@ SCSocket.prototype.unsubscribe = function (channelName) {
     
       this._triggerChannelUnsubscribe(channel);
       
-      // The only case in which unsubscribe can fail is if the connection is closed or dies.
-      // If that's the case, the server will automatically unsubscribe the client so
-      // we don't need to check for failure since this operation can never really fail.
-      
-      this.emit('unsubscribe', channelName);
+      channel.unsubscribeAttempts = 0;
+      this._tryUnsubscribe(this.socket, channel);
     }
   }
 };
@@ -1026,24 +1503,30 @@ SCSocket.prototype.isSubscribed = function (channel, includePending) {
 SCSocket.prototype._triggerChannelSubscribe = function (channel) {
   var channelName = channel.name;
   
-  channel.state = channel.SUBSCRIBED;
-  
-  channel.emit('subscribe', channelName);
-  Emitter.prototype.emit.call(this, 'subscribe', channelName);
+  if (channel.state != channel.SUBSCRIBED) {
+    channel.state = channel.SUBSCRIBED;
+    
+    channel.emit('subscribe', channelName);
+    Emitter.prototype.emit.call(this, 'subscribe', channelName);
+  }
 };
 
 SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel) {
   var channelName = channel.name;
   
-  channel.state = channel.UNSUBSCRIBED;
-  
-  channel.emit('subscribeFail', err, channelName);
-  Emitter.prototype.emit.call(this, 'subscribeFail', err, channelName);
+  if (channel.state != channel.UNSUBSCRIBED) {
+    channel.state = channel.UNSUBSCRIBED;
+    
+    channel.emit('subscribeFail', err, channelName);
+    Emitter.prototype.emit.call(this, 'subscribeFail', err, channelName);
+  }
 };
 
 SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
   var channelName = channel.name;
   var oldState = channel.state;
+  
+  clearTimeout(channel.retrySubscribeTimeoutTicker);
   
   if (newState) {
     channel.state = newState;
@@ -1056,39 +1539,19 @@ SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
   }
 };
 
-SCSocket.prototype._resubscribe = function (callback) {
+SCSocket.prototype._resubscribe = function (socket) {
   var self = this;
   
   var channels = [];
   for (var channelName in this._channels) {
     channels.push(channelName);
   }
-  var error;
-  var ackCount = 0;
   
-  var ackHandler = function (err, channel) {
-    ackCount++;
-    
-    if (err) {
-      self._triggerChannelSubscribeFail(err, channel);
-    } else {
-      self._triggerChannelSubscribe(channel);
-    }
-    if (!error) {
-      if (err) {
-        error = err;
-        callback && callback(err);
-      } else if (ackCount >= channels.length) {
-        callback && callback();
-      }
-    }
-  };
   for (var i in this._channels) {
     (function (channel) {
       if (channel.state == channel.PENDING) {
-        self.emit('subscribe', channel.name, function (err) {
-          ackHandler(err, channel);
-        });
+        channel.subscribeAttempts = 0;
+        self._trySubscribe(socket, channel);
       }
     })(this._channels[i]);
   }
@@ -1118,7 +1581,8 @@ if (typeof JSON != 'undefined') {
 SCSocket.JSON = SCSocket.prototype.JSON;
 
 module.exports = SCSocket;
-},{"./json":2,"./objectcreate":3,"./scchannel":4,"emitter":6,"engine.io-client":8}],6:[function(require,module,exports){
+
+},{"./json":5,"./objectcreate":6,"./scchannel":7,"emitter":9,"engine.io-client":11,"expirymanager":40,"linked-list":42,"node-uuid":43,"querystring":3}],9:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -1282,7 +1746,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{"indexof":7}],7:[function(require,module,exports){
+},{"indexof":10}],10:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -1293,11 +1757,11 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],8:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 
 module.exports =  require('./lib/');
 
-},{"./lib/":9}],9:[function(require,module,exports){
+},{"./lib/":12}],12:[function(require,module,exports){
 
 module.exports = require('./socket');
 
@@ -1309,7 +1773,7 @@ module.exports = require('./socket');
  */
 module.exports.parser = require('engine.io-parser');
 
-},{"./socket":10,"engine.io-parser":23}],10:[function(require,module,exports){
+},{"./socket":13,"engine.io-parser":26}],13:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -1996,7 +2460,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./transport":11,"./transports":12,"component-emitter":18,"debug":20,"engine.io-parser":23,"indexof":32,"parsejson":33,"parseqs":34,"parseuri":35}],11:[function(require,module,exports){
+},{"./transport":14,"./transports":15,"component-emitter":21,"debug":23,"engine.io-parser":26,"indexof":35,"parsejson":36,"parseqs":37,"parseuri":38}],14:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -2148,7 +2612,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"component-emitter":18,"engine.io-parser":23}],12:[function(require,module,exports){
+},{"component-emitter":21,"engine.io-parser":26}],15:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies
@@ -2205,7 +2669,7 @@ function polling(opts){
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling-jsonp":13,"./polling-xhr":14,"./websocket":16,"xmlhttprequest":17}],13:[function(require,module,exports){
+},{"./polling-jsonp":16,"./polling-xhr":17,"./websocket":19,"xmlhttprequest":20}],16:[function(require,module,exports){
 (function (global){
 
 /**
@@ -2442,7 +2906,7 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":15,"component-inherit":19}],14:[function(require,module,exports){
+},{"./polling":18,"component-inherit":22}],17:[function(require,module,exports){
 (function (global){
 /**
  * Module requirements.
@@ -2797,7 +3261,7 @@ function unloadHandler() {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":15,"component-emitter":18,"component-inherit":19,"debug":20,"xmlhttprequest":17}],15:[function(require,module,exports){
+},{"./polling":18,"component-emitter":21,"component-inherit":22,"debug":23,"xmlhttprequest":20}],18:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -3044,7 +3508,7 @@ Polling.prototype.uri = function(){
   return schema + '://' + this.hostname + port + this.path + query;
 };
 
-},{"../transport":11,"component-inherit":19,"debug":20,"engine.io-parser":23,"parseqs":34,"xmlhttprequest":17}],16:[function(require,module,exports){
+},{"../transport":14,"component-inherit":22,"debug":23,"engine.io-parser":26,"parseqs":37,"xmlhttprequest":20}],19:[function(require,module,exports){
 /**
  * Module dependencies.
  */
@@ -3275,7 +3739,7 @@ WS.prototype.check = function(){
   return !!WebSocket && !('__initialize' in WebSocket && this.name === WS.prototype.name);
 };
 
-},{"../transport":11,"component-inherit":19,"debug":20,"engine.io-parser":23,"parseqs":34,"ws":36}],17:[function(require,module,exports){
+},{"../transport":14,"component-inherit":22,"debug":23,"engine.io-parser":26,"parseqs":37,"ws":39}],20:[function(require,module,exports){
 // browser shim for xmlhttprequest module
 var hasCORS = require('has-cors');
 
@@ -3313,7 +3777,7 @@ module.exports = function(opts) {
   }
 }
 
-},{"has-cors":30}],18:[function(require,module,exports){
+},{"has-cors":33}],21:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -3479,7 +3943,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],19:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 
 module.exports = function(a, b){
   var fn = function(){};
@@ -3487,7 +3951,7 @@ module.exports = function(a, b){
   a.prototype = new fn;
   a.prototype.constructor = a;
 };
-},{}],20:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 
 /**
  * This is the web browser implementation of `debug()`.
@@ -3636,7 +4100,7 @@ function load() {
 
 exports.enable(load());
 
-},{"./debug":21}],21:[function(require,module,exports){
+},{"./debug":24}],24:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -3835,7 +4299,7 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":22}],22:[function(require,module,exports){
+},{"ms":25}],25:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -3948,7 +4412,7 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],23:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -4518,7 +4982,7 @@ exports.decodePayloadAsBinary = function (data, binaryType, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./keys":24,"after":25,"arraybuffer.slice":26,"base64-arraybuffer":27,"blob":28,"utf8":29}],24:[function(require,module,exports){
+},{"./keys":27,"after":28,"arraybuffer.slice":29,"base64-arraybuffer":30,"blob":31,"utf8":32}],27:[function(require,module,exports){
 
 /**
  * Gets the keys for an object.
@@ -4539,7 +5003,7 @@ module.exports = Object.keys || function keys (obj){
   return arr;
 };
 
-},{}],25:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 module.exports = after
 
 function after(count, callback, err_cb) {
@@ -4569,7 +5033,7 @@ function after(count, callback, err_cb) {
 
 function noop() {}
 
-},{}],26:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 /**
  * An abstraction for slicing an arraybuffer even when
  * ArrayBuffer.prototype.slice is not supported
@@ -4600,7 +5064,7 @@ module.exports = function(arraybuffer, start, end) {
   return result.buffer;
 };
 
-},{}],27:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 /*
  * base64-arraybuffer
  * https://github.com/niklasvh/base64-arraybuffer
@@ -4661,7 +5125,7 @@ module.exports = function(arraybuffer, start, end) {
   };
 })("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
-},{}],28:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 (function (global){
 /**
  * Create a blob builder even when vendor prefixes exist
@@ -4714,7 +5178,7 @@ module.exports = (function() {
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],29:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/utf8js v2.0.0 by @mathias */
 ;(function(root) {
@@ -4957,7 +5421,7 @@ module.exports = (function() {
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],30:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -4982,7 +5446,7 @@ try {
   module.exports = false;
 }
 
-},{"global":31}],31:[function(require,module,exports){
+},{"global":34}],34:[function(require,module,exports){
 
 /**
  * Returns `this`. Execute this without a "context" (i.e. without it being
@@ -4992,9 +5456,9 @@ try {
 
 module.exports = (function () { return this; })();
 
-},{}],32:[function(require,module,exports){
-module.exports=require(7)
-},{"C:\\node\\sc\\node_modules\\socketcluster-client\\node_modules\\emitter\\node_modules\\indexof\\index.js":7}],33:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
+module.exports=require(10)
+},{"C:\\node\\sc\\node_modules\\socketcluster-client\\node_modules\\emitter\\node_modules\\indexof\\index.js":10}],36:[function(require,module,exports){
 (function (global){
 /**
  * JSON parse.
@@ -5029,7 +5493,7 @@ module.exports = function parsejson(data) {
   }
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],34:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -5068,7 +5532,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],35:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /**
  * Parses an URI
  *
@@ -5109,7 +5573,7 @@ module.exports = function parseuri(str) {
     return uri;
 };
 
-},{}],36:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -5154,5 +5618,760 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}]},{},[1])(1)
+},{}],40:[function(require,module,exports){
+var ExpiryManager = module.exports.ExpiryManager = function () {
+  this._keys = {};
+  this._expiries = {};
+};
+
+ExpiryManager.prototype._isEmpty = function (obj) {
+  for (var i in obj) {
+    if (obj.hasOwnProperty(i)) {
+      return false;
+    }
+  }
+  return true;
+};
+
+ExpiryManager.prototype._simplifyKey = function (key) {
+  if (key instanceof Array) {
+    // Use escape sequence to delimit array
+    return '\\u001b' + key.join('\\u001b');
+  }
+  return key;
+};
+
+ExpiryManager.prototype._expandKey = function (key) {
+  var regex = /^\\u001b/;
+  if (regex.test(key)) {
+    return key.replace(regex, '').split('\\u001b');
+  }
+  return key;
+};
+
+ExpiryManager.prototype.now = function () {
+  return Math.round((new Date()).getTime() / 1000);
+};
+
+ExpiryManager.prototype.expire = function (keys, seconds) {
+  this.unexpire(keys);
+  var expiry = this.now() + seconds;
+  var len = keys.length;
+  var key;
+  for (var i = 0; i < len; i++) {
+    key = this._simplifyKey(keys[i]);
+    this._keys[key] = expiry;
+    if (this._expiries[expiry] == null) {
+      this._expiries[expiry] = {};
+    }
+    this._expiries[expiry][key] = 1;
+  }
+};
+
+ExpiryManager.prototype.unexpire = function (keys) {
+  var len = keys.length;
+  var expiry, key;
+  for (var i = 0; i < len; i++) {
+    key = this._simplifyKey(keys[i]);
+    expiry = this._keys[key];
+    delete this._keys[key];
+    if (expiry && this._expiries[expiry] != null) {
+      delete this._expiries[expiry][key];
+      if (this._isEmpty(this._expiries[expiry])) {
+        delete this._expiries[expiry];
+      }
+    }
+  }
+};
+
+ExpiryManager.prototype.getExpiry = function (key) {
+  key = this._simplifyKey(key);
+  return this._keys[key];
+};
+
+ExpiryManager.prototype.getKeysByExpiry = function (expiry) {
+  var keys = [];
+  var keyMap = this._expiries[expiry];
+  for (var i in keyMap) {
+    if (keyMap.hasOwnProperty(i)) {
+      keys.push(this._expandKey(i));
+    }
+  }
+  return keys;
+};
+
+ExpiryManager.prototype.getExpiredKeys = function (time) {
+  var expiredKeys = [];
+  var now = time || this.now();
+  var expiries = this._expiries;
+  
+  for (var i in expiries) {
+    if (expiries.hasOwnProperty(i)) {
+      if (i <= now) {
+        for (var j in expiries[i]) {
+          if (expiries[i].hasOwnProperty(j)) {
+            expiredKeys.push(this._expandKey(j));
+          }
+        }
+      } else {
+        break;
+      }
+    }
+  }
+  return expiredKeys;
+};
+
+ExpiryManager.prototype.extractExpiredKeys = function (time) {
+  var expiredKeys = this.getExpiredKeys(time);
+  this.unexpire(expiredKeys);
+  return expiredKeys;
+};
+
+ExpiryManager.prototype.clear = function () {
+  this._keys = {};
+  this._expiries = {};
+};
+},{}],41:[function(require,module,exports){
+'use strict';
+
+/**
+ * Constants.
+ */
+
+var errorMessage;
+
+errorMessage = 'An argument without append, prepend, ' +
+    'or detach methods was given to `List';
+
+/**
+ * Creates a new List: A linked list is a bit like an Array, but
+ * knows nothing about how many items are in it, and knows only about its
+ * first (`head`) and last (`tail`) items. Each item (e.g. `head`, `tail`,
+ * &c.) knows which item comes before or after it (its more like the
+ * implementation of the DOM in JavaScript).
+ * @global
+ * @private
+ * @constructor
+ * @class Represents an instance of List.
+ */
+
+function List(/*items...*/) {
+    if (arguments.length) {
+        return List.from(arguments);
+    }
+}
+
+var ListPrototype;
+
+ListPrototype = List.prototype;
+
+/**
+ * Creates a new list from the arguments (each a list item) passed in.
+ * @name List.of
+ * @param {...ListItem} [items] - Zero or more items to attach.
+ * @returns {list} - A new instance of List.
+ */
+
+List.of = function (/*items...*/) {
+    return List.from.call(this, arguments);
+};
+
+/**
+ * Creates a new list from the given array-like object (each a list item)
+ * passed in.
+ * @name List.from
+ * @param {ListItem[]} [items] - The items to append.
+ * @returns {list} - A new instance of List.
+ */
+List.from = function (items) {
+    var list = new this(), length, iterator, item;
+
+    if (items && (length = items.length)) {
+        iterator = -1;
+
+        while (++iterator < length) {
+            item = items[iterator];
+
+            if (item !== null && item !== undefined) {
+                list.append(item);
+            }
+        }
+    }
+
+    return list;
+};
+
+/**
+ * List#head
+ * Default to `null`.
+ */
+ListPrototype.head = null;
+
+/**
+ * List#tail
+ * Default to `null`.
+ */
+ListPrototype.tail = null;
+
+/**
+ * Returns the list's items as an array. This does *not* detach the items.
+ * @name List#toArray
+ * @returns {ListItem[]} - An array of (still attached) ListItems.
+ */
+ListPrototype.toArray = function () {
+    var item = this.head,
+        result = [];
+
+    while (item) {
+        result.push(item);
+        item = item.next;
+    }
+
+    return result;
+};
+
+/**
+ * Prepends the given item to the list: Item will be the new first item
+ * (`head`).
+ * @name List#prepend
+ * @param {ListItem} item - The item to prepend.
+ * @returns {ListItem} - An instance of ListItem (the given item).
+ */
+ListPrototype.prepend = function (item) {
+    if (!item) {
+        return false;
+    }
+
+    if (!item.append || !item.prepend || !item.detach) {
+        throw new Error(errorMessage + '#prepend`.');
+    }
+
+    var self, head;
+
+    // Cache self.
+    self = this;
+
+    // If self has a first item, defer prepend to the first items prepend
+    // method, and return the result.
+    head = self.head;
+
+    if (head) {
+        return head.prepend(item);
+    }
+
+    // ...otherwise, there is no `head` (or `tail`) item yet.
+
+    // Detach the prependee.
+    item.detach();
+
+    // Set the prependees parent list to reference self.
+    item.list = self;
+
+    // Set self's first item to the prependee, and return the item.
+    self.head = item;
+
+    return item;
+};
+
+/**
+ * Appends the given item to the list: Item will be the new last item (`tail`)
+ * if the list had a first item, and its first item (`head`) otherwise.
+ * @name List#append
+ * @param {ListItem} item - The item to append.
+ * @returns {ListItem} - An instance of ListItem (the given item).
+ */
+
+ListPrototype.append = function (item) {
+    if (!item) {
+        return false;
+    }
+
+    if (!item.append || !item.prepend || !item.detach) {
+        throw new Error(errorMessage + '#append`.');
+    }
+
+    var self, head, tail;
+
+    // Cache self.
+    self = this;
+
+    // If self has a last item, defer appending to the last items append
+    // method, and return the result.
+    tail = self.tail;
+
+    if (tail) {
+        return tail.append(item);
+    }
+
+    // If self has a first item, defer appending to the first items append
+    // method, and return the result.
+    head = self.head;
+
+    if (head) {
+        return head.append(item);
+    }
+
+    // ...otherwise, there is no `tail` or `head` item yet.
+
+    // Detach the appendee.
+    item.detach();
+
+    // Set the appendees parent list to reference self.
+    item.list = self;
+
+    // Set self's first item to the appendee, and return the item.
+    self.head = item;
+
+    return item;
+};
+
+/**
+ * Creates a new ListItem: A linked list item is a bit like DOM node:
+ * It knows only about its "parent" (`list`), the item before it (`prev`),
+ * and the item after it (`next`).
+ * @global
+ * @private
+ * @constructor
+ * @class Represents an instance of ListItem.
+ */
+
+function ListItem() {}
+
+List.Item = ListItem;
+
+var ListItemPrototype = ListItem.prototype;
+
+ListItemPrototype.next = null;
+
+ListItemPrototype.prev = null;
+
+ListItemPrototype.list = null;
+
+/**
+ * Detaches the item operated on from its parent list.
+ * @name ListItem#detach
+ * @returns {ListItem} - The item operated on.
+ */
+ListItemPrototype.detach = function () {
+    // Cache self, the parent list, and the previous and next items.
+    var self = this,
+        list = self.list,
+        prev = self.prev,
+        next = self.next;
+
+    // If the item is already detached, return self.
+    if (!list) {
+        return self;
+    }
+
+    // If self is the last item in the parent list, link the lists last item
+    // to the previous item.
+    if (list.tail === self) {
+        list.tail = prev;
+    }
+
+    // If self is the first item in the parent list, link the lists first item
+    // to the next item.
+    if (list.head === self) {
+        list.head = next;
+    }
+
+    // If both the last and first items in the parent list are the same,
+    // remove the link to the last item.
+    if (list.tail === list.head) {
+        list.tail = null;
+    }
+
+    // If a previous item exists, link its next item to selfs next item.
+    if (prev) {
+        prev.next = next;
+    }
+
+    // If a next item exists, link its previous item to selfs previous item.
+    if (next) {
+        next.prev = prev;
+    }
+
+    // Remove links from self to both the next and previous items, and to the
+    // parent list.
+    self.prev = self.next = self.list = null;
+
+    // Return self.
+    return self;
+};
+
+/**
+ * Prepends the given item *before* the item operated on.
+ * @name ListItem#prepend
+ * @param {ListItem} item - The item to prepend.
+ * @returns {ListItem} - The item operated on, or false when that item is not
+ * attached.
+ */
+ListItemPrototype.prepend = function (item) {
+    if (!item || !item.append || !item.prepend || !item.detach) {
+        throw new Error(errorMessage + 'Item#prepend`.');
+    }
+
+    // Cache self, the parent list, and the previous item.
+    var self = this,
+        list = self.list,
+        prev = self.prev;
+
+    // If self is detached, return false.
+    if (!list) {
+        return false;
+    }
+
+    // Detach the prependee.
+    item.detach();
+
+    // If self has a previous item...
+    if (prev) {
+        // ...link the prependees previous item, to selfs previous item.
+        item.prev = prev;
+
+        // ...link the previous items next item, to self.
+        prev.next = item;
+    }
+
+    // Set the prependees next item to self.
+    item.next = self;
+
+    // Set the prependees parent list to selfs parent list.
+    item.list = list;
+
+    // Set the previous item of self to the prependee.
+    self.prev = item;
+
+    // If self is the first item in the parent list, link the lists first item
+    // to the prependee.
+    if (self === list.head) {
+        list.head = item;
+    }
+
+    // If the the parent list has no last item, link the lists last item to
+    // self.
+    if (!list.tail) {
+        list.tail = self;
+    }
+
+    // Return the prependee.
+    return item;
+};
+
+/**
+ * Appends the given item *after* the item operated on.
+ * @name ListItem#append
+ * @param {ListItem} item - The item to append.
+ * @returns {ListItem} - The item operated on, or false when that item is not
+ * attached.
+ */
+ListItemPrototype.append = function (item) {
+    // If item is falsey, return false.
+    if (!item || !item.append || !item.prepend || !item.detach) {
+        throw new Error(errorMessage + 'Item#append`.');
+    }
+
+    // Cache self, the parent list, and the next item.
+    var self = this,
+        list = self.list,
+        next = self.next;
+
+    // If self is detached, return false.
+    if (!list) {
+        return false;
+    }
+
+    // Detach the appendee.
+    item.detach();
+
+    // If self has a next item...
+    if (next) {
+        // ...link the appendees next item, to selfs next item.
+        item.next = next;
+
+        // ...link the next items previous item, to the appendee.
+        next.prev = item;
+    }
+
+    // Set the appendees previous item to self.
+    item.prev = self;
+
+    // Set the appendees parent list to selfs parent list.
+    item.list = list;
+
+    // Set the next item of self to the appendee.
+    self.next = item;
+
+    // If the the parent list has no last item or if self is the parent lists
+    // last item, link the lists last item to the appendee.
+    if (self === list.tail || !list.tail) {
+        list.tail = item;
+    }
+
+    // Return the appendee.
+    return item;
+};
+
+/**
+ * Expose `List`.
+ */
+
+module.exports = List;
+
+},{}],42:[function(require,module,exports){
+'use strict';
+
+module.exports = require('./_source/linked-list.js');
+
+},{"./_source/linked-list.js":41}],43:[function(require,module,exports){
+//     uuid.js
+//
+//     Copyright (c) 2010-2012 Robert Kieffer
+//     MIT License - http://opensource.org/licenses/mit-license.php
+
+(function() {
+  var _global = this;
+
+  // Unique ID creation requires a high quality random # generator.  We feature
+  // detect to determine the best RNG source, normalizing to a function that
+  // returns 128-bits of randomness, since that's what's usually required
+  var _rng;
+
+  // Node.js crypto-based RNG - http://nodejs.org/docs/v0.6.2/api/crypto.html
+  //
+  // Moderately fast, high quality
+  if (typeof(_global.require) == 'function') {
+    try {
+      var _rb = _global.require('crypto').randomBytes;
+      _rng = _rb && function() {return _rb(16);};
+    } catch(e) {}
+  }
+
+  if (!_rng && _global.crypto && crypto.getRandomValues) {
+    // WHATWG crypto-based RNG - http://wiki.whatwg.org/wiki/Crypto
+    //
+    // Moderately fast, high quality
+    var _rnds8 = new Uint8Array(16);
+    _rng = function whatwgRNG() {
+      crypto.getRandomValues(_rnds8);
+      return _rnds8;
+    };
+  }
+
+  if (!_rng) {
+    // Math.random()-based (RNG)
+    //
+    // If all else fails, use Math.random().  It's fast, but is of unspecified
+    // quality.
+    var  _rnds = new Array(16);
+    _rng = function() {
+      for (var i = 0, r; i < 16; i++) {
+        if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
+        _rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
+      }
+
+      return _rnds;
+    };
+  }
+
+  // Buffer class to use
+  var BufferClass = typeof(_global.Buffer) == 'function' ? _global.Buffer : Array;
+
+  // Maps for number <-> hex string conversion
+  var _byteToHex = [];
+  var _hexToByte = {};
+  for (var i = 0; i < 256; i++) {
+    _byteToHex[i] = (i + 0x100).toString(16).substr(1);
+    _hexToByte[_byteToHex[i]] = i;
+  }
+
+  // **`parse()` - Parse a UUID into it's component bytes**
+  function parse(s, buf, offset) {
+    var i = (buf && offset) || 0, ii = 0;
+
+    buf = buf || [];
+    s.toLowerCase().replace(/[0-9a-f]{2}/g, function(oct) {
+      if (ii < 16) { // Don't overflow!
+        buf[i + ii++] = _hexToByte[oct];
+      }
+    });
+
+    // Zero out remaining bytes if string was short
+    while (ii < 16) {
+      buf[i + ii++] = 0;
+    }
+
+    return buf;
+  }
+
+  // **`unparse()` - Convert UUID byte array (ala parse()) into a string**
+  function unparse(buf, offset) {
+    var i = offset || 0, bth = _byteToHex;
+    return  bth[buf[i++]] + bth[buf[i++]] +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] +
+            bth[buf[i++]] + bth[buf[i++]] +
+            bth[buf[i++]] + bth[buf[i++]];
+  }
+
+  // **`v1()` - Generate time-based UUID**
+  //
+  // Inspired by https://github.com/LiosK/UUID.js
+  // and http://docs.python.org/library/uuid.html
+
+  // random #'s we need to init node and clockseq
+  var _seedBytes = _rng();
+
+  // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
+  var _nodeId = [
+    _seedBytes[0] | 0x01,
+    _seedBytes[1], _seedBytes[2], _seedBytes[3], _seedBytes[4], _seedBytes[5]
+  ];
+
+  // Per 4.2.2, randomize (14 bit) clockseq
+  var _clockseq = (_seedBytes[6] << 8 | _seedBytes[7]) & 0x3fff;
+
+  // Previous uuid creation time
+  var _lastMSecs = 0, _lastNSecs = 0;
+
+  // See https://github.com/broofa/node-uuid for API details
+  function v1(options, buf, offset) {
+    var i = buf && offset || 0;
+    var b = buf || [];
+
+    options = options || {};
+
+    var clockseq = options.clockseq != null ? options.clockseq : _clockseq;
+
+    // UUID timestamps are 100 nano-second units since the Gregorian epoch,
+    // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
+    // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
+    // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
+    var msecs = options.msecs != null ? options.msecs : new Date().getTime();
+
+    // Per 4.2.1.2, use count of uuid's generated during the current clock
+    // cycle to simulate higher resolution clock
+    var nsecs = options.nsecs != null ? options.nsecs : _lastNSecs + 1;
+
+    // Time since last uuid creation (in msecs)
+    var dt = (msecs - _lastMSecs) + (nsecs - _lastNSecs)/10000;
+
+    // Per 4.2.1.2, Bump clockseq on clock regression
+    if (dt < 0 && options.clockseq == null) {
+      clockseq = clockseq + 1 & 0x3fff;
+    }
+
+    // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
+    // time interval
+    if ((dt < 0 || msecs > _lastMSecs) && options.nsecs == null) {
+      nsecs = 0;
+    }
+
+    // Per 4.2.1.2 Throw error if too many uuids are requested
+    if (nsecs >= 10000) {
+      throw new Error('uuid.v1(): Can\'t create more than 10M uuids/sec');
+    }
+
+    _lastMSecs = msecs;
+    _lastNSecs = nsecs;
+    _clockseq = clockseq;
+
+    // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
+    msecs += 12219292800000;
+
+    // `time_low`
+    var tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
+    b[i++] = tl >>> 24 & 0xff;
+    b[i++] = tl >>> 16 & 0xff;
+    b[i++] = tl >>> 8 & 0xff;
+    b[i++] = tl & 0xff;
+
+    // `time_mid`
+    var tmh = (msecs / 0x100000000 * 10000) & 0xfffffff;
+    b[i++] = tmh >>> 8 & 0xff;
+    b[i++] = tmh & 0xff;
+
+    // `time_high_and_version`
+    b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
+    b[i++] = tmh >>> 16 & 0xff;
+
+    // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
+    b[i++] = clockseq >>> 8 | 0x80;
+
+    // `clock_seq_low`
+    b[i++] = clockseq & 0xff;
+
+    // `node`
+    var node = options.node || _nodeId;
+    for (var n = 0; n < 6; n++) {
+      b[i + n] = node[n];
+    }
+
+    return buf ? buf : unparse(b);
+  }
+
+  // **`v4()` - Generate random UUID**
+
+  // See https://github.com/broofa/node-uuid for API details
+  function v4(options, buf, offset) {
+    // Deprecated - 'format' argument, as supported in v1.2
+    var i = buf && offset || 0;
+
+    if (typeof(options) == 'string') {
+      buf = options == 'binary' ? new BufferClass(16) : null;
+      options = null;
+    }
+    options = options || {};
+
+    var rnds = options.random || (options.rng || _rng)();
+
+    // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+    rnds[6] = (rnds[6] & 0x0f) | 0x40;
+    rnds[8] = (rnds[8] & 0x3f) | 0x80;
+
+    // Copy bytes to buffer, if provided
+    if (buf) {
+      for (var ii = 0; ii < 16; ii++) {
+        buf[i + ii] = rnds[ii];
+      }
+    }
+
+    return buf || unparse(rnds);
+  }
+
+  // Export public API
+  var uuid = v4;
+  uuid.v1 = v1;
+  uuid.v4 = v4;
+  uuid.parse = parse;
+  uuid.unparse = unparse;
+  uuid.BufferClass = BufferClass;
+
+  if (typeof(module) != 'undefined' && module.exports) {
+    // Publish as node.js module
+    module.exports = uuid;
+  } else  if (typeof define === 'function' && define.amd) {
+    // Publish as AMD module
+    define(function() {return uuid;});
+ 
+
+  } else {
+    // Publish as global (in browsers)
+    var _previousRoot = _global.uuid;
+
+    // **`noConflict()` - (browser only) to reset global 'uuid' var**
+    uuid.noConflict = function() {
+      _global.uuid = _previousRoot;
+      return uuid;
+    };
+
+    _global.uuid = uuid;
+  }
+}).call(this);
+
+},{}]},{},[4])(4)
 });
