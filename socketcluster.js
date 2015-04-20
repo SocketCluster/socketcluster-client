@@ -776,6 +776,8 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   var self = this;
   
   if (this.state == this.CLOSED) {
+    this._clearAllSocketBindings();
+    
     this.state = this.CONNECTING;
     
     var socket;
@@ -788,26 +790,34 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     this.socket = socket;
     
     socket.on('open', function () {
-      self._onSCOpen(socket);
+      if (socket == self.socket) {
+        self._onSCOpen();
+      }
     });
     
     socket.on('error', function (err) {
-      self._onSCError(err);
+      if (socket == self.socket) {
+        self._onSCError(err);
+      }
     });
     
     socket.on('close', function () {
-      self._onSCClose(socket, self.RECONNECT_DELAYED);
+      if (socket == self.socket) {
+        self._onSCClose(self.RECONNECT_DELAYED);
+      }
     });
     
     socket.on('message', function (message) {
-      self._onSCMessage(socket, message);
+      if (socket == self.socket) {
+        self._onSCMessage(message);
+      }
     });
   }
 };
 
 SCSocket.prototype.disconnect = function (reason) {
   if (this.state == this.OPEN) {
-    this._onSCClose(this.socket);
+    this._onSCClose();
     this.socket.close();
   }
 };
@@ -816,7 +826,7 @@ SCSocket.prototype._cleanupAlreadyReceived = function () {
   this._alreadyReceivedManager.extractExpiredKeys();
 };
 
-SCSocket.prototype._onSCOpen = function (socket) {
+SCSocket.prototype._onSCOpen = function () {
   var self = this;
   
   this.state = this.OPEN;
@@ -827,21 +837,21 @@ SCSocket.prototype._onSCOpen = function (socket) {
     self._cleanupAlreadyReceived();
   }, this.deliveryTrackingCheckInterval);
 
-  this._resubscribe(socket);
+  this._resubscribe();
   Emitter.prototype.emit.call(this, 'connect');
   
-  this._flushEmitBuffer(socket);
+  this._flushEmitBuffer();
   
   clearTimeout(this._initTimeoutTicker);
   
   // In case 'ready' event isn't triggered on time
   this._initTimeoutTicker = setTimeout(function () {
-    socket.close();
+    self.socket.close();
     var error = new Error("Client socket initialization timed out - Client did not receive a 'ready' event");
     error.type = 'timeout';
     
     self._onSCError(error);
-    self._onSCClose(socket, self.RECONNECT_DELAYED);
+    self._onSCClose(self.RECONNECT_DELAYED);
   }, this.initTimeout);
 };
 
@@ -900,12 +910,18 @@ SCSocket.prototype._suspendSubscriptions = function () {
   }
 };
 
+SCSocket.prototype._clearAllSocketBindings = function (code, data) {
+  clearTimeout(this._initTimeoutTicker);
+  clearTimeout(this._reconnectTimeout);
+  clearInterval(this._alreadyReceivedCleanupInterval);
+};
+
 // The reconnect argument can be:
 // RECONNECT_IMMEDIATE: 'immediate'
 // RECONNECT_DELAYED: 'delayed'
 // or null (no reconnect)
-SCSocket.prototype._onSCClose = function (socket, reconnect) {
-  clearInterval(this._alreadyReceivedCleanupInterval);
+SCSocket.prototype._onSCClose = function (reconnect) {
+  this._clearAllSocketBindings();
   this._alreadyReceivedManager.clear();
   
   if (this.state != this.CLOSED) {
@@ -916,6 +932,7 @@ SCSocket.prototype._onSCClose = function (socket, reconnect) {
     this._suspendSubscriptions();
     this.state = this.CLOSED;
 
+    var socket = this.socket;
     socket.removeListener('open');
     socket.removeListener('error');
     socket.removeListener('close');
@@ -960,7 +977,7 @@ SCSocket.prototype._getCookie = function (name) {
   }
 };
 
-SCSocket.prototype._onSCMessage = function (socket, message) {
+SCSocket.prototype._onSCMessage = function (message) {
   Emitter.prototype.emit.call(this, 'message', message);
 
   var obj;
@@ -1052,7 +1069,7 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
       clearTimeout(this._initTimeoutTicker);
       Emitter.prototype.emit.call(this, obj.event, obj.data);
     } else if (obj.event == 'pingTimeout') {
-      this._onSCClose(socket, this.RECONNECT_IMMEDIATE);
+      this._onSCClose(this.RECONNECT_IMMEDIATE);
     } else {
       var response = new Response(this, obj.cid);
       Emitter.prototype.emit.call(this, obj.event, obj.data, function (error, data) {
@@ -1060,7 +1077,7 @@ SCSocket.prototype._onSCMessage = function (socket, message) {
       });
     }
   } else if (obj.disconnect) {
-    this._onSCClose(socket);
+    this._onSCClose();
   } else if (obj.rid != null) {
     var ret = this._callbackMap[obj.rid];
     if (ret) {
@@ -1153,29 +1170,21 @@ SCSocket.prototype.stringify = function (object) {
   return this.JSON.stringify(this._convertBuffersToBase64(object));
 };
 
-SCSocket.prototype._send = function (socket, data, options) {
-  if (!socket || socket.readyState != this.OPEN) {
+SCSocket.prototype.send = function (data, options) {
+  if (this.socket.readyState != this.OPEN) {
     var error = new Error('Failed to send - Underlying connection was not open');
     this._onSCError(error);
-    this._onSCClose(socket, this.RECONNECT_DELAYED);
+    this._onSCClose(this.RECONNECT_DELAYED);
   } else {
-    socket.send(data, options);
+    this.socket.send(data, options);
   }
 };
 
-SCSocket.prototype._sendObject = function (socket, object, options) {
-  this._send(socket, this.stringify(object), options);
-};
-
-SCSocket.prototype.send = function (data, options) {
-  this._send(this.socket, data, options);
-};
-
 SCSocket.prototype.sendObject = function (object, options) {
-  this._sendObject(this.socket, object, options);
+  this.send(this.stringify(object), options);
 };
 
-SCSocket.prototype._emitRaw = function (socket, eventObject) {
+SCSocket.prototype._emitRaw = function (eventObject) {
   eventObject.cid = this._nextCallId();
   
   if (eventObject.callback) {
@@ -1188,10 +1197,10 @@ SCSocket.prototype._emitRaw = function (socket, eventObject) {
     cid: eventObject.cid
   };
   
-  this._sendObject(socket, simpleEventObject);
+  this.sendObject(simpleEventObject);
 };
 
-SCSocket.prototype._flushEmitBuffer = function (socket) {
+SCSocket.prototype._flushEmitBuffer = function () {
   var currentNode = this._emitBuffer.head;
   var nextNode;
 
@@ -1199,7 +1208,7 @@ SCSocket.prototype._flushEmitBuffer = function (socket) {
     nextNode = currentNode.next;
     var eventObject = currentNode.data;
     currentNode.detach();
-    this._emitRaw(socket, eventObject);
+    this._emitRaw(eventObject);
     currentNode = nextNode;
   }
 };
@@ -1226,7 +1235,7 @@ SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
 
 // Emit directly without appending to emitBuffer
 // The last two optional arguments (a and b) can be options and/or callback
-SCSocket.prototype._emitDirect = function (socket, event, data, a, b) {
+SCSocket.prototype._emitDirect = function (event, data, a, b) {
   var self = this;
   
   var callback, options;
@@ -1261,14 +1270,14 @@ SCSocket.prototype._emitDirect = function (socket, event, data, a, b) {
   }
   
   if (this.state == this.OPEN) {
-    this._emitRaw(socket, eventObject);
+    this._emitRaw(eventObject);
   }
 };
 
-SCSocket.prototype._emit = function (socket, event, data, callback) {
+SCSocket.prototype._emit = function (event, data, callback) {
   var self = this;
   
-  if (this.state == this.CLOSED || socket.readyState == socket.CLOSED) {
+  if (this.state == this.CLOSED) {
     this.connect();
   }
   var eventObject = {
@@ -1289,13 +1298,13 @@ SCSocket.prototype._emit = function (socket, event, data, callback) {
   this._emitBuffer.append(eventNode);
   
   if (this.state == this.OPEN) {
-    this._flushEmitBuffer(socket);
+    this._flushEmitBuffer();
   }
 };
 
 SCSocket.prototype.emit = function (event, data, callback) {
   if (this._localEvents[event] == null) {
-    this._emit(this.socket, event, data, callback);
+    this._emit(event, data, callback);
   } else {
     Emitter.prototype.emit.call(this, event, data);
   }
@@ -1328,7 +1337,7 @@ SCSocket.prototype.publish = function () {
   });
 };
 
-SCSocket.prototype._retrySubscribe = function (socket, channel) {
+SCSocket.prototype._retrySubscribe = function (channel) {
   var self = this;
   
   if (this.state == this.OPEN) {
@@ -1348,23 +1357,23 @@ SCSocket.prototype._retrySubscribe = function (socket, channel) {
     clearTimeout(channel.retrySubscribeTimeoutTicker);
     channel.retrySubscribeTimeoutTicker = setTimeout(function () {
       if (channel.state == channel.PENDING) {
-        self._trySubscribe(socket, channel);
+        self._trySubscribe(channel);
       }
     }, timeout);
   }
 };
 
-SCSocket.prototype._trySubscribe = function (socket, channel) {
+SCSocket.prototype._trySubscribe = function (channel) {
   var self = this;
   
   if (this.state == this.OPEN) {
     var options = {
       errorDetails: 'Channel: ' + channel.name
     };
-    this._emitDirect(socket, 'subscribe', channel.name, options, function (err) {
+    this._emitDirect('subscribe', channel.name, options, function (err) {
       if (err) {
         if (err.type == 'timeout') {
-          self._retrySubscribe(socket, channel);
+          self._retrySubscribe(channel);
         } else {
           self._triggerChannelSubscribeFail(err, channel);
         }
@@ -1389,13 +1398,13 @@ SCSocket.prototype.subscribe = function (channelName) {
     channel.state = channel.PENDING;
     
     channel.subscribeAttempts = 0;
-    this._trySubscribe(this.socket, channel);
+    this._trySubscribe(channel);
   }
   
   return channel;
 };
 
-SCSocket.prototype._retryUnsubscribe = function (socket, channel) {
+SCSocket.prototype._retryUnsubscribe = function (channel) {
   var self = this;
   
   if (this.state == this.OPEN) {
@@ -1416,22 +1425,22 @@ SCSocket.prototype._retryUnsubscribe = function (socket, channel) {
     channel.retryUnsubscribeTimeoutTicker = setTimeout(function () {
       // Only unsubscribe from server if client channel is in UNSUBSCRIBED state
       if (channel.state == channel.UNSUBSCRIBED) {
-        self._tryUnsubscribe(socket, channel);
+        self._tryUnsubscribe(channel);
       }
     }, timeout);
   }
 };
 
-SCSocket.prototype._tryUnsubscribe = function (socket, channel) {
+SCSocket.prototype._tryUnsubscribe = function (channel) {
   var self = this;
   
   if (this.state == this.OPEN) {
     var options = {
       errorDetails: 'Channel: ' + channel.name
     };
-    this._emitDirect(socket, 'unsubscribe', channel.name, options, function (err) {
+    this._emitDirect('unsubscribe', channel.name, options, function (err) {
       if (err) {
-        self._retryUnsubscribe(socket, channel);
+        self._retryUnsubscribe(channel);
       } else {
         channel.unsubscribeAttempts = 0;
       }
@@ -1449,7 +1458,7 @@ SCSocket.prototype.unsubscribe = function (channelName) {
       this._triggerChannelUnsubscribe(channel);
       
       channel.unsubscribeAttempts = 0;
-      this._tryUnsubscribe(this.socket, channel);
+      this._tryUnsubscribe(channel);
     }
   }
 };
@@ -1539,7 +1548,7 @@ SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
   }
 };
 
-SCSocket.prototype._resubscribe = function (socket) {
+SCSocket.prototype._resubscribe = function () {
   var self = this;
   
   var channels = [];
@@ -1551,7 +1560,7 @@ SCSocket.prototype._resubscribe = function (socket) {
     (function (channel) {
       if (channel.state == channel.PENDING) {
         channel.subscribeAttempts = 0;
-        self._trySubscribe(socket, channel);
+        self._trySubscribe(channel);
       }
     })(this._channels[i]);
   }
