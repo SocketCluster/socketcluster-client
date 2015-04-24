@@ -15,9 +15,7 @@
   },
   "dependencies": {
     "emitter": "http://github.com/component/emitter/archive/1.0.1.tar.gz",
-    "expirymanager": "0.9.x",
     "linked-list": "0.1.0",
-    "node-uuid": "1.4.3",
     "ws": "0.7.1"
   },
   "readmeFilename": "README.md"
