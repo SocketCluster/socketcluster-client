@@ -14,11 +14,9 @@
     "url": "git://github.com/topcloud/socketcluster-client.git"
   },
   "dependencies": {
-    "engine.io-client": "1.4.3",
     "emitter": "http://github.com/component/emitter/archive/1.0.1.tar.gz",
-    "expirymanager": "0.9.x",
-    "linked-list": "0.1.0",
-    "node-uuid": "1.4.3"
+    "engine.io-client": "1.4.3",
+    "linked-list": "0.1.0"
   },
   "readmeFilename": "README.md"
 }
