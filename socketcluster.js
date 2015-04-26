@@ -1077,7 +1077,6 @@ SCSocket.prototype.subscribe = function (channelName) {
     channel = new SCChannel(channelName, this);
     this._channels[channelName] = channel;
   }
-  clearTimeout(channel.retryUnsubscribeTimeoutTicker);
 
   if (channel.state == channel.UNSUBSCRIBED) {
     channel.state = channel.PENDING;
