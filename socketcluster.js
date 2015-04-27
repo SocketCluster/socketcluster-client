@@ -364,6 +364,8 @@ var SCSocket = function (options) {
     'raw': 1,
     'fail': 1,
     'kickOut': 1,
+    'subscribe': 1,
+    'unsubscribe': 1,
     'setAuthToken': 1,
     'removeAuthToken': 1,
     'ready': 1
@@ -533,11 +535,11 @@ SCSocket.prototype.disconnect = function (code, data) {
   code = code || 1000;
   
   if (this.state == this.OPEN) {
-    this.sendObject({
-      disconnect: 1,
+    var packet = {
       code: code,
       data: data
-    });
+    };
+    this._emitDirect('#disconnect', packet);
     
     this._onSCClose(code, data);
     this.socket.close(code);
@@ -696,6 +698,10 @@ SCSocket.prototype._getCookie = function (name) {
   }
 };
 
+SCSocket.prototype._isPrivateTransmittedEvent = function (event) {
+  return !!event && event.indexOf('#') == 0;
+};
+
 SCSocket.prototype._onSCMessage = function (message) {
   Emitter.prototype.emit.call(this, 'message', message);
 
@@ -712,67 +718,77 @@ SCSocket.prototype._onSCMessage = function (message) {
     } catch (err) {
       obj = message;
     }
+    var eventName = obj.event;
     
-    if (obj.event) {
-      if (obj.event == 'fail') {
-        this._onSCError(obj.data);
-        
-      } else if (obj.event == 'publish') {
-        var publishData = obj.data;
-        var isSubscribed = this.isSubscribed(publishData.channel, true);
-        
-        if (isSubscribed) {
-          this._channelEmitter.emit(publishData.channel, publishData.data);
-        }
-      } else if (obj.event == 'kickOut') {
-        var kickData = obj.data || {};
-        var channelName = kickData.channel;
-        var channel = this._channels[channelName];
-        if (channel) {
-          Emitter.prototype.emit.call(this, obj.event, kickData.message, channelName);
-          channel.emit(obj.event, kickData.message, channelName);
-          this._triggerChannelUnsubscribe(channel);
-        }
-      } else if (obj.event == 'setAuthToken') {
-        var tokenData = obj.data;
-        var response = new Response(this, obj.cid);
-        
-        if (tokenData) {
-          this._tokenData = tokenData;
+    if (eventName) {
+      var eventData = obj.data || {};
+      
+      if (this._isPrivateTransmittedEvent(eventName)) {
+        if (eventName == '#fail') {
+          this._onSCError(eventData);
           
-          if (tokenData.persistent && tokenData.expiresInMinutes != null) {
-            this._setCookie(tokenData.cookieName, tokenData.token, tokenData.expiresInMinutes * 60);
-          } else {
-            this._setCookie(tokenData.cookieName, tokenData.token);
+        } else if (eventName == '#publish') {
+          var publishData = eventData;
+          var isSubscribed = this.isSubscribed(publishData.channel, true);
+          
+          if (isSubscribed) {
+            this._channelEmitter.emit(publishData.channel, publishData.data);
           }
-          Emitter.prototype.emit.call(this, obj.event, tokenData.token);
+        } else if (eventName == '#kickOut') {
+          var channelName = eventData.channel;
+          var channel = this._channels[channelName];
+          if (channel) {
+            Emitter.prototype.emit.call(this, 'kickOut', eventData.message, channelName);
+            channel.emit('kickOut', eventData.message, channelName);
+            this._triggerChannelUnsubscribe(channel);
+          }
+        } else if (eventName == '#setAuthToken') {
+          var tokenData = eventData;
+          var response = new Response(this, obj.cid);
+          
+          if (tokenData) {
+            this._tokenData = tokenData;
+            
+            if (tokenData.persistent && tokenData.expiresInMinutes != null) {
+              this._setCookie(tokenData.cookieName, tokenData.token, tokenData.expiresInMinutes * 60);
+            } else {
+              this._setCookie(tokenData.cookieName, tokenData.token);
+            }
+            Emitter.prototype.emit.call(this, 'setAuthToken', tokenData.token);
+            response.end();
+          } else {
+            response.error('No token data provided with setAuthToken event');
+          }
+        } else if (eventName == '#removeAuthToken') {
+          if (this._tokenData) {
+            this._setCookie(this._tokenData.cookieName, null, -1);
+            Emitter.prototype.emit.call(this, 'removeAuthToken');
+          }
+          var response = new Response(this, obj.cid);
           response.end();
+        } else if (eventName == '#ready') {
+          if (eventData) {
+            this.id = eventData.id;
+            this.pingTimeout = eventData.pingTimeout;
+          }
+          this._resetPingTimeout();
+          clearTimeout(this._initTimeoutTicker);
+          Emitter.prototype.emit.call(this, 'ready', eventData);
+          
+        } else if (eventName == '#disconnect') {
+          this._onSCClose(eventData.code, eventData.data);
         } else {
-          response.error('No token data provided with setAuthToken event');
+          var response = new Response(this, obj.cid);
+          Emitter.prototype.emit.call(this, eventName, eventData, function (error, data) {
+            response.callback(error, data);
+          });
         }
-      } else if (obj.event == 'removeAuthToken') {
-        if (this._tokenData) {
-          this._setCookie(this._tokenData.cookieName, null, -1);
-          Emitter.prototype.emit.call(this, obj.event);
-        }
-        var response = new Response(this, obj.cid);
-        response.end();
-      } else if (obj.event == 'ready') {
-        if (obj.data) {
-          this.id = obj.data.id;
-          this.pingTimeout = obj.data.pingTimeout;
-        }
-        this._resetPingTimeout();
-        clearTimeout(this._initTimeoutTicker);
-        Emitter.prototype.emit.call(this, obj.event, obj.data);
       } else {
         var response = new Response(this, obj.cid);
-        Emitter.prototype.emit.call(this, obj.event, obj.data, function (error, data) {
+        Emitter.prototype.emit.call(this, eventName, eventData, function (error, data) {
           response.callback(error, data);
         });
       }
-    } else if (obj.disconnect) {
-      this._onSCClose(obj.code, obj.data);
     } else if (obj.rid != null) {
       var ret = this._callbackMap[obj.rid];
       if (ret) {
@@ -1015,7 +1031,7 @@ SCSocket.prototype.publish = function (channelName, data, callback) {
     channel: channelName,
     data: data
   };
-  this.emit('publish', pubData, function (err) {
+  this.emit('#publish', pubData, function (err) {
     callback && callback(err);
   });
 };
@@ -1060,7 +1076,7 @@ SCSocket.prototype._trySubscribe = function (channel) {
     // We never want to track both a pending subscribe and pending unsubscribe 
     // callback at the same time on the same channel - We only care about the latest action
     this._cancelPendingSubUnsubCallback(channel);
-    channel._lastSubUnsubCid = this._emitDirect('subscribe', channel.name, options, function (err) {
+    channel._lastSubUnsubCid = this._emitDirect('#subscribe', channel.name, options, function (err) {
       if (err) {
         self._triggerChannelSubscribeFail(err, channel);
       } else {
@@ -1116,7 +1132,7 @@ SCSocket.prototype._tryUnsubscribe = function (channel) {
     // so long as the connection remains open. If the connection closes,
     // the server will automatically unsubscribe the socket and thus complete
     // the operation on the server side.
-    channel._lastSubUnsubCid = this._emitDirect('unsubscribe', channel.name, options);
+    channel._lastSubUnsubCid = this._emitDirect('#unsubscribe', channel.name, options);
   }
 };
 
