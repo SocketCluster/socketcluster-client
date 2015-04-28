@@ -354,6 +354,19 @@ var SCSocket = function (options) {
   this.pingTimeout = this.ackTimeout;
   this.initTimeout = opts.initTimeout;
   
+  var maxTimeout = Math.pow(2, 31) - 1;
+  
+  var verifyDuration = function (propertyName) {
+    if (self[propertyName] > maxTimeout) {
+      throw new Error('The ' + propertyName +
+        ' value provided exceeded the maximum amount allowed');
+    }
+  };
+  
+  verifyDuration('ackTimeout');
+  verifyDuration('pingTimeout');
+  verifyDuration('initTimeout');
+  
   this._localEvents = {
     'open': 1,
     'connect': 1,
