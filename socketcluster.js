@@ -692,7 +692,7 @@ var SCSocket = function (options) {
     'kickOut': 1,
     'setAuthToken': 1,
     'removeAuthToken': 1,
-    'ready': 1
+    'status': 1
   };
   
   this._connectAttempts = 0;
@@ -810,10 +810,10 @@ SCSocket.prototype._onSCOpen = function () {
   
   clearTimeout(this._initTimeoutTicker);
   
-  // In case 'ready' event isn't triggered on time
+  // In case 'status' event isn't triggered on time
   this._initTimeoutTicker = setTimeout(function () {
     self.socket.close();
-    var error = new Error("Client socket initialization timed out - Client did not receive a 'ready' event");
+    var error = new Error("Client socket initialization timed out - Client did not receive a 'status' event");
     error.type = 'timeout';
     
     self._onSCError(error);
@@ -995,7 +995,7 @@ SCSocket.prototype._onSCMessage = function (message) {
       }
       var response = new Response(this, obj.cid);
       response.end();
-    } else if (obj.event == 'ready') {
+    } else if (obj.event == 'status') {
       if (obj.data) {
         this.id = obj.data.id;
       }
