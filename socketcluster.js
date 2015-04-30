@@ -350,7 +350,7 @@ var SCSocket = function (options) {
   this.ackTimeout = opts.ackTimeout;
   
   // pingTimeout will be ackTimeout at the start, but it will
-  // be updated with values provided by the 'ready' event
+  // be updated with values provided by the 'status' event
   this.pingTimeout = this.ackTimeout;
   this.initTimeout = opts.initTimeout;
   
@@ -381,7 +381,7 @@ var SCSocket = function (options) {
     'unsubscribe': 1,
     'setAuthToken': 1,
     'removeAuthToken': 1,
-    'ready': 1
+    'status': 1
   };
   
   this._connectAttempts = 0;
@@ -471,7 +471,7 @@ SCSocket.errorStatuses = {
   1011: 'Server encountered an unexpected fatal condition',
   4000: 'Server ping timed out',
   4001: 'Client pong timed out',
-  4002: "Client socket initialization timed out - Client did not receive a 'ready' event"
+  4002: "Client socket initialization timed out - Client did not receive a 'status' event"
 };
 
 SCSocket.prototype.uri = function () {
@@ -573,7 +573,7 @@ SCSocket.prototype._onSCOpen = function () {
   
   clearTimeout(this._initTimeoutTicker);
   
-  // In case 'ready' event isn't triggered on time
+  // In case 'status' event isn't triggered on time
   this._initTimeoutTicker = setTimeout(function () {
     self._onSCClose(4002);
     self.socket.close(4002);
@@ -779,14 +779,14 @@ SCSocket.prototype._onSCMessage = function (message) {
           }
           var response = new Response(this, obj.cid);
           response.end();
-        } else if (eventName == '#ready') {
+        } else if (eventName == '#status') {
           if (eventData) {
             this.id = eventData.id;
             this.pingTimeout = eventData.pingTimeout;
           }
           this._resetPingTimeout();
           clearTimeout(this._initTimeoutTicker);
-          Emitter.prototype.emit.call(this, 'ready', eventData);
+          Emitter.prototype.emit.call(this, 'status', eventData);
           
         } else if (eventName == '#disconnect') {
           this._onSCClose(eventData.code, eventData.data);
