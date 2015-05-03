@@ -181,12 +181,12 @@ exports.encode = exports.stringify = require('./encode');
 var SCSocket = require('./lib/scsocket');
 module.exports.SCSocket = SCSocket;
 
-module.exports.Emitter = require('emitter');
+module.exports.Emitter = require('component-emitter');
 
 module.exports.connect = function (options) {
   return new SCSocket(options);
 };
-},{"./lib/scsocket":8,"emitter":9}],5:[function(require,module,exports){
+},{"./lib/scsocket":8,"component-emitter":9}],5:[function(require,module,exports){
 module.exports.create = (function () {
   function F() {};
 
@@ -252,7 +252,7 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 },{}],7:[function(require,module,exports){
-var Emitter = require('emitter');
+var Emitter = require('component-emitter');
 
 if (!Object.create) {
   Object.create = require('./objectcreate');
@@ -307,10 +307,10 @@ SCChannel.prototype.destroy = function () {
 };
 
 module.exports = SCChannel;
-},{"./objectcreate":5,"emitter":9}],8:[function(require,module,exports){
+},{"./objectcreate":5,"component-emitter":9}],8:[function(require,module,exports){
 (function (global){
 var WebSocket = require('ws');
-var Emitter = require('emitter');
+var Emitter = require('component-emitter');
 var SCChannel = require('./scchannel');
 var Response = require('./response').Response;
 var querystring = require('querystring');
@@ -1244,13 +1244,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./objectcreate":5,"./response":6,"./scchannel":7,"emitter":9,"linked-list":12,"querystring":3,"ws":13}],9:[function(require,module,exports){
-
-/**
- * Module dependencies.
- */
-
-var index = require('indexof');
+},{"./objectcreate":5,"./response":6,"./scchannel":7,"component-emitter":9,"linked-list":11,"querystring":3,"ws":12}],9:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -1292,9 +1286,10 @@ function mixin(obj) {
  * @api public
  */
 
-Emitter.prototype.on = function(event, fn){
+Emitter.prototype.on =
+Emitter.prototype.addEventListener = function(event, fn){
   this._callbacks = this._callbacks || {};
-  (this._callbacks[event] = this._callbacks[event] || [])
+  (this._callbacks['$' + event] = this._callbacks['$' + event] || [])
     .push(fn);
   return this;
 };
@@ -1310,15 +1305,12 @@ Emitter.prototype.on = function(event, fn){
  */
 
 Emitter.prototype.once = function(event, fn){
-  var self = this;
-  this._callbacks = this._callbacks || {};
-
   function on() {
-    self.off(event, on);
+    this.off(event, on);
     fn.apply(this, arguments);
   }
 
-  fn._off = on;
+  on.fn = fn;
   this.on(event, on);
   return this;
 };
@@ -1335,7 +1327,8 @@ Emitter.prototype.once = function(event, fn){
 
 Emitter.prototype.off =
 Emitter.prototype.removeListener =
-Emitter.prototype.removeAllListeners = function(event, fn){
+Emitter.prototype.removeAllListeners =
+Emitter.prototype.removeEventListener = function(event, fn){
   this._callbacks = this._callbacks || {};
 
   // all
@@ -1345,18 +1338,24 @@ Emitter.prototype.removeAllListeners = function(event, fn){
   }
 
   // specific event
-  var callbacks = this._callbacks[event];
+  var callbacks = this._callbacks['$' + event];
   if (!callbacks) return this;
 
   // remove all handlers
   if (1 == arguments.length) {
-    delete this._callbacks[event];
+    delete this._callbacks['$' + event];
     return this;
   }
 
   // remove specific handler
-  var i = index(callbacks, fn._off || fn);
-  if (~i) callbacks.splice(i, 1);
+  var cb;
+  for (var i = 0; i < callbacks.length; i++) {
+    cb = callbacks[i];
+    if (cb === fn || cb.fn === fn) {
+      callbacks.splice(i, 1);
+      break;
+    }
+  }
   return this;
 };
 
@@ -1371,7 +1370,7 @@ Emitter.prototype.removeAllListeners = function(event, fn){
 Emitter.prototype.emit = function(event){
   this._callbacks = this._callbacks || {};
   var args = [].slice.call(arguments, 1)
-    , callbacks = this._callbacks[event];
+    , callbacks = this._callbacks['$' + event];
 
   if (callbacks) {
     callbacks = callbacks.slice(0);
@@ -1393,7 +1392,7 @@ Emitter.prototype.emit = function(event){
 
 Emitter.prototype.listeners = function(event){
   this._callbacks = this._callbacks || {};
-  return this._callbacks[event] || [];
+  return this._callbacks['$' + event] || [];
 };
 
 /**
@@ -1408,18 +1407,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{"indexof":10}],10:[function(require,module,exports){
-
-var indexOf = [].indexOf;
-
-module.exports = function(arr, obj){
-  if (indexOf) return arr.indexOf(obj);
-  for (var i = 0; i < arr.length; ++i) {
-    if (arr[i] === obj) return i;
-  }
-  return -1;
-};
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1807,12 +1795,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":11}],13:[function(require,module,exports){
+},{"./_source/linked-list.js":10}],12:[function(require,module,exports){
 
 /**
  * Module dependencies.
