@@ -178,6 +178,7 @@ exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
 },{"./decode":1,"./encode":2}],4:[function(require,module,exports){
+var pkg = require('./package.json');
 var SCSocket = require('./lib/scsocket');
 module.exports.SCSocket = SCSocket;
 
@@ -186,7 +187,10 @@ module.exports.Emitter = require('component-emitter');
 module.exports.connect = function (options) {
   return new SCSocket(options);
 };
-},{"./lib/scsocket":8,"component-emitter":9}],5:[function(require,module,exports){
+
+module.exports.version = pkg.version;
+
+},{"./lib/scsocket":8,"./package.json":13,"component-emitter":9}],5:[function(require,module,exports){
 module.exports.create = (function () {
   function F() {};
 
@@ -1071,25 +1075,25 @@ SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel) {
   }
 };
 
-// Cancel any pending subscribe or subscribe callback
-SCSocket.prototype._cancelPendingSubUnsubCallback = function (channel) {
-  var lastCid = channel._lastSubUnsubCid;
-  if (lastCid != null) {
-    delete this._callbackMap[lastCid];
+// Cancel any pending subscribe callback
+SCSocket.prototype._cancelPendingSubscribeCallback = function (channel) {
+  if (channel._pendingSubscriptionCid != null) {
+    delete this._callbackMap[channel._pendingSubscriptionCid];
+    delete channel._pendingSubscriptionCid;
   }
 };
 
 SCSocket.prototype._trySubscribe = function (channel) {
   var self = this;
   
-  if (this.state == this.OPEN) {
+  // We can only ever have one pending subscribe action at any given time on a channel
+  if (this.state == this.OPEN && channel._pendingSubscriptionCid == null) {
     var options = {
       noTimeout: true
     };
-    // We never want to track both a pending subscribe and pending unsubscribe 
-    // callback at the same time on the same channel - We only care about the latest action
-    this._cancelPendingSubUnsubCallback(channel);
-    channel._lastSubUnsubCid = this._emitDirect('#subscribe', channel.name, options, function (err) {
+
+    channel._pendingSubscriptionCid = this._emitDirect('#subscribe', channel.name, options, function (err) {
+      delete channel._pendingSubscriptionCid;
       if (err) {
         self._triggerChannelSubscribeFail(err, channel);
       } else {
@@ -1137,15 +1141,14 @@ SCSocket.prototype._tryUnsubscribe = function (channel) {
     var options = {
       noTimeout: true
     };
-    // We never want to track both a pending subscribe and pending unsubscribe 
-    // callback at the same time on the same channel - We only care about the latest action
-    this._cancelPendingSubUnsubCallback(channel);
+    // If there is a pending subscribe action, cancel the callback
+    this._cancelPendingSubscribeCallback(channel);
     
     // This operation cannot fail because the TCP protocol guarantees delivery
     // so long as the connection remains open. If the connection closes,
     // the server will automatically unsubscribe the socket and thus complete
     // the operation on the server side.
-    channel._lastSubUnsubCid = this._emitDirect('#unsubscribe', channel.name, options);
+    this._emitDirect('#unsubscribe', channel.name, options);
   }
 };
 
@@ -1844,6 +1847,30 @@ function ws(uri, protocols, opts) {
 }
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
+
+},{}],13:[function(require,module,exports){
+module.exports={
+  "name": "socketcluster-client",
+  "description": "SocketCluster JavaScript client",
+  "version": "2.2.20",
+  "homepage": "http://socketcluster.io",
+  "contributors": [
+    {
+      "name": "Jonathan Gros-Dubois",
+      "email": "grosjona@yahoo.com.au"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/topcloud/socketcluster-client.git"
+  },
+  "dependencies": {
+    "component-emitter": "1.2.0",
+    "linked-list": "0.1.0",
+    "ws": "0.7.1"
+  },
+  "readmeFilename": "README.md"
+}
 
 },{}]},{},[4])(4)
 });
