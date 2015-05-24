@@ -1862,7 +1862,7 @@ module.exports={
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/topcloud/socketcluster-client.git"
+    "url": "git://github.com/SocketCluster/socketcluster-client.git"
   },
   "dependencies": {
     "component-emitter": "1.2.0",
