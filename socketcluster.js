@@ -190,7 +190,7 @@ module.exports.connect = function (options) {
 
 module.exports.version = pkg.version;
 
-},{"./lib/scsocket":9,"./package.json":16,"sc-emitter":13}],5:[function(require,module,exports){
+},{"./lib/scsocket":8,"./package.json":17,"sc-emitter":14}],5:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -313,65 +313,9 @@ Response.prototype.callback = function (error, data) {
 module.exports.Response = Response;
 
 },{}],8:[function(require,module,exports){
-var SCEmitter = require('sc-emitter').SCEmitter;
-
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
-
-var SCChannel = function (name, socket) {
-  var self = this;
-  
-  SCEmitter.call(this);
-  
-  this.PENDING = 'pending';
-  this.SUBSCRIBED = 'subscribed';
-  this.UNSUBSCRIBED = 'unsubscribed';
-  
-  this.name = name;
-  this.state = this.UNSUBSCRIBED;
-  this.socket = socket;
-};
-
-SCChannel.prototype = Object.create(SCEmitter.prototype);
-
-SCChannel.prototype.getState = function () {
-  return this.state;
-};
-
-SCChannel.prototype.subscribe = function () {
-  this.socket.subscribe(this.name);
-};
-
-SCChannel.prototype.unsubscribe = function () {
-  this.socket.unsubscribe(this.name);
-};
-
-SCChannel.prototype.isSubscribed = function (includePending) {
-  return this.socket.isSubscribed(this.name, includePending);
-};
-
-SCChannel.prototype.publish = function (data, callback) {
-  this.socket.publish(this.name, data, callback);
-};
-
-SCChannel.prototype.watch = function (handler) {
-  this.socket.watch(this.name, handler);
-};
-
-SCChannel.prototype.unwatch = function (handler) {
-  this.socket.unwatch(this.name, handler);
-};
-
-SCChannel.prototype.destroy = function () {
-  this.socket.destroyChannel(this.name);
-};
-
-module.exports = SCChannel;
-},{"./objectcreate":6,"sc-emitter":13}],9:[function(require,module,exports){
 (function (global){
 var SCEmitter = require('sc-emitter').SCEmitter;
-var SCChannel = require('./scchannel');
+var SCChannel = require('sc-channel').SCChannel;
 var Response = require('./response').Response;
 var AuthEngine = require('./auth').AuthEngine;
 var SCTransport = require('./sctransport').SCTransport;
@@ -1084,7 +1028,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./auth":5,"./objectcreate":6,"./response":7,"./scchannel":8,"./sctransport":10,"linked-list":12,"querystring":3,"sc-emitter":13}],10:[function(require,module,exports){
+},{"./auth":5,"./objectcreate":6,"./response":7,"./sctransport":9,"linked-list":11,"querystring":3,"sc-channel":12,"sc-emitter":14}],9:[function(require,module,exports){
 var WebSocket = require('ws');
 var SCEmitter = require('sc-emitter').SCEmitter;
 var Response = require('./response').Response;
@@ -1446,7 +1390,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":7,"querystring":3,"sc-emitter":13,"ws":15}],11:[function(require,module,exports){
+},{"./response":7,"querystring":3,"sc-emitter":14,"ws":16}],10:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1834,12 +1778,71 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],12:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":11}],13:[function(require,module,exports){
+},{"./_source/linked-list.js":10}],12:[function(require,module,exports){
+var SCEmitter = require('sc-emitter').SCEmitter;
+
+if (!Object.create) {
+  Object.create = require('./objectcreate');
+}
+
+var SCChannel = function (name, client) {
+  var self = this;
+  
+  SCEmitter.call(this);
+  
+  this.PENDING = 'pending';
+  this.SUBSCRIBED = 'subscribed';
+  this.UNSUBSCRIBED = 'unsubscribed';
+  
+  this.name = name;
+  this.state = this.UNSUBSCRIBED;
+  this.client = client;
+};
+
+SCChannel.prototype = Object.create(SCEmitter.prototype);
+
+SCChannel.prototype.getState = function () {
+  return this.state;
+};
+
+SCChannel.prototype.subscribe = function () {
+  this.client.subscribe(this.name);
+};
+
+SCChannel.prototype.unsubscribe = function () {
+  this.client.unsubscribe(this.name);
+};
+
+SCChannel.prototype.isSubscribed = function (includePending) {
+  return this.client.isSubscribed(this.name, includePending);
+};
+
+SCChannel.prototype.publish = function (data, callback) {
+  this.client.publish(this.name, data, callback);
+};
+
+SCChannel.prototype.watch = function (handler) {
+  this.client.watch(this.name, handler);
+};
+
+SCChannel.prototype.unwatch = function (handler) {
+  this.client.unwatch(this.name, handler);
+};
+
+SCChannel.prototype.destroy = function () {
+  this.client.destroyChannel(this.name);
+};
+
+module.exports.SCChannel = SCChannel;
+
+},{"./objectcreate":13,"sc-emitter":14}],13:[function(require,module,exports){
+module.exports=require(6)
+},{"C:\\node\\sc\\node_modules\\socketcluster-client\\lib\\objectcreate.js":6}],14:[function(require,module,exports){
 var Emitter = require('component-emitter');
 
 var SCEmitter = function () {
@@ -1868,7 +1871,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"component-emitter":14}],14:[function(require,module,exports){
+},{"component-emitter":15}],15:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -2031,7 +2034,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -2076,11 +2079,11 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.25",
+  "version": "2.2.26",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -2094,6 +2097,7 @@ module.exports={
   },
   "dependencies": {
     "linked-list": "0.1.0",
+    "sc-channel": "1.0.x",
     "sc-emitter": "1.0.x",
     "ws": "0.7.1"
   },

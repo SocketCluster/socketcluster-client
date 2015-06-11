@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.25",
+  "version": "2.2.26",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "linked-list": "0.1.0",
+    "sc-channel": "1.0.x",
     "sc-emitter": "1.0.x",
     "ws": "0.7.1"
   },
