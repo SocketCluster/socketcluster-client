@@ -190,7 +190,7 @@ module.exports.connect = function (options) {
 
 module.exports.version = pkg.version;
 
-},{"./lib/scsocket":8,"./package.json":17,"sc-emitter":14}],5:[function(require,module,exports){
+},{"./lib/scsocket":8,"./package.json":18,"sc-emitter":14}],5:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -1390,7 +1390,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":7,"querystring":3,"sc-emitter":14,"ws":16}],10:[function(require,module,exports){
+},{"./response":7,"querystring":3,"sc-emitter":14,"ws":17}],10:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1845,6 +1845,10 @@ module.exports=require(6)
 },{"C:\\node\\sc\\node_modules\\socketcluster-client\\lib\\objectcreate.js":6}],14:[function(require,module,exports){
 var Emitter = require('component-emitter');
 
+if (!Object.create) {
+  Object.create = require('./objectcreate');
+}
+
 var SCEmitter = function () {
   Emitter.call(this);
 };
@@ -1853,7 +1857,7 @@ SCEmitter.prototype = Object.create(Emitter.prototype);
 
 SCEmitter.prototype.emit = function (event) {
   if (event == 'error' && this.domain) {
-     // Emit the error on the domain if it has one.
+    // Emit the error on the domain if it has one.
     // See https://github.com/joyent/node/blob/ef4344311e19a4f73c031508252b21712b22fe8a/lib/events.js#L78-85
     
     var err = arguments[1];
@@ -1871,7 +1875,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"component-emitter":15}],15:[function(require,module,exports){
+},{"./objectcreate":16,"component-emitter":15}],15:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -2035,6 +2039,8 @@ Emitter.prototype.hasListeners = function(event){
 };
 
 },{}],16:[function(require,module,exports){
+module.exports=require(6)
+},{"C:\\node\\sc\\node_modules\\socketcluster-client\\lib\\objectcreate.js":6}],17:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -2079,7 +2085,7 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
