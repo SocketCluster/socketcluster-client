@@ -693,6 +693,7 @@ SCSocket.prototype._suspendSubscriptions = function () {
     } else {
       newState = channel.UNSUBSCRIBED;
     }
+    
     this._triggerChannelUnsubscribe(channel, newState);
   }
 };
@@ -909,6 +910,8 @@ SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
   } else {
     channel.state = channel.UNSUBSCRIBED;
   }
+  this._cancelPendingSubscribeCallback(channel);
+  
   if (oldState == channel.SUBSCRIBED) {
     channel.emit('unsubscribe', channelName);
     SCEmitter.prototype.emit.call(this, 'unsubscribe', channelName);
@@ -2089,7 +2092,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.26",
+  "version": "2.2.27",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
