@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.29",
+  "version": "2.2.30",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {

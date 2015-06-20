@@ -337,6 +337,7 @@ var SCSocket = function (options) {
   var opts = {
     port: null,
     autoReconnect: true,
+    autoProcessSubscriptions: true,
     ackTimeout: 10000,
     hostname: global.location && location.hostname,
     path: '/socketcluster/',
@@ -655,6 +656,8 @@ SCSocket.prototype._tryReconnect = function (initialDelay) {
 };
 
 SCSocket.prototype._onSCOpen = function (status) {
+  var self = this;
+  
   if (status) {
     this.id = status.id;
     this.pingTimeout = status.pingTimeout;
@@ -662,9 +665,16 @@ SCSocket.prototype._onSCOpen = function (status) {
   }
   
   this._connectAttempts = 0;
-  this._resubscribe();
+  if (this.options.autoProcessSubscriptions) {
+    this.processPendingSubscriptions();
+  }
   
-  SCEmitter.prototype.emit.call(this, 'connect', status);
+  // If the user invokes the callback while in autoProcessSubscriptions mode, it
+  // won't break anything - The processPendingSubscriptions() call will be a no-op.
+  SCEmitter.prototype.emit.call(this, 'connect', status, function () {
+    self.processPendingSubscriptions();
+  });
+  
   this._flushEmitBuffer();
 };
 
@@ -995,7 +1005,7 @@ SCSocket.prototype.isSubscribed = function (channel, includePending) {
   return !!channel && channel.state == channel.SUBSCRIBED;
 };
 
-SCSocket.prototype._resubscribe = function () {
+SCSocket.prototype.processPendingSubscriptions = function () {
   var self = this;
   
   var channels = [];
@@ -2092,7 +2102,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.29",
+  "version": "2.2.30",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
