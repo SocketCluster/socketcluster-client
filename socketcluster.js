@@ -1847,6 +1847,10 @@ SCChannel.prototype.unwatch = function (handler) {
   this.client.unwatch(this.name, handler);
 };
 
+SCChannel.prototype.watchers = function () {
+  return this.client.watchers(this.name);
+};
+
 SCChannel.prototype.destroy = function () {
   this.client.destroyChannel(this.name);
 };
