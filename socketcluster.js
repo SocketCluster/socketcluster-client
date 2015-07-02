@@ -605,16 +605,16 @@ SCSocket.prototype.disconnect = function (code, data) {
   }
 };
 
-// Perform client-initiated authentication by providing an encrypted token
+// Perform client-initiated authentication by providing an encrypted token string
 SCSocket.prototype.authenticate = function (encryptedAuthToken, callback) {
   var self = this;
   
   this.transport.emit('#authenticate', encryptedAuthToken, function (err, authStatus) {
     if (err) {
-      callback(err, authStatus);
+      callback && callback(err, authStatus);
     } else {
       self.auth.saveToken(self.options.authTokenName, encryptedAuthToken, {}, function (err) {
-        callback(err, authStatus);
+        callback && callback(err, authStatus);
         if (err) {
           self._onSCError(err);
         } else if (authStatus.isAuthenticated) {
@@ -2102,7 +2102,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.36",
+  "version": "2.2.37",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
