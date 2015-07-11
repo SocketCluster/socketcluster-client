@@ -609,7 +609,7 @@ SCSocket.prototype.disconnect = function (code, data) {
 SCSocket.prototype.authenticate = function (encryptedAuthToken, callback) {
   var self = this;
   
-  this.transport.emit('#authenticate', encryptedAuthToken, function (err, authStatus) {
+  this.emit('#authenticate', encryptedAuthToken, function (err, authStatus) {
     if (err) {
       callback && callback(err, authStatus);
     } else {
@@ -2102,7 +2102,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.37",
+  "version": "2.2.38",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
