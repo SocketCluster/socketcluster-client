@@ -2102,7 +2102,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.2.38",
+  "version": "2.3.0",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
