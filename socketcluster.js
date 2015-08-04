@@ -329,7 +329,9 @@ var SCSocket = function (options) {
     binaryType: 'arraybuffer'
   };
   for (var i in options) {
-    opts[i] = options[i];
+    if (options.hasOwnProperty(i)) {
+      opts[i] = options[i];
+    }
   }
   
   this.id = null;
@@ -690,16 +692,18 @@ SCSocket.prototype._onSCError = function (err) {
 SCSocket.prototype._suspendSubscriptions = function () {
   var channel, newState;
   for (var channelName in this._channels) {
-    channel = this._channels[channelName];
-    if (channel.state == channel.SUBSCRIBED ||
-      channel.state == channel.PENDING) {
+    if (this._channels.hasOwnProperty(channelName)) {
+      channel = this._channels[channelName];
+      if (channel.state == channel.SUBSCRIBED ||
+        channel.state == channel.PENDING) {
+        
+        newState = channel.PENDING;
+      } else {
+        newState = channel.UNSUBSCRIBED;
+      }
       
-      newState = channel.PENDING;
-    } else {
-      newState = channel.UNSUBSCRIBED;
+      this._triggerChannelUnsubscribe(channel, newState);
     }
-    
-    this._triggerChannelUnsubscribe(channel, newState);
   }
 };
 
@@ -975,17 +979,19 @@ SCSocket.prototype.subscriptions = function (includePending) {
   var subs = [];
   var channel, includeChannel;
   for (var channelName in this._channels) {
-    channel = this._channels[channelName];
-    
-    if (includePending) {
-      includeChannel = channel && (channel.state == channel.SUBSCRIBED || 
-        channel.state == channel.PENDING);
-    } else {
-      includeChannel = channel && channel.state == channel.SUBSCRIBED;
-    }
-    
-    if (includeChannel) {
-      subs.push(channelName);
+    if (this._channels.hasOwnProperty(channelName)) {
+      channel = this._channels[channelName];
+      
+      if (includePending) {
+        includeChannel = channel && (channel.state == channel.SUBSCRIBED || 
+          channel.state == channel.PENDING);
+      } else {
+        includeChannel = channel && channel.state == channel.SUBSCRIBED;
+      }
+      
+      if (includeChannel) {
+        subs.push(channelName);
+      }
     }
   }
   return subs;
@@ -1005,15 +1011,19 @@ SCSocket.prototype.processPendingSubscriptions = function () {
   
   var channels = [];
   for (var channelName in this._channels) {
-    channels.push(channelName);
+    if (this._channels.hasOwnProperty(channelName)) {
+      channels.push(channelName);
+    }
   }
   
   for (var i in this._channels) {
-    (function (channel) {
-      if (channel.state == channel.PENDING) {
-        self._trySubscribe(channel);
-      }
-    })(this._channels[i]);
+    if (this._channels.hasOwnProperty(i)) {
+      (function (channel) {
+        if (channel.state == channel.PENDING) {
+          self._trySubscribe(channel);
+        }
+      })(this._channels[i]);
+    }
   }
 };
 
@@ -2027,8 +2037,10 @@ var arrayBufferToBase64 = function (arraybuffer) {
 
 var isOwnDescendant = function (object, ancestors) {
   for (var i in ancestors) {
-    if (ancestors[i] === object) {
-      return true;
+    if (ancestors.hasOwnProperty(i)) {
+      if (ancestors[i] === object) {
+        return true;
+      }
     }
   }
   return false;
@@ -2055,11 +2067,15 @@ var convertBuffersToBase64 = function (object, ancestors) {
     };
   } else if (object instanceof Array) {
     for (var i in object) {
-      object[i] = convertBuffersToBase64(object[i], newAncestors);
+      if (object.hasOwnProperty(i)) {
+        object[i] = convertBuffersToBase64(object[i], newAncestors);
+      }
     }
   } else if (object instanceof Object) {
     for (var j in object) {
-      object[j] = convertBuffersToBase64(object[j], newAncestors);
+      if (object.hasOwnProperty(j)) {
+        object[j] = convertBuffersToBase64(object[j], newAncestors);
+      }
     }
   }
   return object;
@@ -2120,7 +2136,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.3.3",
+  "version": "2.3.7",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
