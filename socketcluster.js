@@ -1120,6 +1120,10 @@ SCTransport.prototype.open = function () {
   wsSocket.onmessage = function (message, flags) {
     self._onMessage(message.data);
   };
+  
+  // Capture and ignore errors, these errors will be handled
+  // in the onclose handler instead.
+  wsSocket.onerror = function (error) {};
 };
 
 SCTransport.prototype._onOpen = function () {
@@ -1162,6 +1166,7 @@ SCTransport.prototype._onClose = function (code, data) {
   delete this.socket.onopen;
   delete this.socket.onclose;
   delete this.socket.onmessage;
+  delete this.socket.onerror;
     
   if (this.state == this.OPEN) {
     this.state = this.CLOSED;
@@ -2136,7 +2141,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.3.7",
+  "version": "2.3.9",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
