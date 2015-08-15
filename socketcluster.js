@@ -756,7 +756,9 @@ SCSocket.prototype._onSCEvent = function (event, data, res) {
   if (handler) {
     handler.call(this, data, res);
   } else {
-    SCEmitter.prototype.emit.call(this, event, data, res);
+    SCEmitter.prototype.emit.call(this, event, data, function () {
+      res && res.callback.apply(res, arguments);
+    });
   }
 };
 
@@ -2141,7 +2143,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports={
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.3.9",
+  "version": "2.3.10",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
