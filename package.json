@@ -3,6 +3,7 @@
   "description": "Client side of SocketCluster",
   "version": "1.3.13",
   "homepage": "http://socketcluster.io",
+  "main": "socketcluster.js",
   "contributors": [
     {
       "name": "Jonathan Gros-Dubois",
