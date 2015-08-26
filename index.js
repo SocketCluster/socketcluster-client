@@ -1,4 +1,3 @@
-var pkg = require('./package.json');
 var SCSocket = require('./lib/scsocket');
 module.exports.SCSocket = SCSocket;
 
@@ -8,4 +7,4 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = pkg.version;
+module.exports.version = '2.3.11';

@@ -178,7 +178,6 @@ exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
 },{"./decode":1,"./encode":2}],4:[function(require,module,exports){
-var pkg = require('./package.json');
 var SCSocket = require('./lib/scsocket');
 module.exports.SCSocket = SCSocket;
 
@@ -188,9 +187,9 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = pkg.version;
+module.exports.version = '2.3.11';
 
-},{"./lib/scsocket":8,"./package.json":19,"sc-emitter":14}],5:[function(require,module,exports){
+},{"./lib/scsocket":8,"sc-emitter":14}],5:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -2138,32 +2137,6 @@ function ws(uri, protocols, opts) {
 }
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
-
-},{}],19:[function(require,module,exports){
-module.exports={
-  "name": "socketcluster-client",
-  "description": "SocketCluster JavaScript client",
-  "version": "2.3.10",
-  "homepage": "http://socketcluster.io",
-  "contributors": [
-    {
-      "name": "Jonathan Gros-Dubois",
-      "email": "grosjona@yahoo.com.au"
-    }
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/SocketCluster/socketcluster-client.git"
-  },
-  "dependencies": {
-    "linked-list": "0.1.0",
-    "sc-channel": "1.0.x",
-    "sc-emitter": "1.0.x",
-    "sc-formatter": "1.0.x",
-    "ws": "0.7.2"
-  },
-  "readmeFilename": "README.md"
-}
 
 },{}]},{},[4])(4)
 });

@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "2.3.10",
+  "version": "2.3.11",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -18,7 +18,7 @@
     "sc-channel": "1.0.x",
     "sc-emitter": "1.0.x",
     "sc-formatter": "1.0.x",
-    "ws": "0.7.2"
+    "ws": "0.8.0"
   },
   "readmeFilename": "README.md"
 }
