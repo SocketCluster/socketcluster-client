@@ -187,7 +187,7 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = '2.3.11';
+module.exports.version = '2.3.12';
 
 },{"./lib/scsocket":8,"sc-emitter":14}],5:[function(require,module,exports){
 (function (global){
@@ -1122,9 +1122,17 @@ SCTransport.prototype.open = function () {
     self._onMessage(message.data);
   };
   
-  // Capture and ignore errors, these errors will be handled
-  // in the onclose handler instead.
-  wsSocket.onerror = function (error) {};
+  wsSocket.onerror = function (error) {
+    // The onclose event will be called automatically after the onerror event 
+    // if the socket is connected - Otherwise, if it's in the middle of 
+    // connecting, we want to close it manually with a 1006 - This is necessary 
+    // to prevent inconsistent behavior when running the client in Node.js
+    // vs in a browser.
+    
+    if (self.state === self.CONNECTING) {
+      self._onClose(1006);
+    }
+  };
 };
 
 SCTransport.prototype._onOpen = function () {
