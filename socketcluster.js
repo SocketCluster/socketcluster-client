@@ -187,7 +187,7 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = '2.3.12';
+module.exports.version = '2.3.13';
 
 },{"./lib/scsocket":8,"sc-emitter":14}],5:[function(require,module,exports){
 (function (global){
@@ -376,6 +376,12 @@ var SCSocket = function (options) {
   
   this.options = opts;
   
+  this._cid = 1;
+  
+  this.options.callIdGenerator = function () {
+    return self._callIdGenerator();
+  };
+  
   if (this.options.autoReconnect) {
     if (this.options.autoReconnectOptions == null) {
       this.options.autoReconnectOptions = {};
@@ -521,6 +527,10 @@ SCSocket.prototype._privateEventHandlerMap = {
   '#disconnect': function (data) {
     this.transport.close(data.code, data.data);
   }
+};
+
+SCSocket.prototype._callIdGenerator = function () {
+  return this._cid++;
 };
 
 SCSocket.prototype.getState = function () {
@@ -681,7 +691,7 @@ SCSocket.prototype._onSCError = function (err) {
   // cannot interfere with a reconnect action.
   setTimeout(function () {
     if (self.listeners('error').length < 1) {
-        throw err;
+      throw err;
     } else {
       SCEmitter.prototype.emit.call(self, 'error', err);
     }
@@ -1048,7 +1058,7 @@ module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./auth":5,"./objectcreate":6,"./response":7,"./sctransport":9,"linked-list":11,"querystring":3,"sc-channel":12,"sc-emitter":14}],9:[function(require,module,exports){
-var WebSocket = require('ws');
+var WebSocket = require('sc-ws');
 var SCEmitter = require('sc-emitter').SCEmitter;
 var formatter = require('sc-formatter');
 var Response = require('./response').Response;
@@ -1059,8 +1069,8 @@ var SCTransport = function (authEngine, options) {
   this.auth = authEngine;
   this.options = options;
   this.pingTimeout = options.ackTimeout;
+  this.callIdGenerator = options.callIdGenerator;
   
-  this._cid = 1;
   this._pingTimeoutTicker = null;
   this._callbackMap = {};
   
@@ -1094,10 +1104,6 @@ SCTransport.prototype.uri = function () {
   }
 
   return schema + '://' + this.options.hostname + port + this.options.path + query;
-};
-
-SCTransport.prototype._nextCallId = function () {
-  return this._cid++;
 };
 
 SCTransport.prototype.open = function () {
@@ -1213,7 +1219,10 @@ SCTransport.prototype._onMessage = function (message) {
       if (eventObject) {
         clearTimeout(eventObject.timeout);
         delete this._callbackMap[obj.rid];
-        eventObject.callback(obj.error, obj.data);
+        
+        if (eventObject.callback) {
+          eventObject.callback(obj.error, obj.data);
+        }
       }
       if (obj.error) {
         this._onError(obj.error);
@@ -1264,7 +1273,7 @@ SCTransport.prototype.close = function (code, data) {
 };
 
 SCTransport.prototype.emitRaw = function (eventObject) {
-  eventObject.cid = this._nextCallId();
+  eventObject.cid = this.callIdGenerator();
   
   if (eventObject.callback) {
     this._callbackMap[eventObject.cid] = eventObject;
@@ -1358,7 +1367,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":7,"querystring":3,"sc-emitter":14,"sc-formatter":17,"ws":18}],10:[function(require,module,exports){
+},{"./response":7,"querystring":3,"sc-emitter":14,"sc-formatter":17,"sc-ws":18}],10:[function(require,module,exports){
 'use strict';
 
 /**
