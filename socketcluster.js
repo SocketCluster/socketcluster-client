@@ -569,7 +569,7 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
       // want to re-establish the connection as soon as possible.
       this._tryReconnect(0);
 
-    } else if (code == 1006 || code == 4003) {
+    } else if (code != 1000) {
       this._tryReconnect();
     }
   }
