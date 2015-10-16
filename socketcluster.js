@@ -928,14 +928,13 @@ SCSocket.prototype._setCookie = function (name, value, expirySeconds) {
     exdate = new Date();
     exdate.setTime(exdate.getTime() + Math.round(expirySeconds * 1000));
   }
-
   if(this.socket.hostname != 'localhost' && !this.socket.hostname.match(/^\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}$/)){
     var hostname = this.socket.hostname;
     var hostnameSplited = hostname.split('.');
     var hostnameSplitedLength = hostnameSplited.length;
     var host = '.'+hostnameSplited[hostnameSplitedLength-2]+'.'+hostnameSplited[hostnameSplitedLength-1];
   }
-  document.cookie = name + "=" + encodeURIComponent(value) + ((exdate) ? '; expires='+expire : "") + ((host) ? "; domain="+host : "") +  "; path=/";
+  document.cookie = name + "=" + encodeURIComponent(value) + ((exdate) ? '; expires='+exdate : "") + ((host) ? "; domain="+host : "") +  "; path=/";
 };
 
 SCSocket.prototype._getCookie = function (name) {
