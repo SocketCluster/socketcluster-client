@@ -7,4 +7,4 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = '2.3.15';
+module.exports.version = '2.3.16';
