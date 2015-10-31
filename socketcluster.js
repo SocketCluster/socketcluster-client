@@ -8,7 +8,7 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = '2.3.16';
+module.exports.version = '2.3.17';
 
 },{"./lib/scsocket":5,"sc-emitter":11}],2:[function(require,module,exports){
 (function (global){
@@ -16,8 +16,19 @@ var AuthEngine = function () {
   this._internalStorage = {};
 };
 
+AuthEngine.prototype._isLocalStorageEnabled = function () {
+  var err;
+  try {
+    // Some browsers will throw an error here if localStorage is disabled.
+    global.localStorage;
+  } catch (e) {
+    err = e;
+  }
+  return !err;
+};
+
 AuthEngine.prototype.saveToken = function (name, token, options, callback) {
-  if (global.localStorage) {
+  if (this._isLocalStorageEnabled() && global.localStorage) {
     global.localStorage.setItem(name, token);
   } else {
     this._internalStorage[name] = token;
@@ -26,7 +37,7 @@ AuthEngine.prototype.saveToken = function (name, token, options, callback) {
 };
 
 AuthEngine.prototype.removeToken = function (name, callback) {
-  if (global.localStorage) {
+  if (this._isLocalStorageEnabled() && global.localStorage) {
     global.localStorage.removeItem(name);
   }
   delete this._internalStorage[name];
@@ -37,7 +48,7 @@ AuthEngine.prototype.removeToken = function (name, callback) {
 AuthEngine.prototype.loadToken = function (name, callback) {
   var token;
 
-  if (global.localStorage) {
+  if (this._isLocalStorageEnabled() && global.localStorage) {
     token = global.localStorage.getItem(name);
   } else {
     token = this._internalStorage[name] || null;
@@ -46,6 +57,7 @@ AuthEngine.prototype.loadToken = function (name, callback) {
 };
 
 module.exports.AuthEngine = AuthEngine;
+
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],3:[function(require,module,exports){
 module.exports.create = (function () {
@@ -85,11 +97,11 @@ Response.prototype.error = function (error, data) {
   if (this.id) {
     var err;
     if (error instanceof Error) {
-      err = {name: error.name, message: error.message, stack: error.stack};
+      err = {name: error.name, message: error.message, stack: error.stack};      
     } else {
       err = error;
     }
-
+    
     var responseData = {
       rid: this.id,
       error: err
@@ -97,7 +109,7 @@ Response.prototype.error = function (error, data) {
     if (data !== undefined) {
       responseData.data = data;
     }
-
+    
     this._respond(responseData);
   }
 };
@@ -1604,13 +1616,13 @@ if (!Object.create) {
 
 var SCChannel = function (name, client) {
   var self = this;
-
+  
   SCEmitter.call(this);
-
+  
   this.PENDING = 'pending';
   this.SUBSCRIBED = 'subscribed';
   this.UNSUBSCRIBED = 'unsubscribed';
-
+  
   this.name = name;
   this.state = this.UNSUBSCRIBED;
   this.client = client;
@@ -1675,9 +1687,9 @@ SCEmitter.prototype.emit = function (event) {
   if (event == 'error' && this.domain) {
     // Emit the error on the domain if it has one.
     // See https://github.com/joyent/node/blob/ef4344311e19a4f73c031508252b21712b22fe8a/lib/events.js#L78-85
-
+    
     var err = arguments[1];
-
+    
     if (!err) {
       err = new Error('Uncaught, unspecified "error" event.');
     }
@@ -1865,7 +1877,7 @@ module.exports.parse = function (input) {
    return null;
   }
   var message = input.toString();
-
+  
   try {
     return JSON.parse(message);
   } catch (err) {}
@@ -1912,7 +1924,7 @@ var convertBuffersToBase64 = function (object, ancestors) {
     throw new Error('Cannot traverse circular structure');
   }
   var newAncestors = ancestors.concat([object]);
-
+  
   if (global.ArrayBuffer && object instanceof global.ArrayBuffer) {
     object = {
       base64: true,
