@@ -8,7 +8,7 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = '2.3.17';
+module.exports.version = '2.3.18';
 
 },{"./lib/scsocket":5,"sc-emitter":11}],2:[function(require,module,exports){
 (function (global){
@@ -877,6 +877,9 @@ SCSocket.prototype.processPendingSubscriptions = function () {
 };
 
 SCSocket.prototype.watch = function (channelName, handler) {
+  if (typeof handler != 'function') {
+    throw new Error('No handler function was provided');
+  }
   this._channelEmitter.on(channelName, handler);
 };
 
