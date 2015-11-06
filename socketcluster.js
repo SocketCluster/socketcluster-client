@@ -683,9 +683,7 @@ SCSocket.prototype.publish = function (channelName, data, callback) {
     channel: channelName,
     data: data
   };
-  this.emit('#publish', pubData, function (err) {
-    callback && callback(err);
-  });
+  this.emit('#publish', pubData, callback);
 };
 
 SCSocket.prototype._triggerChannelSubscribe = function (channel) {
