@@ -8,7 +8,7 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = '2.3.18';
+module.exports.version = '2.4.1';
 
 },{"./lib/scsocket":5,"sc-emitter":11}],2:[function(require,module,exports){
 (function (global){
