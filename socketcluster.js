@@ -8,7 +8,7 @@ module.exports.connect = function (options) {
   return new SCSocket(options);
 };
 
-module.exports.version = '2.4.1';
+module.exports.version = '3.0.0';
 
 },{"./lib/scsocket":5,"sc-emitter":11}],2:[function(require,module,exports){
 (function (global){
@@ -200,7 +200,8 @@ var SCSocket = function (options) {
     'subscribe': 1,
     'unsubscribe': 1,
     'authenticate': 1,
-    'removeAuthToken': 1
+    'removeAuthToken': 1,
+    'subscribeRequest': 1
   };
 
   this._connectAttempts = 0;
@@ -450,19 +451,19 @@ SCSocket.prototype.disconnect = function (code, data) {
 };
 
 // Perform client-initiated authentication by providing an encrypted token string
-SCSocket.prototype.authenticate = function (encryptedAuthToken, callback) {
+SCSocket.prototype.authenticate = function (signedAuthToken, callback) {
   var self = this;
 
-  this.emit('#authenticate', encryptedAuthToken, function (err, authStatus) {
+  this.emit('#authenticate', signedAuthToken, function (err, authStatus) {
     if (err) {
       callback && callback(err, authStatus);
     } else {
-      self.auth.saveToken(self.options.authTokenName, encryptedAuthToken, {}, function (err) {
+      self.auth.saveToken(self.options.authTokenName, signedAuthToken, {}, function (err) {
         callback && callback(err, authStatus);
         if (err) {
           self._onSCError(err);
         } else if (authStatus.isAuthenticated) {
-          SCEmitter.prototype.emit.call(self, 'authenticate', encryptedAuthToken);
+          SCEmitter.prototype.emit.call(self, 'authenticate', signedAuthToken);
         }
       });
     }
@@ -740,6 +741,7 @@ SCSocket.prototype._trySubscribe = function (channel) {
         }
       }
     );
+    SCEmitter.prototype.emit.call(this, 'subscribeRequest', channel.name);
   }
 };
 
@@ -1040,10 +1042,10 @@ SCTransport.prototype._onMessage = function (message) {
   SCEmitter.prototype.emit.call(this, 'event', 'message', message);
 
   // If ping
-  if (message == '1') {
+  if (message == '#1') {
     this._resetPingTimeout();
     if (this.socket.readyState == this.socket.OPEN) {
-      this.socket.send('2');
+      this.socket.send('#2');
     }
   } else {
     var obj;
