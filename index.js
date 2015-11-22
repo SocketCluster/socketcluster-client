@@ -10,4 +10,4 @@ module.exports.connect = function (options) {
   return SCSocketCreator(options);
 };
 
-module.exports.version = '2.4.1';
+module.exports.version = '3.1.0';
