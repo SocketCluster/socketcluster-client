@@ -1,16 +1,23 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var SCSocket = require('./lib/scsocket');
+var SCSocketCreator = require('./lib/scsocketcreator');
+
+module.exports.SCSocketCreator = SCSocketCreator;
 module.exports.SCSocket = SCSocket;
 
 module.exports.SCEmitter = require('sc-emitter').SCEmitter;
 
 module.exports.connect = function (options) {
-  return new SCSocket(options);
+  return SCSocketCreator.connect(options);
 };
 
-module.exports.version = '3.0.0';
+module.exports.destroy = function (options) {
+  return SCSocketCreator.destroy(options);
+};
 
-},{"./lib/scsocket":5,"sc-emitter":11}],2:[function(require,module,exports){
+module.exports.version = '3.1.0';
+
+},{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -141,30 +148,10 @@ if (!Object.create) {
 var isBrowser = typeof window != 'undefined';
 
 
-var SCSocket = function (options) {
+var SCSocket = function (opts) {
   var self = this;
 
   SCEmitter.call(this);
-
-  var opts = {
-    port: null,
-    autoReconnect: true,
-    autoProcessSubscriptions: true,
-    ackTimeout: 10000,
-    hostname: global.location && location.hostname,
-    path: '/socketcluster/',
-    secure: global.location && location.protocol == 'https:',
-    timestampRequests: false,
-    timestampParam: 't',
-    authEngine: null,
-    authTokenName: 'socketCluster.authToken',
-    binaryType: 'arraybuffer'
-  };
-  for (var i in options) {
-    if (options.hasOwnProperty(i)) {
-      opts[i] = options[i];
-    }
-  }
 
   this.id = null;
   this.state = this.CLOSED;
@@ -222,6 +209,8 @@ var SCSocket = function (options) {
       this.options.autoReconnectOptions = {};
     }
 
+    // Add properties to the this.options.autoReconnectOptions object.
+    // We assign the reference to a reconnectOptions variable to avoid repetition.
     var reconnectOptions = this.options.autoReconnectOptions;
     if (reconnectOptions.initialDelay == null) {
       reconnectOptions.initialDelay = 10000;
@@ -253,9 +242,6 @@ var SCSocket = function (options) {
   if (typeof this.options.query == 'string') {
     this.options.query = querystring.parse(this.options.query);
   }
-
-  this.options.port = opts.port || (global.location && location.port ?
-    location.port : (this.options.secure ? 443 : 80));
 
   this.connect();
 
@@ -902,7 +888,76 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./auth":2,"./objectcreate":3,"./response":4,"./sctransport":6,"linked-list":8,"querystring":18,"sc-channel":9,"sc-emitter":11}],6:[function(require,module,exports){
+},{"./auth":2,"./objectcreate":3,"./response":4,"./sctransport":7,"linked-list":9,"querystring":19,"sc-channel":10,"sc-emitter":12}],6:[function(require,module,exports){
+(function (global){
+var SCSocket = require('./scsocket');
+
+var _connections = {};
+
+function getMultiplexId(isSecure, hostname, port, path) {
+  var protocolPrefix = isSecure ? 'https://' : 'http://';
+  return protocolPrefix + hostname + ':' + port + path;
+}
+
+function connect(options) {
+  var self = this;
+  options = options || {};
+  var isSecure = global.location && location.protocol == 'https:';
+  var opts = {
+    port: options.port || global.location && location.port ? location.port : isSecure ? 443 : 80,
+    autoReconnect: true,
+    autoProcessSubscriptions: true,
+    ackTimeout: 10000,
+    hostname: global.location && location.hostname,
+    path: '/socketcluster/',
+    secure: isSecure,
+    timestampRequests: false,
+    timestampParam: 't',
+    authEngine: null,
+    authTokenName: 'socketCluster.authToken',
+    binaryType: 'arraybuffer',
+    multiplex: true
+  };
+  for (var i in options) {
+    if (options.hasOwnProperty(i)) {
+      opts[i] = options[i];
+    }
+  }
+  var multiplexId = getMultiplexId(isSecure, opts.hostname, opts.port, opts.path);
+  if (opts.multiplex === false) {
+    return new SCSocket(opts);
+  }
+  if (!_connections[multiplexId]) {
+    _connections[multiplexId] = new SCSocket(opts);
+  }
+  return _connections[multiplexId];
+}
+
+function destroy(options) {
+  var self = this;
+  options = options || {};
+  var isSecure = global.location && location.protocol == 'https:';
+  var opts = {
+    port: options.port || global.location && location.port ? location.port : isSecure ? 443 : 80,
+    hostname: global.location && location.hostname,
+    path: '/socketcluster/'
+  };
+  for (var i in options) {
+    if (options.hasOwnProperty(i)) {
+      opts[i] = options[i];
+    }
+  }
+  var multiplexId = getMultiplexId(isSecure, opts.hostname, opts.port, opts.path);
+  delete _connections[multiplexId];
+}
+
+module.exports = {
+  connect: connect,
+  destroy: destroy
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./scsocket":5}],7:[function(require,module,exports){
 var WebSocket = require('sc-ws');
 var SCEmitter = require('sc-emitter').SCEmitter;
 var formatter = require('sc-formatter');
@@ -1221,7 +1276,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":4,"querystring":18,"sc-emitter":11,"sc-formatter":14,"sc-ws":15}],7:[function(require,module,exports){
+},{"./response":4,"querystring":19,"sc-emitter":12,"sc-formatter":15,"sc-ws":16}],8:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1609,12 +1664,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":7}],9:[function(require,module,exports){
+},{"./_source/linked-list.js":8}],10:[function(require,module,exports){
 var SCEmitter = require('sc-emitter').SCEmitter;
 
 if (!Object.create) {
@@ -1675,9 +1730,9 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"./objectcreate":10,"sc-emitter":11}],10:[function(require,module,exports){
+},{"./objectcreate":11,"sc-emitter":12}],11:[function(require,module,exports){
 arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],11:[function(require,module,exports){
+},{"dup":3}],12:[function(require,module,exports){
 var Emitter = require('component-emitter');
 
 if (!Object.create) {
@@ -1710,7 +1765,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"./objectcreate":13,"component-emitter":12}],12:[function(require,module,exports){
+},{"./objectcreate":14,"component-emitter":13}],13:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -1873,9 +1928,9 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],14:[function(require,module,exports){
+},{"dup":3}],15:[function(require,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -1964,7 +2019,7 @@ module.exports.stringify = function (object) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -2009,7 +2064,7 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2095,7 +2150,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2182,11 +2237,11 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":16,"./encode":17}]},{},[1])(1)
+},{"./decode":17,"./encode":18}]},{},[1])(1)
 });
