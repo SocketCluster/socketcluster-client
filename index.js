@@ -1,5 +1,5 @@
 var SCSocket = require('./lib/scsocket');
-var SCSocketCreator = require('./lib/scsocketCreator');
+var SCSocketCreator = require('./lib/scsocketcreator');
 
 module.exports.SCSocketCreator = SCSocketCreator;
 module.exports.SCSocket = SCSocket;
