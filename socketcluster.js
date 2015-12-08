@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '3.1.0';
+module.exports.version = '3.1.1';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -894,23 +894,34 @@ var SCSocket = require('./scsocket');
 
 var _connections = {};
 
-function getMultiplexId(isSecure, hostname, port, path) {
-  var protocolPrefix = isSecure ? 'https://' : 'http://';
-  return protocolPrefix + hostname + ':' + port + path;
+function getMultiplexId(options) {
+  var protocolPrefix = options.secure ? 'https://' : 'http://';
+  return protocolPrefix + options.hostname + ':' + options.port + options.path;
+}
+
+function isUrlSecure() {
+  return global.location && location.protocol == 'https:';
+}
+
+function getPort(options, isSecureDefault) {
+  var isSecure = options.secure == null ? isSecureDefault : options.secure;
+  return options.port || (global.location && location.port ? location.port : isSecure ? 443 : 80);
 }
 
 function connect(options) {
   var self = this;
+
   options = options || {};
-  var isSecure = global.location && location.protocol == 'https:';
+  var isSecureDefault = isUrlSecure();
+
   var opts = {
-    port: options.port || global.location && location.port ? location.port : isSecure ? 443 : 80,
+    port: getPort(options, isSecureDefault),
+    hostname: global.location && location.hostname,
+    path: '/socketcluster/',
+    secure: isSecureDefault,
     autoReconnect: true,
     autoProcessSubscriptions: true,
     ackTimeout: 10000,
-    hostname: global.location && location.hostname,
-    path: '/socketcluster/',
-    secure: isSecure,
     timestampRequests: false,
     timestampParam: 't',
     authEngine: null,
@@ -923,7 +934,7 @@ function connect(options) {
       opts[i] = options[i];
     }
   }
-  var multiplexId = getMultiplexId(isSecure, opts.hostname, opts.port, opts.path);
+  var multiplexId = getMultiplexId(opts);
   if (opts.multiplex === false) {
     return new SCSocket(opts);
   }
@@ -935,19 +946,22 @@ function connect(options) {
 
 function destroy(options) {
   var self = this;
+
   options = options || {};
-  var isSecure = global.location && location.protocol == 'https:';
+  var isSecureDefault = isUrlSecure();
+
   var opts = {
-    port: options.port || global.location && location.port ? location.port : isSecure ? 443 : 80,
+    port: getPort(options, isSecureDefault),
     hostname: global.location && location.hostname,
-    path: '/socketcluster/'
+    path: '/socketcluster/',
+    secure: isSecureDefault
   };
   for (var i in options) {
     if (options.hasOwnProperty(i)) {
       opts[i] = options[i];
     }
   }
-  var multiplexId = getMultiplexId(isSecure, opts.hostname, opts.port, opts.path);
+  var multiplexId = getMultiplexId(opts);
   delete _connections[multiplexId];
 }
 
