@@ -15,9 +15,9 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '3.1.1';
+module.exports.version = '4.0.0';
 
-},{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":12}],2:[function(require,module,exports){
+},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":13}],2:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -40,16 +40,22 @@ AuthEngine.prototype.saveToken = function (name, token, options, callback) {
   } else {
     this._internalStorage[name] = token;
   }
-  callback && callback();
+  callback && callback(null, token);
 };
 
 AuthEngine.prototype.removeToken = function (name, callback) {
+  var token;
+
+  this.loadToken(name, function (err, authToken) {
+    token = authToken;
+  });
+
   if (this._isLocalStorageEnabled() && global.localStorage) {
     global.localStorage.removeItem(name);
   }
   delete this._internalStorage[name];
 
-  callback && callback();
+  callback && callback(null, token);
 };
 
 AuthEngine.prototype.loadToken = function (name, callback) {
@@ -67,25 +73,22 @@ module.exports.AuthEngine = AuthEngine;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],3:[function(require,module,exports){
-module.exports.create = (function () {
-  function F() {};
+var scErrors = require('sc-errors');
+var InvalidActionError = scErrors.InvalidActionError;
 
-  return function (o) {
-    if (arguments.length != 1) {
-      throw new Error('Object.create implementation only accepts one parameter.');
-    }
-    F.prototype = o;
-    return new F();
-  }
-})();
-},{}],4:[function(require,module,exports){
 var Response = function (socket, id) {
   this.socket = socket;
   this.id = id;
+  this.sent = false;
 };
 
 Response.prototype._respond = function (responseData) {
-  this.socket.send(this.socket.stringify(responseData));
+  if (this.sent) {
+    throw new InvalidActionError('Response ' + this.id + ' has already been sent');
+  } else {
+    this.sent = true;
+    this.socket.send(this.socket.stringify(responseData));
+  }
 };
 
 Response.prototype.end = function (data) {
@@ -102,13 +105,8 @@ Response.prototype.end = function (data) {
 
 Response.prototype.error = function (error, data) {
   if (this.id) {
-    var err;
-    if (error instanceof Error) {
-      err = {name: error.name, message: error.message, stack: error.stack};      
-    } else {
-      err = error;
-    }
-    
+    var err = scErrors.dehydrateError(error);
+
     var responseData = {
       rid: this.id,
       error: err
@@ -116,7 +114,7 @@ Response.prototype.error = function (error, data) {
     if (data !== undefined) {
       responseData.data = data;
     }
-    
+
     this._respond(responseData);
   }
 };
@@ -131,7 +129,7 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 
-},{}],5:[function(require,module,exports){
+},{"sc-errors":17}],4:[function(require,module,exports){
 (function (global){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var SCChannel = require('sc-channel').SCChannel;
@@ -141,9 +139,11 @@ var SCTransport = require('./sctransport').SCTransport;
 var querystring = require('querystring');
 var LinkedList = require('linked-list');
 
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
+var scErrors = require('sc-errors');
+var InvalidArgumentsError = scErrors.InvalidArgumentsError;
+var InvalidMessageError = scErrors.InvalidMessageError;
+var SocketProtocolError = scErrors.SocketProtocolError;
+var TimeoutError = scErrors.TimeoutError;
 
 var isBrowser = typeof window != 'undefined';
 
@@ -155,6 +155,7 @@ var SCSocket = function (opts) {
 
   this.id = null;
   this.state = this.CLOSED;
+  this.authState = this.PENDING;
   this.pendingConnectCallback = false;
 
   this.ackTimeout = opts.ackTimeout;
@@ -167,7 +168,7 @@ var SCSocket = function (opts) {
 
   var verifyDuration = function (propertyName) {
     if (self[propertyName] > maxTimeout) {
-      throw new Error('The ' + propertyName +
+      throw new InvalidArgumentsError('The ' + propertyName +
         ' value provided exceeded the maximum amount allowed');
     }
   };
@@ -186,7 +187,10 @@ var SCSocket = function (opts) {
     'kickOut': 1,
     'subscribe': 1,
     'unsubscribe': 1,
+    'subscribeStateChange': 1,
+    'authStateChange': 1,
     'authenticate': 1,
+    'deauthenticate': 1,
     'removeAuthToken': 1,
     'subscribeRequest': 1
   };
@@ -266,33 +270,14 @@ SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = SCTransport.prototype.CONN
 SCSocket.OPEN = SCSocket.prototype.OPEN = SCTransport.prototype.OPEN;
 SCSocket.CLOSED = SCSocket.prototype.CLOSED = SCTransport.prototype.CLOSED;
 
-SCSocket.ignoreStatuses = {
-  1000: 'Socket closed normally',
-  1001: 'Socket hung up'
-};
+SCSocket.AUTHENTICATED = SCSocket.prototype.AUTHENTICATED = 'authenticated';
+SCSocket.UNAUTHENTICATED = SCSocket.prototype.UNAUTHENTICATED = 'unauthenticated';
+SCSocket.PENDING = SCSocket.prototype.PENDING = 'pending';
 
-SCSocket.errorStatuses = {
-  1001: 'Socket was disconnected',
-  1002: 'A WebSocket protocol error was encountered',
-  1003: 'Server terminated socket because it received invalid data',
-  1005: 'Socket closed without status code',
-  1006: 'Socket hung up',
-  1007: 'Message format was incorrect',
-  1008: 'Encountered a policy violation',
-  1009: 'Message was too big to process',
-  1010: 'Client ended the connection because the server did not comply with extension requirements',
-  1011: 'Server encountered an unexpected fatal condition',
-  4000: 'Server ping timed out',
-  4001: 'Client pong timed out',
-  4002: 'Server failed to sign auth token',
-  4003: 'Failed to complete handshake',
-  4004: 'Client failed to save auth token'
-};
+SCSocket.ignoreStatuses = scErrors.socketProtocolIgnoreStatuses;
+SCSocket.errorStatuses = scErrors.socketProtocolErrorStatuses;
 
 SCSocket.prototype._privateEventHandlerMap = {
-  '#fail': function (data) {
-    this._onSCError(data);
-  },
   '#publish': function (data) {
     var isSubscribed = this.isSubscribed(data.channel, true);
 
@@ -318,29 +303,30 @@ SCSocket.prototype._privateEventHandlerMap = {
           // This is a non-fatal error, we don't want to close the connection
           // because of this but we do want to notify the server and throw an error
           // on the client.
-          response.error(err.message || err);
+          response.error(err);
           self._onSCError(err);
         } else {
-          SCEmitter.prototype.emit.call(self, 'authenticate', data.token);
+          self._changeToAuthenticatedState(data.token);
           response.end();
         }
       };
 
       this.auth.saveToken(this.options.authTokenName, data.token, {}, triggerAuthenticate);
     } else {
-      response.error('No token data provided by #setAuthToken event');
+      response.error(new InvalidMessageError('No token data provided by #setAuthToken event'));
     }
   },
   '#removeAuthToken': function (data, response) {
     var self = this;
 
-    this.auth.removeToken(this.options.authTokenName, function (err) {
+    this.auth.removeToken(this.options.authTokenName, function (err, oldToken) {
       if (err) {
         // Non-fatal error - Do not close the connection
-        response.error(err.message || err);
+        response.error(err);
         self._onSCError(err);
       } else {
-        SCEmitter.prototype.emit.call(self, 'removeAuthToken');
+        SCEmitter.prototype.emit.call(self, 'removeAuthToken', oldToken);
+        self._changeToUnauthenticatedState();
         response.end();
       }
     });
@@ -362,16 +348,18 @@ SCSocket.prototype.getBytesReceived = function () {
   return this.transport.getBytesReceived();
 };
 
-SCSocket.prototype.removeAuthToken = function (callback) {
+SCSocket.prototype.deauthenticate = function (callback) {
   var self = this;
 
-  this.auth.removeToken(this.options.authTokenName, function (err) {
+  this.auth.removeToken(this.options.authTokenName, function (err, oldToken) {
+    self.emit('#removeAuthToken');
     callback && callback(err);
     if (err) {
       // Non-fatal error - Do not close the connection
       self._onSCError(err);
     } else {
-      SCEmitter.prototype.emit.call(self, 'removeAuthToken');
+      SCEmitter.prototype.emit.call(self, 'removeAuthToken', oldToken);
+      self._changeToUnauthenticatedState();
     }
   });
 };
@@ -383,6 +371,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     clearTimeout(this._reconnectTimeout);
 
     this.state = this.CONNECTING;
+    this._changeToPendingAuthState();
 
     if (this.transport) {
       this.transport.off();
@@ -436,20 +425,72 @@ SCSocket.prototype.disconnect = function (code, data) {
   }
 };
 
+SCSocket.prototype._changeToPendingAuthState = function () {
+  if (this.authState != this.PENDING) {
+    var oldState = this.authState;
+    this.authState = this.PENDING;
+    var stateChangeData = {
+      oldState: oldState,
+      newState: this.authState
+    };
+    SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
+  }
+};
+
+SCSocket.prototype._changeToUnauthenticatedState = function () {
+  if (this.authState != this.UNAUTHENTICATED) {
+    var oldState = this.authState;
+    this.authState = this.UNAUTHENTICATED;
+
+    var stateChangeData = {
+      oldState: oldState,
+      newState: this.authState
+    };
+    SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
+    if (oldState == this.AUTHENTICATED) {
+      SCEmitter.prototype.emit.call(this, 'deauthenticate');
+    }
+  }
+};
+
+SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
+  if (this.authState != this.AUTHENTICATED) {
+    var oldState = this.authState;
+    this.authState = this.AUTHENTICATED;
+    var stateChangeData = {
+      oldState: oldState,
+      newState: this.authState,
+      authToken: signedAuthToken
+    };
+    this.processPendingSubscriptions();
+
+    SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
+    SCEmitter.prototype.emit.call(this, 'authenticate', signedAuthToken);
+  }
+};
+
 // Perform client-initiated authentication by providing an encrypted token string
 SCSocket.prototype.authenticate = function (signedAuthToken, callback) {
   var self = this;
 
+  this._changeToPendingAuthState();
+
   this.emit('#authenticate', signedAuthToken, function (err, authStatus) {
     if (err) {
+      self._changeToUnauthenticatedState();
       callback && callback(err, authStatus);
     } else {
       self.auth.saveToken(self.options.authTokenName, signedAuthToken, {}, function (err) {
         callback && callback(err, authStatus);
         if (err) {
+          self._changeToUnauthenticatedState();
           self._onSCError(err);
-        } else if (authStatus.isAuthenticated) {
-          SCEmitter.prototype.emit.call(self, 'authenticate', signedAuthToken);
+        } else {
+          if (authStatus.isAuthenticated) {
+            self._changeToAuthenticatedState(signedAuthToken);
+          } else {
+            self._changeToUnauthenticatedState();
+          }
         }
       });
     }
@@ -489,6 +530,13 @@ SCSocket.prototype._onSCOpen = function (status) {
     this.id = status.id;
     this.pingTimeout = status.pingTimeout;
     this.transport.pingTimeout = this.pingTimeout;
+    if (status.isAuthenticated) {
+      this._changeToAuthenticatedState(status.authToken);
+    } else {
+      this._changeToUnauthenticatedState();
+    }
+  } else {
+    this._changeToUnauthenticatedState();
   }
 
   this._connectAttempts = 0;
@@ -549,6 +597,7 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
   }
   clearTimeout(this._reconnectTimeout);
 
+  this._changeToPendingAuthState();
   this._suspendSubscriptions();
 
   if (openAbort) {
@@ -577,8 +626,7 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
   }
 
   if (!SCSocket.ignoreStatuses[code]) {
-    var err = new Error(SCSocket.errorStatuses[code] || 'Socket connection failed for unknown reasons');
-    err.code = code;
+    var err = new SocketProtocolError(SCSocket.errorStatuses[code] || 'Socket connection failed for unknown reasons', code);
     this._onSCError(err);
   }
 };
@@ -616,9 +664,7 @@ SCSocket.prototype._flushEmitBuffer = function () {
 };
 
 SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
-  var errorMessage = "Event response for '" + eventObject.event + "' timed out";
-  var error = new Error(errorMessage);
-  error.type = 'timeout';
+  var error = new TimeoutError("Event response for '" + eventObject.event + "' timed out");
 
   var callback = eventObject.callback;
   delete eventObject.callback;
@@ -626,7 +672,6 @@ SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
     eventNode.detach();
   }
   callback.call(eventObject, error, eventObject);
-  this._onSCError(error);
 };
 
 SCSocket.prototype._emit = function (event, data, callback) {
@@ -681,17 +726,26 @@ SCSocket.prototype._triggerChannelSubscribe = function (channel) {
   var channelName = channel.name;
 
   if (channel.state != channel.SUBSCRIBED) {
+    var oldState = channel.state;
     channel.state = channel.SUBSCRIBED;
 
+    var stateChangeData = {
+      channel: channelName,
+      oldState: oldState,
+      newState: channel.state
+    };
+    channel.emit('subscribeStateChange', stateChangeData);
     channel.emit('subscribe', channelName);
+    SCEmitter.prototype.emit.call(this, 'subscribeStateChange', stateChangeData);
     SCEmitter.prototype.emit.call(this, 'subscribe', channelName);
   }
 };
 
 SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel) {
   var channelName = channel.name;
+  var meetsAuthRequirements = !channel.waitForAuth || this.authState == this.AUTHENTICATED;
 
-  if (channel.state != channel.UNSUBSCRIBED) {
+  if (channel.state != channel.UNSUBSCRIBED && meetsAuthRequirements) {
     channel.state = channel.UNSUBSCRIBED;
 
     channel.emit('subscribeFail', err, channelName);
@@ -710,11 +764,18 @@ SCSocket.prototype._cancelPendingSubscribeCallback = function (channel) {
 SCSocket.prototype._trySubscribe = function (channel) {
   var self = this;
 
+  var meetsAuthRequirements = !channel.waitForAuth || this.authState == this.AUTHENTICATED;
+
   // We can only ever have one pending subscribe action at any given time on a channel
-  if (this.state == this.OPEN && !this.pendingConnectCallback && channel._pendingSubscriptionCid == null) {
+  if (this.state == this.OPEN && !this.pendingConnectCallback &&
+    channel._pendingSubscriptionCid == null && meetsAuthRequirements) {
+
     var options = {
       noTimeout: true
     };
+    if (channel.waitForAuth) {
+      options.waitForAuth = true;
+    }
 
     channel._pendingSubscriptionCid = this.transport.emit(
       '#subscribe', channel.name, options,
@@ -731,11 +792,11 @@ SCSocket.prototype._trySubscribe = function (channel) {
   }
 };
 
-SCSocket.prototype.subscribe = function (channelName) {
+SCSocket.prototype.subscribe = function (channelName, options) {
   var channel = this._channels[channelName];
 
   if (!channel) {
-    channel = new SCChannel(channelName, this);
+    channel = new SCChannel(channelName, this, options);
     this._channels[channelName] = channel;
   }
 
@@ -759,7 +820,14 @@ SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
   this._cancelPendingSubscribeCallback(channel);
 
   if (oldState == channel.SUBSCRIBED) {
+    var stateChangeData = {
+      channel: channelName,
+      oldState: oldState,
+      newState: channel.state
+    };
+    channel.emit('subscribeStateChange', stateChangeData);
     channel.emit('unsubscribe', channelName);
+    SCEmitter.prototype.emit.call(this, 'subscribeStateChange', stateChangeData);
     SCEmitter.prototype.emit.call(this, 'unsubscribe', channelName);
   }
 };
@@ -795,11 +863,11 @@ SCSocket.prototype.unsubscribe = function (channelName) {
   }
 };
 
-SCSocket.prototype.channel = function (channelName) {
+SCSocket.prototype.channel = function (channelName, options) {
   var currentChannel = this._channels[channelName];
 
   if (!currentChannel) {
-    currentChannel = new SCChannel(channelName, this);
+    currentChannel = new SCChannel(channelName, this, options);
     this._channels[channelName] = currentChannel;
   }
   return currentChannel;
@@ -848,13 +916,6 @@ SCSocket.prototype.processPendingSubscriptions = function () {
 
   this.pendingConnectCallback = false;
 
-  var channels = [];
-  for (var channelName in this._channels) {
-    if (this._channels.hasOwnProperty(channelName)) {
-      channels.push(channelName);
-    }
-  }
-
   for (var i in this._channels) {
     if (this._channels.hasOwnProperty(i)) {
       (function (channel) {
@@ -868,7 +929,7 @@ SCSocket.prototype.processPendingSubscriptions = function () {
 
 SCSocket.prototype.watch = function (channelName, handler) {
   if (typeof handler != 'function') {
-    throw new Error('No handler function was provided');
+    throw new InvalidArgumentsError('No handler function was provided');
   }
   this._channelEmitter.on(channelName, handler);
 };
@@ -888,7 +949,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./auth":2,"./objectcreate":3,"./response":4,"./sctransport":7,"linked-list":9,"querystring":19,"sc-channel":10,"sc-emitter":12}],6:[function(require,module,exports){
+},{"./auth":2,"./response":3,"./sctransport":6,"linked-list":8,"querystring":20,"sc-channel":9,"sc-emitter":13,"sc-errors":17}],5:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
 
@@ -971,12 +1032,15 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./scsocket":5}],7:[function(require,module,exports){
+},{"./scsocket":4}],6:[function(require,module,exports){
 var WebSocket = require('sc-ws');
 var SCEmitter = require('sc-emitter').SCEmitter;
 var formatter = require('sc-formatter');
 var Response = require('./response').Response;
 var querystring = require('querystring');
+
+var scErrors = require('sc-errors');
+var TimeoutError = scErrors.TimeoutError;
 
 var SCTransport = function (authEngine, options) {
   this.state = this.CLOSED;
@@ -1086,7 +1150,14 @@ SCTransport.prototype._handshake = function (callback) {
       };
       self.emit('#handshake', {
         authToken: token
-      }, options, callback);
+      }, options, function (err, status) {
+        if (status) {
+          // Add the token which was used as part of authentication attempt
+          // to the status object.
+          status.authToken = token;
+        }
+        callback(err, status);
+      });
     }
   });
 };
@@ -1129,17 +1200,16 @@ SCTransport.prototype._onMessage = function (message) {
       var response = new Response(this, obj.cid);
       SCEmitter.prototype.emit.call(this, 'event', event, obj.data, response);
     } else if (obj.rid != null) {
+
       var eventObject = this._callbackMap[obj.rid];
       if (eventObject) {
         clearTimeout(eventObject.timeout);
         delete this._callbackMap[obj.rid];
 
         if (eventObject.callback) {
-          eventObject.callback(obj.error, obj.data);
+          var rehydratedError = scErrors.hydrateError(obj.error);
+          eventObject.callback(rehydratedError, obj.data);
         }
-      }
-      if (obj.error) {
-        this._onError(obj.error);
       }
     } else {
       SCEmitter.prototype.emit.call(this, 'event', 'raw', obj);
@@ -1206,8 +1276,7 @@ SCTransport.prototype.emitRaw = function (eventObject) {
 
 SCTransport.prototype._handleEventAckTimeout = function (eventObject) {
   var errorMessage = "Event response for '" + eventObject.event + "' timed out";
-  var error = new Error(errorMessage);
-  error.type = 'timeout';
+  var error = new TimeoutError(errorMessage);
 
   if (eventObject.cid) {
     delete this._callbackMap[eventObject.cid];
@@ -1215,7 +1284,6 @@ SCTransport.prototype._handleEventAckTimeout = function (eventObject) {
   var callback = eventObject.callback;
   delete eventObject.callback;
   callback.call(eventObject, error, eventObject);
-  this._onError(error);
 };
 
 // The last two optional arguments (a and b) can be options and/or callback
@@ -1290,7 +1358,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":4,"querystring":19,"sc-emitter":12,"sc-formatter":15,"sc-ws":16}],8:[function(require,module,exports){
+},{"./response":3,"querystring":20,"sc-emitter":13,"sc-errors":17,"sc-formatter":15,"sc-ws":16}],7:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1678,30 +1746,29 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":8}],10:[function(require,module,exports){
+},{"./_source/linked-list.js":7}],9:[function(require,module,exports){
 var SCEmitter = require('sc-emitter').SCEmitter;
 
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
-
-var SCChannel = function (name, client) {
+var SCChannel = function (name, client, options) {
   var self = this;
-  
+
   SCEmitter.call(this);
-  
+
   this.PENDING = 'pending';
   this.SUBSCRIBED = 'subscribed';
   this.UNSUBSCRIBED = 'unsubscribed';
-  
+
   this.name = name;
   this.state = this.UNSUBSCRIBED;
   this.client = client;
+
+  this.options = options || {};
+  this.waitForAuth = this.options.waitForAuth || false;
 };
 
 SCChannel.prototype = Object.create(SCEmitter.prototype);
@@ -1744,9 +1811,7 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"./objectcreate":11,"sc-emitter":12}],11:[function(require,module,exports){
-arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],12:[function(require,module,exports){
+},{"sc-emitter":10}],10:[function(require,module,exports){
 var Emitter = require('component-emitter');
 
 if (!Object.create) {
@@ -1779,7 +1844,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"./objectcreate":14,"component-emitter":13}],13:[function(require,module,exports){
+},{"./objectcreate":12,"component-emitter":11}],11:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -1942,9 +2007,50 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],14:[function(require,module,exports){
-arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],15:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
+module.exports.create = (function () {
+  function F() {};
+
+  return function (o) {
+    if (arguments.length != 1) {
+      throw new Error('Object.create implementation only accepts one parameter.');
+    }
+    F.prototype = o;
+    return new F();
+  }
+})();
+},{}],13:[function(require,module,exports){
+var Emitter = require('component-emitter');
+
+var SCEmitter = function () {
+  Emitter.call(this);
+};
+
+SCEmitter.prototype = Object.create(Emitter.prototype);
+
+SCEmitter.prototype.emit = function (event) {
+  if (event == 'error' && this.domain) {
+    // Emit the error on the domain if it has one.
+    // See https://github.com/joyent/node/blob/ef4344311e19a4f73c031508252b21712b22fe8a/lib/events.js#L78-85
+    
+    var err = arguments[1];
+    
+    if (!err) {
+      err = new Error('Uncaught, unspecified "error" event.');
+    }
+    err.domainEmitter = this;
+    err.domain = this.domain;
+    err.domainThrown = false;
+    this.domain.emit('error', err);
+  }
+  Emitter.prototype.emit.apply(this, arguments);
+};
+
+module.exports.SCEmitter = SCEmitter;
+
+},{"component-emitter":14}],14:[function(require,module,exports){
+arguments[4][11][0].apply(exports,arguments)
+},{"dup":11}],15:[function(require,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -2079,6 +2185,215 @@ function ws(uri, protocols, opts) {
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
 },{}],17:[function(require,module,exports){
+
+function AuthTokenExpiredError(message, expiry) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'AuthTokenExpiredError';
+  this.message = message;
+  this.expiry = expiry;
+};
+AuthTokenExpiredError.prototype = Object.create(Error.prototype);
+
+
+function AuthTokenInvalidError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'AuthTokenInvalidError';
+  this.message = message;
+};
+AuthTokenInvalidError.prototype = Object.create(Error.prototype);
+
+
+function SilentMiddlewareBlockedError(message, type) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'SilentMiddlewareBlockedError';
+  this.message = message;
+  this.type = type;
+};
+SilentMiddlewareBlockedError.prototype = Object.create(Error.prototype);
+
+
+function InvalidActionError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'InvalidActionError';
+  this.message = message;
+};
+InvalidActionError.prototype = Object.create(Error.prototype);
+
+function InvalidArgumentsError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'InvalidArgumentsError';
+  this.message = message;
+};
+InvalidArgumentsError.prototype = Object.create(Error.prototype);
+
+function InvalidOptionsError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'InvalidOptionsError';
+  this.message = message;
+};
+InvalidOptionsError.prototype = Object.create(Error.prototype);
+
+
+function InvalidMessageError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'InvalidMessageError';
+  this.message = message;
+};
+InvalidMessageError.prototype = Object.create(Error.prototype);
+
+
+function SocketProtocolError(message, code) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'SocketProtocolError';
+  this.message = message;
+  this.code = code;
+};
+SocketProtocolError.prototype = Object.create(Error.prototype);
+
+
+function ServerProtocolError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'ServerProtocolError';
+  this.message = message;
+};
+ServerProtocolError.prototype = Object.create(Error.prototype);
+
+function HTTPServerError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'HTTPServerError';
+  this.message = message;
+};
+HTTPServerError.prototype = Object.create(Error.prototype);
+
+
+function ResourceLimitError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'ResourceLimitError';
+  this.message = message;
+};
+ResourceLimitError.prototype = Object.create(Error.prototype);
+
+
+function TimeoutError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'TimeoutError';
+  this.message = message;
+};
+TimeoutError.prototype = Object.create(Error.prototype);
+
+
+function BrokerError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'BrokerError';
+  this.message = message;
+};
+BrokerError.prototype = Object.create(Error.prototype);
+
+
+function ProcessExitError(message, code) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'ProcessExitError';
+  this.message = message;
+  this.code = code;
+};
+ProcessExitError.prototype = Object.create(Error.prototype);
+
+
+function UnknownError(message) {
+  Error.captureStackTrace(this, arguments.callee);
+  this.name = 'UnknownError';
+  this.message = message;
+};
+UnknownError.prototype = Object.create(Error.prototype);
+
+
+// Expose all error types
+
+module.exports = {
+  AuthTokenExpiredError: AuthTokenExpiredError,
+  AuthTokenInvalidError: AuthTokenInvalidError,
+  SilentMiddlewareBlockedError: SilentMiddlewareBlockedError,
+  InvalidActionError: InvalidActionError,
+  InvalidArgumentsError: InvalidArgumentsError,
+  InvalidOptionsError: InvalidOptionsError,
+  InvalidMessageError: InvalidMessageError,
+  SocketProtocolError: SocketProtocolError,
+  ServerProtocolError: ServerProtocolError,
+  HTTPServerError: HTTPServerError,
+  ResourceLimitError: ResourceLimitError,
+  TimeoutError: TimeoutError,
+  BrokerError: BrokerError,
+  ProcessExitError: ProcessExitError,
+  UnknownError: UnknownError
+};
+
+module.exports.socketProtocolErrorStatuses = {
+  1001: 'Socket was disconnected',
+  1002: 'A WebSocket protocol error was encountered',
+  1003: 'Server terminated socket because it received invalid data',
+  1005: 'Socket closed without status code',
+  1006: 'Socket hung up',
+  1007: 'Message format was incorrect',
+  1008: 'Encountered a policy violation',
+  1009: 'Message was too big to process',
+  1010: 'Client ended the connection because the server did not comply with extension requirements',
+  1011: 'Server encountered an unexpected fatal condition',
+  4000: 'Server ping timed out',
+  4001: 'Client pong timed out',
+  4002: 'Server failed to sign auth token',
+  4003: 'Failed to complete handshake',
+  4004: 'Client failed to save auth token',
+  4005: 'Did not receive #handshake from client before timeout',
+  4006: 'Failed to bind socket to message broker'
+};
+
+module.exports.socketProtocolIgnoreStatuses = {
+  1000: 'Socket closed normally',
+  1001: 'Socket hung up'
+};
+
+// Properties related to error domains cannot be serialized.
+var unserializableErrorProperties = {
+  domainEmitter: 1,
+  domain: 1
+};
+
+module.exports.dehydrateError = function (error, includeStackTrace) {
+  var dehydratedError;
+  if (typeof error == 'string') {
+      dehydratedError = error;
+  } else {
+    dehydratedError = {
+      message: error.message
+    };
+    if (includeStackTrace) {
+      dehydratedError.stack = error.stack;
+    }
+    for (var i in error) {
+      dehydratedError[i] = error[i];
+    }
+  }
+  return dehydratedError;
+};
+
+module.exports.hydrateError = function (error) {
+  var hydratedError = null;
+  if (error != null) {
+    if (typeof error == 'string') {
+      hydratedError = error;
+    } else {
+      hydratedError = new Error(error.message);
+      for (var i in error) {
+        if (error.hasOwnProperty(i)) {
+          hydratedError[i] = error[i];
+        }
+      }
+    }
+  }
+  return hydratedError;
+};
+
+},{}],18:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2164,7 +2479,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2251,11 +2566,11 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":17,"./encode":18}]},{},[1])(1)
+},{"./decode":18,"./encode":19}]},{},[1])(1)
 });
