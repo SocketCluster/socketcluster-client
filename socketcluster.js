@@ -17,7 +17,7 @@ module.exports.destroy = function (options) {
 
 module.exports.version = '3.1.1';
 
-},{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":12}],2:[function(require,module,exports){
+},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":10}],2:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -40,16 +40,22 @@ AuthEngine.prototype.saveToken = function (name, token, options, callback) {
   } else {
     this._internalStorage[name] = token;
   }
-  callback && callback();
+  callback && callback(null, token);
 };
 
 AuthEngine.prototype.removeToken = function (name, callback) {
+  var token;
+
+  this.loadToken(name, function (err, authToken) {
+    token = authToken;
+  });
+
   if (this._isLocalStorageEnabled() && global.localStorage) {
     global.localStorage.removeItem(name);
   }
   delete this._internalStorage[name];
 
-  callback && callback();
+  callback && callback(null, token);
 };
 
 AuthEngine.prototype.loadToken = function (name, callback) {
@@ -67,18 +73,6 @@ module.exports.AuthEngine = AuthEngine;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],3:[function(require,module,exports){
-module.exports.create = (function () {
-  function F() {};
-
-  return function (o) {
-    if (arguments.length != 1) {
-      throw new Error('Object.create implementation only accepts one parameter.');
-    }
-    F.prototype = o;
-    return new F();
-  }
-})();
-},{}],4:[function(require,module,exports){
 var Response = function (socket, id) {
   this.socket = socket;
   this.id = id;
@@ -131,7 +125,7 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 (function (global){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var SCChannel = require('sc-channel').SCChannel;
@@ -140,10 +134,6 @@ var AuthEngine = require('./auth').AuthEngine;
 var SCTransport = require('./sctransport').SCTransport;
 var querystring = require('querystring');
 var LinkedList = require('linked-list');
-
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
 
 var isBrowser = typeof window != 'undefined';
 
@@ -187,7 +177,7 @@ var SCSocket = function (opts) {
     'subscribe': 1,
     'unsubscribe': 1,
     'authenticate': 1,
-    'removeAuthToken': 1,
+    'deauthenticate': 1,
     'subscribeRequest': 1
   };
 
@@ -331,16 +321,16 @@ SCSocket.prototype._privateEventHandlerMap = {
       response.error('No token data provided by #setAuthToken event');
     }
   },
-  '#removeAuthToken': function (data, response) {
+  '#deauthenticate': function (data, response) {
     var self = this;
 
-    this.auth.removeToken(this.options.authTokenName, function (err) {
+    this.auth.removeToken(this.options.authTokenName, function (err, oldToken) {
       if (err) {
         // Non-fatal error - Do not close the connection
         response.error(err.message || err);
         self._onSCError(err);
       } else {
-        SCEmitter.prototype.emit.call(self, 'removeAuthToken');
+        SCEmitter.prototype.emit.call(self, 'deauthenticate', oldToken);
         response.end();
       }
     });
@@ -362,16 +352,17 @@ SCSocket.prototype.getBytesReceived = function () {
   return this.transport.getBytesReceived();
 };
 
-SCSocket.prototype.removeAuthToken = function (callback) {
+SCSocket.prototype.deauthenticate = function (callback) {
   var self = this;
 
   this.auth.removeToken(this.options.authTokenName, function (err) {
+    self.emit('#deauthenticate');
     callback && callback(err);
     if (err) {
       // Non-fatal error - Do not close the connection
       self._onSCError(err);
     } else {
-      SCEmitter.prototype.emit.call(self, 'removeAuthToken');
+      SCEmitter.prototype.emit.call(self, 'deauthenticate');
     }
   });
 };
@@ -888,7 +879,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./auth":2,"./objectcreate":3,"./response":4,"./sctransport":7,"linked-list":9,"querystring":19,"sc-channel":10,"sc-emitter":12}],6:[function(require,module,exports){
+},{"./auth":2,"./response":3,"./sctransport":6,"linked-list":8,"querystring":16,"sc-channel":9,"sc-emitter":10}],5:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
 
@@ -971,7 +962,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./scsocket":5}],7:[function(require,module,exports){
+},{"./scsocket":4}],6:[function(require,module,exports){
 var WebSocket = require('sc-ws');
 var SCEmitter = require('sc-emitter').SCEmitter;
 var formatter = require('sc-formatter');
@@ -1290,7 +1281,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":4,"querystring":19,"sc-emitter":12,"sc-formatter":15,"sc-ws":16}],8:[function(require,module,exports){
+},{"./response":3,"querystring":16,"sc-emitter":10,"sc-formatter":12,"sc-ws":13}],7:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1678,17 +1669,13 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":8}],10:[function(require,module,exports){
+},{"./_source/linked-list.js":7}],9:[function(require,module,exports){
 var SCEmitter = require('sc-emitter').SCEmitter;
-
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
 
 var SCChannel = function (name, client) {
   var self = this;
@@ -1744,14 +1731,8 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"./objectcreate":11,"sc-emitter":12}],11:[function(require,module,exports){
-arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],12:[function(require,module,exports){
+},{"sc-emitter":10}],10:[function(require,module,exports){
 var Emitter = require('component-emitter');
-
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
 
 var SCEmitter = function () {
   Emitter.call(this);
@@ -1779,7 +1760,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"./objectcreate":14,"component-emitter":13}],13:[function(require,module,exports){
+},{"component-emitter":11}],11:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -1942,9 +1923,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],14:[function(require,module,exports){
-arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],15:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -2033,7 +2012,7 @@ module.exports.stringify = function (object) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],16:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -2078,7 +2057,7 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}],17:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2164,7 +2143,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],18:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -2251,11 +2230,11 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],19:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":17,"./encode":18}]},{},[1])(1)
+},{"./decode":14,"./encode":15}]},{},[1])(1)
 });
