@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.0.0';
+module.exports.version = '4.0.1';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":13}],2:[function(require,module,exports){
 (function (global){
@@ -476,6 +476,9 @@ SCSocket.prototype.authenticate = function (signedAuthToken, callback) {
   this._changeToPendingAuthState();
 
   this.emit('#authenticate', signedAuthToken, function (err, authStatus) {
+    if (authStatus && authStatus.authError) {
+      authStatus.authError = scErrors.hydrateError(authStatus.authError);
+    }
     if (err) {
       self._changeToUnauthenticatedState();
       callback && callback(err, authStatus);
@@ -773,12 +776,17 @@ SCSocket.prototype._trySubscribe = function (channel) {
     var options = {
       noTimeout: true
     };
+
+    var subscriptionData = {
+      channel: channel.name
+    };
     if (channel.waitForAuth) {
       options.waitForAuth = true;
+      subscriptionData.waitForAuth = options.waitForAuth;
     }
 
     channel._pendingSubscriptionCid = this.transport.emit(
-      '#subscribe', channel.name, options,
+      '#subscribe', subscriptionData, options,
       function (err) {
         delete channel._pendingSubscriptionCid;
         if (err) {
@@ -1155,6 +1163,9 @@ SCTransport.prototype._handshake = function (callback) {
           // Add the token which was used as part of authentication attempt
           // to the status object.
           status.authToken = token;
+          if (status.authError) {
+            status.authError = scErrors.hydrateError(status.authError);
+          }
         }
         callback(err, status);
       });
