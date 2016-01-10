@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.0.1';
+module.exports.version = '4.1.0';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":13}],2:[function(require,module,exports){
 (function (global){
@@ -2198,7 +2198,11 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 },{}],17:[function(require,module,exports){
 
 function AuthTokenExpiredError(message, expiry) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'AuthTokenExpiredError';
   this.message = message;
   this.expiry = expiry;
@@ -2207,7 +2211,11 @@ AuthTokenExpiredError.prototype = Object.create(Error.prototype);
 
 
 function AuthTokenInvalidError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'AuthTokenInvalidError';
   this.message = message;
 };
@@ -2215,7 +2223,11 @@ AuthTokenInvalidError.prototype = Object.create(Error.prototype);
 
 
 function SilentMiddlewareBlockedError(message, type) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'SilentMiddlewareBlockedError';
   this.message = message;
   this.type = type;
@@ -2224,21 +2236,33 @@ SilentMiddlewareBlockedError.prototype = Object.create(Error.prototype);
 
 
 function InvalidActionError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'InvalidActionError';
   this.message = message;
 };
 InvalidActionError.prototype = Object.create(Error.prototype);
 
 function InvalidArgumentsError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'InvalidArgumentsError';
   this.message = message;
 };
 InvalidArgumentsError.prototype = Object.create(Error.prototype);
 
 function InvalidOptionsError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'InvalidOptionsError';
   this.message = message;
 };
@@ -2246,7 +2270,11 @@ InvalidOptionsError.prototype = Object.create(Error.prototype);
 
 
 function InvalidMessageError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'InvalidMessageError';
   this.message = message;
 };
@@ -2254,7 +2282,11 @@ InvalidMessageError.prototype = Object.create(Error.prototype);
 
 
 function SocketProtocolError(message, code) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'SocketProtocolError';
   this.message = message;
   this.code = code;
@@ -2263,14 +2295,22 @@ SocketProtocolError.prototype = Object.create(Error.prototype);
 
 
 function ServerProtocolError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'ServerProtocolError';
   this.message = message;
 };
 ServerProtocolError.prototype = Object.create(Error.prototype);
 
 function HTTPServerError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'HTTPServerError';
   this.message = message;
 };
@@ -2278,7 +2318,11 @@ HTTPServerError.prototype = Object.create(Error.prototype);
 
 
 function ResourceLimitError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'ResourceLimitError';
   this.message = message;
 };
@@ -2286,7 +2330,11 @@ ResourceLimitError.prototype = Object.create(Error.prototype);
 
 
 function TimeoutError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'TimeoutError';
   this.message = message;
 };
@@ -2294,7 +2342,11 @@ TimeoutError.prototype = Object.create(Error.prototype);
 
 
 function BrokerError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'BrokerError';
   this.message = message;
 };
@@ -2302,7 +2354,11 @@ BrokerError.prototype = Object.create(Error.prototype);
 
 
 function ProcessExitError(message, code) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'ProcessExitError';
   this.message = message;
   this.code = code;
@@ -2311,7 +2367,11 @@ ProcessExitError.prototype = Object.create(Error.prototype);
 
 
 function UnknownError(message) {
-  Error.captureStackTrace(this, arguments.callee);
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
   this.name = 'UnknownError';
   this.message = message;
 };
@@ -2365,8 +2425,9 @@ module.exports.socketProtocolIgnoreStatuses = {
 
 // Properties related to error domains cannot be serialized.
 var unserializableErrorProperties = {
+  domain: 1,
   domainEmitter: 1,
-  domain: 1
+  domainThrown: 1
 };
 
 module.exports.dehydrateError = function (error, includeStackTrace) {
@@ -2381,7 +2442,9 @@ module.exports.dehydrateError = function (error, includeStackTrace) {
       dehydratedError.stack = error.stack;
     }
     for (var i in error) {
-      dehydratedError[i] = error[i];
+      if (!unserializableErrorProperties[i]) {
+        dehydratedError[i] = error[i];
+      }
     }
   }
   return dehydratedError;
