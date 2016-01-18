@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.1.4';
+module.exports.version = '4.1.5';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":11}],2:[function(require,module,exports){
 (function (global){
@@ -1075,12 +1075,11 @@ module.exports = {
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./scsocket":4}],6:[function(require,module,exports){
-(function (global){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var formatter = require('sc-formatter');
 var Response = require('./response').Response;
 var querystring = require('querystring');
-var WebSocket = global.WebSocket || global.MozWebSocket || require('ws');
+var WebSocket = require('sc-ws');
 
 var scErrors = require('sc-errors');
 var TimeoutError = scErrors.TimeoutError;
@@ -1405,8 +1404,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./response":3,"querystring":22,"sc-emitter":11,"sc-errors":13,"sc-formatter":14,"ws":16}],7:[function(require,module,exports){
+},{"./response":3,"querystring":22,"sc-emitter":11,"sc-errors":13,"sc-formatter":14,"sc-ws":15}],7:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -2429,6 +2427,51 @@ module.exports.stringify = function (object) {
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],15:[function(require,module,exports){
+
+/**
+ * Module dependencies.
+ */
+
+var global = (function() { return this; })();
+
+/**
+ * WebSocket constructor.
+ */
+
+var WebSocket = global.WebSocket || global.MozWebSocket;
+
+/**
+ * Module exports.
+ */
+
+module.exports = WebSocket ? ws : null;
+
+/**
+ * WebSocket constructor.
+ *
+ * The third `opts` options object gets ignored in web browsers, since it's
+ * non-standard, and throws a TypeError if passed to the constructor.
+ * See: https://github.com/einaros/ws/issues/227
+ *
+ * @param {String} uri
+ * @param {Array} protocols (optional)
+ * @param {Object} opts (optional)
+ * @api public
+ */
+
+function ws(uri, protocols, opts) {
+  var instance;
+  if (protocols) {
+    instance = new WebSocket(uri, protocols);
+  } else {
+    instance = new WebSocket(uri);
+  }
+  return instance;
+}
+
+if (WebSocket) ws.prototype = WebSocket.prototype;
+
+},{}],16:[function(require,module,exports){
 ;(function (exports) {
   'use strict'
 
@@ -2547,8 +2590,6 @@ module.exports.stringify = function (object) {
   exports.toByteArray = b64ToByteArray
   exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
-
-},{}],16:[function(require,module,exports){
 
 },{}],17:[function(require,module,exports){
 (function (global){
@@ -4006,7 +4047,7 @@ function blitBuffer (src, dst, offset, length) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":15,"ieee754":19,"isarray":18}],18:[function(require,module,exports){
+},{"base64-js":16,"ieee754":19,"isarray":18}],18:[function(require,module,exports){
 var toString = {}.toString;
 
 module.exports = Array.isArray || function (arr) {
