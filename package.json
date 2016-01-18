@@ -21,5 +21,8 @@
     "sc-formatter": "1.0.x",
     "ws": "1.0.1"
   },
+  "browser": {
+    "ws": false
+  },
   "readmeFilename": "README.md"
 }
