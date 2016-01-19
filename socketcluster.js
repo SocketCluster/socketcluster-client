@@ -15,9 +15,9 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.1.5';
+module.exports.version = '4.1.6';
 
-},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":11}],2:[function(require,module,exports){
+},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -129,7 +129,7 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 
-},{"sc-errors":13}],4:[function(require,module,exports){
+},{"sc-errors":14}],4:[function(require,module,exports){
 (function (global,Buffer){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var SCChannel = require('sc-channel').SCChannel;
@@ -138,6 +138,7 @@ var AuthEngine = require('./auth').AuthEngine;
 var SCTransport = require('./sctransport').SCTransport;
 var querystring = require('querystring');
 var LinkedList = require('linked-list');
+var base64 = require('base-64');
 
 var scErrors = require('sc-errors');
 var InvalidArgumentsError = scErrors.InvalidArgumentsError;
@@ -476,21 +477,46 @@ SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
   }
 };
 
+SCSocket.prototype.decodeBase64 = function (encodedString) {
+  var decodedString;
+  if (typeof Buffer == 'undefined') {
+    if (global.atob) {
+      decodedString = global.atob(encodedString);
+    } else {
+      decodedString = base64.decode(encodedString);
+    }
+  } else {
+    var buffer = new Buffer(encodedString, 'base64');
+    decodedString = buffer.toString('utf8');
+  }
+  return decodedString;
+};
+
+SCSocket.prototype.encodeBase64 = function (decodedString) {
+  var encodedString;
+  if (typeof Buffer == 'undefined') {
+    if (global.btoa) {
+      encodedString = global.btoa(decodedString);
+    } else {
+      encodedString = base64.encode(decodedString);
+    }
+  } else {
+    var buffer = new Buffer(decodedString, 'utf8');
+    encodedString = buffer.toString('base64');
+  }
+  return encodedString;
+};
+
 SCSocket.prototype._extractAuthTokenData = function (signedAuthToken) {
   var tokenParts = (signedAuthToken || '').split('.');
   var encodedTokenData = tokenParts[1];
   if (encodedTokenData != null) {
-    var decodedToken;
-    if (typeof Buffer == 'undefined') {
-      decodedToken = global.atob(encodedTokenData);
-    } else {
-      var buffer = new Buffer(encodedTokenData, 'base64');
-      decodedToken = buffer.toString('utf8');
-    }
+    var tokenData = encodedTokenData;
     try {
-      return JSON.parse(decodedToken);
+      tokenData = this.decodeBase64(tokenData);
+      return JSON.parse(tokenData);
     } catch (e) {
-      return decodedToken;
+      return tokenData;
     }
   }
   return null;
@@ -991,7 +1017,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./auth":2,"./response":3,"./sctransport":6,"buffer":17,"linked-list":9,"querystring":22,"sc-channel":10,"sc-emitter":11,"sc-errors":13}],5:[function(require,module,exports){
+},{"./auth":2,"./response":3,"./sctransport":6,"base-64":7,"buffer":18,"linked-list":10,"querystring":23,"sc-channel":11,"sc-emitter":12,"sc-errors":14}],5:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
 
@@ -1404,7 +1430,176 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":3,"querystring":22,"sc-emitter":11,"sc-errors":13,"sc-formatter":14,"sc-ws":15}],7:[function(require,module,exports){
+},{"./response":3,"querystring":23,"sc-emitter":12,"sc-errors":14,"sc-formatter":15,"sc-ws":16}],7:[function(require,module,exports){
+(function (global){
+/*! http://mths.be/base64 v0.1.0 by @mathias | MIT license */
+;(function(root) {
+
+	// Detect free variables `exports`.
+	var freeExports = typeof exports == 'object' && exports;
+
+	// Detect free variable `module`.
+	var freeModule = typeof module == 'object' && module &&
+		module.exports == freeExports && module;
+
+	// Detect free variable `global`, from Node.js or Browserified code, and use
+	// it as `root`.
+	var freeGlobal = typeof global == 'object' && global;
+	if (freeGlobal.global === freeGlobal || freeGlobal.window === freeGlobal) {
+		root = freeGlobal;
+	}
+
+	/*--------------------------------------------------------------------------*/
+
+	var InvalidCharacterError = function(message) {
+		this.message = message;
+	};
+	InvalidCharacterError.prototype = new Error;
+	InvalidCharacterError.prototype.name = 'InvalidCharacterError';
+
+	var error = function(message) {
+		// Note: the error messages used throughout this file match those used by
+		// the native `atob`/`btoa` implementation in Chromium.
+		throw new InvalidCharacterError(message);
+	};
+
+	var TABLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	// http://whatwg.org/html/common-microsyntaxes.html#space-character
+	var REGEX_SPACE_CHARACTERS = /[\t\n\f\r ]/g;
+
+	// `decode` is designed to be fully compatible with `atob` as described in the
+	// HTML Standard. http://whatwg.org/html/webappapis.html#dom-windowbase64-atob
+	// The optimized base64-decoding algorithm used is based on @atk’s excellent
+	// implementation. https://gist.github.com/atk/1020396
+	var decode = function(input) {
+		input = String(input)
+			.replace(REGEX_SPACE_CHARACTERS, '');
+		var length = input.length;
+		if (length % 4 == 0) {
+			input = input.replace(/==?$/, '');
+			length = input.length;
+		}
+		if (
+			length % 4 == 1 ||
+			// http://whatwg.org/C#alphanumeric-ascii-characters
+			/[^+a-zA-Z0-9/]/.test(input)
+		) {
+			error(
+				'Invalid character: the string to be decoded is not correctly encoded.'
+			);
+		}
+		var bitCounter = 0;
+		var bitStorage;
+		var buffer;
+		var output = '';
+		var position = -1;
+		while (++position < length) {
+			buffer = TABLE.indexOf(input.charAt(position));
+			bitStorage = bitCounter % 4 ? bitStorage * 64 + buffer : buffer;
+			// Unless this is the first of a group of 4 characters…
+			if (bitCounter++ % 4) {
+				// …convert the first 8 bits to a single ASCII character.
+				output += String.fromCharCode(
+					0xFF & bitStorage >> (-2 * bitCounter & 6)
+				);
+			}
+		}
+		return output;
+	};
+
+	// `encode` is designed to be fully compatible with `btoa` as described in the
+	// HTML Standard: http://whatwg.org/html/webappapis.html#dom-windowbase64-btoa
+	var encode = function(input) {
+		input = String(input);
+		if (/[^\0-\xFF]/.test(input)) {
+			// Note: no need to special-case astral symbols here, as surrogates are
+			// matched, and the input is supposed to only contain ASCII anyway.
+			error(
+				'The string to be encoded contains characters outside of the ' +
+				'Latin1 range.'
+			);
+		}
+		var padding = input.length % 3;
+		var output = '';
+		var position = -1;
+		var a;
+		var b;
+		var c;
+		var d;
+		var buffer;
+		// Make sure any padding is handled outside of the loop.
+		var length = input.length - padding;
+
+		while (++position < length) {
+			// Read three bytes, i.e. 24 bits.
+			a = input.charCodeAt(position) << 16;
+			b = input.charCodeAt(++position) << 8;
+			c = input.charCodeAt(++position);
+			buffer = a + b + c;
+			// Turn the 24 bits into four chunks of 6 bits each, and append the
+			// matching character for each of them to the output.
+			output += (
+				TABLE.charAt(buffer >> 18 & 0x3F) +
+				TABLE.charAt(buffer >> 12 & 0x3F) +
+				TABLE.charAt(buffer >> 6 & 0x3F) +
+				TABLE.charAt(buffer & 0x3F)
+			);
+		}
+
+		if (padding == 2) {
+			a = input.charCodeAt(position) << 8;
+			b = input.charCodeAt(++position);
+			buffer = a + b;
+			output += (
+				TABLE.charAt(buffer >> 10) +
+				TABLE.charAt((buffer >> 4) & 0x3F) +
+				TABLE.charAt((buffer << 2) & 0x3F) +
+				'='
+			);
+		} else if (padding == 1) {
+			buffer = input.charCodeAt(position);
+			output += (
+				TABLE.charAt(buffer >> 2) +
+				TABLE.charAt((buffer << 4) & 0x3F) +
+				'=='
+			);
+		}
+
+		return output;
+	};
+
+	var base64 = {
+		'encode': encode,
+		'decode': decode,
+		'version': '0.1.0'
+	};
+
+	// Some AMD build optimizers, like r.js, check for specific condition patterns
+	// like the following:
+	if (
+		typeof define == 'function' &&
+		typeof define.amd == 'object' &&
+		define.amd
+	) {
+		define(function() {
+			return base64;
+		});
+	}	else if (freeExports && !freeExports.nodeType) {
+		if (freeModule) { // in Node.js or RingoJS v0.8.0+
+			freeModule.exports = base64;
+		} else { // in Narwhal or RingoJS v0.7.0-
+			for (var key in base64) {
+				base64.hasOwnProperty(key) && (freeExports[key] = base64[key]);
+			}
+		}
+	} else { // in Rhino or a web browser
+		root.base64 = base64;
+	}
+
+}(this));
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],8:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -1567,7 +1762,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1955,12 +2150,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":8}],10:[function(require,module,exports){
+},{"./_source/linked-list.js":9}],11:[function(require,module,exports){
 var SCEmitter = require('sc-emitter').SCEmitter;
 
 var SCChannel = function (name, client, options) {
@@ -2020,7 +2215,7 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"sc-emitter":11}],11:[function(require,module,exports){
+},{"sc-emitter":12}],12:[function(require,module,exports){
 var Emitter = require('component-emitter');
 
 if (!Object.create) {
@@ -2053,7 +2248,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"./objectcreate":12,"component-emitter":7}],12:[function(require,module,exports){
+},{"./objectcreate":13,"component-emitter":8}],13:[function(require,module,exports){
 module.exports.create = (function () {
   function F() {};
 
@@ -2065,7 +2260,7 @@ module.exports.create = (function () {
     return new F();
   }
 })();
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 
 function AuthTokenExpiredError(message, expiry) {
   if (Error.captureStackTrace) {
@@ -2337,7 +2532,7 @@ module.exports.hydrateError = function (error) {
   return hydratedError;
 };
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -2426,7 +2621,7 @@ module.exports.stringify = function (object) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 
 /**
  * Module dependencies.
@@ -2471,7 +2666,7 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 ;(function (exports) {
   'use strict'
 
@@ -2591,7 +2786,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
   exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 (function (global){
 /*!
  * The buffer module from node.js, for the browser.
@@ -4047,14 +4242,14 @@ function blitBuffer (src, dst, offset, length) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":16,"ieee754":19,"isarray":18}],18:[function(require,module,exports){
+},{"base64-js":17,"ieee754":20,"isarray":19}],19:[function(require,module,exports){
 var toString = {}.toString;
 
 module.exports = Array.isArray || function (arr) {
   return toString.call(arr) == '[object Array]';
 };
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -4140,7 +4335,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4226,7 +4421,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4313,11 +4508,11 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":20,"./encode":21}]},{},[1])(1)
+},{"./decode":21,"./encode":22}]},{},[1])(1)
 });
