@@ -14,6 +14,7 @@
     "url": "git://github.com/SocketCluster/socketcluster-client.git"
   },
   "dependencies": {
+    "base-64": "0.1.0",
     "linked-list": "0.1.0",
     "sc-channel": "1.0.x",
     "sc-emitter": "1.0.x",
