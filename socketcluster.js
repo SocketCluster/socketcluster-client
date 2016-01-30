@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.1';
+module.exports.version = '4.3.2';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -1067,7 +1067,9 @@ function connect(options) {
   if (opts.multiplex === false) {
     return new SCSocket(opts);
   }
-  if (!_connections[multiplexId]) {
+  if (_connections[multiplexId]) {
+    _connections[multiplexId].connect();
+  } else {
     _connections[multiplexId] = new SCSocket(opts);
   }
   return _connections[multiplexId];
