@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.2';
+module.exports.version = '4.3.3';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -161,6 +161,7 @@ var SCSocket = function (opts) {
   this.authToken = null;
   this.pendingConnectCallback = false;
 
+  this.connectTimeout = opts.connectTimeout;
   this.ackTimeout = opts.ackTimeout;
 
   // pingTimeout will be ackTimeout at the start, but it will
@@ -176,6 +177,7 @@ var SCSocket = function (opts) {
     }
   };
 
+  verifyDuration('connectTimeout');
   verifyDuration('ackTimeout');
   verifyDuration('pingTimeout');
 
@@ -371,7 +373,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   var self = this;
 
   if (this.state == this.CLOSED) {
-    clearTimeout(this._reconnectTimeout);
+    clearTimeout(this._reconnectTimeoutRef);
 
     this.state = this.CONNECTING;
     this._changeToPendingAuthState();
@@ -425,6 +427,8 @@ SCSocket.prototype.disconnect = function (code, data) {
 
   } else if (this.state == this.CONNECTING) {
     this.transport.close(code);
+  } else {
+    clearTimeout(this._reconnectTimeoutRef);
   }
 };
 
@@ -580,9 +584,9 @@ SCSocket.prototype._tryReconnect = function (initialDelay) {
     timeout = reconnectOptions.maxDelay;
   }
 
-  clearTimeout(this._reconnectTimeout);
+  clearTimeout(this._reconnectTimeoutRef);
 
-  this._reconnectTimeout = setTimeout(function () {
+  this._reconnectTimeoutRef = setTimeout(function () {
     self.connect();
   }, timeout);
 };
@@ -659,7 +663,7 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
   if (this.transport) {
     this.transport.off();
   }
-  clearTimeout(this._reconnectTimeout);
+  clearTimeout(this._reconnectTimeoutRef);
 
   this._changeToPendingAuthState();
   this._suspendSubscriptions();
@@ -1050,6 +1054,7 @@ function connect(options) {
     secure: isSecureDefault,
     autoReconnect: true,
     autoProcessSubscriptions: true,
+    connectTimeout: 20000,
     ackTimeout: 10000,
     timestampRequests: false,
     timestampParam: 't',
@@ -1117,6 +1122,7 @@ var SCTransport = function (authEngine, options) {
   this.state = this.CLOSED;
   this.auth = authEngine;
   this.options = options;
+  this.connectTimeout = options.connectTimeout;
   this.pingTimeout = options.ackTimeout;
   this.callIdGenerator = options.callIdGenerator;
 
@@ -1188,11 +1194,17 @@ SCTransport.prototype.open = function () {
       self._onClose(1006);
     }
   };
+
+  this._connectTimeoutRef = setTimeout(function () {
+    self._onClose(4007);
+    self.socket.close(4007);
+  }, this.connectTimeout);
 };
 
 SCTransport.prototype._onOpen = function () {
   var self = this;
 
+  clearTimeout(this._connectTimeoutRef);
   this._resetPingTimeout();
 
   this._handshake(function (err, status) {
@@ -1241,6 +1253,8 @@ SCTransport.prototype._onClose = function (code, data) {
   delete this.socket.onclose;
   delete this.socket.onmessage;
   delete this.socket.onerror;
+
+  clearTimeout(this._connectTimeoutRef);
 
   if (this.state == this.OPEN) {
     this.state = this.CLOSED;
@@ -2482,7 +2496,8 @@ module.exports.socketProtocolErrorStatuses = {
   4003: 'Failed to complete handshake',
   4004: 'Client failed to save auth token',
   4005: 'Did not receive #handshake from client before timeout',
-  4006: 'Failed to bind socket to message broker'
+  4006: 'Failed to bind socket to message broker',
+  4007: 'Client connection establishment timed out'
 };
 
 module.exports.socketProtocolIgnoreStatuses = {
