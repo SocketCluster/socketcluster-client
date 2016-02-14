@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.5';
+module.exports.version = '4.3.6';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -159,6 +159,7 @@ var SCSocket = function (opts) {
   this.authState = this.PENDING;
   this.signedAuthToken = null;
   this.authToken = null;
+  this.pendingReconnect = false;
   this.pendingConnectCallback = false;
 
   this.connectTimeout = opts.connectTimeout;
@@ -373,6 +374,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   var self = this;
 
   if (this.state == this.CLOSED) {
+    this.pendingReconnect = false;
     clearTimeout(this._reconnectTimeoutRef);
 
     this.state = this.CONNECTING;
@@ -428,6 +430,7 @@ SCSocket.prototype.disconnect = function (code, data) {
   } else if (this.state == this.CONNECTING) {
     this.transport.close(code);
   } else {
+    this.pendingReconnect = false;
     clearTimeout(this._reconnectTimeoutRef);
   }
 };
@@ -586,6 +589,7 @@ SCSocket.prototype._tryReconnect = function (initialDelay) {
 
   clearTimeout(this._reconnectTimeoutRef);
 
+  this.pendingReconnect = true;
   this._reconnectTimeoutRef = setTimeout(function () {
     self.connect();
   }, timeout);
@@ -663,6 +667,7 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
   if (this.transport) {
     this.transport.off();
   }
+  this.pendingReconnect = false;
   clearTimeout(this._reconnectTimeoutRef);
 
   this._changeToPendingAuthState();
