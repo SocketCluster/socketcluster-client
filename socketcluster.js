@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.7';
+module.exports.version = '4.3.8';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -160,6 +160,7 @@ var SCSocket = function (opts) {
   this.signedAuthToken = null;
   this.authToken = null;
   this.pendingReconnect = false;
+  this.pendingReconnectTimeout = null;
   this.pendingConnectCallback = false;
 
   this.connectTimeout = opts.connectTimeout;
@@ -201,7 +202,7 @@ var SCSocket = function (opts) {
     'subscribeRequest': 1
   };
 
-  this._connectAttempts = 0;
+  this.connectAttempts = 0;
 
   this._emitBuffer = new LinkedList();
   this._channels = {};
@@ -375,6 +376,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
 
   if (this.state == this.CLOSED) {
     this.pendingReconnect = false;
+    this.pendingReconnectTimeout = null;
     clearTimeout(this._reconnectTimeoutRef);
 
     this.state = this.CONNECTING;
@@ -431,6 +433,7 @@ SCSocket.prototype.disconnect = function (code, data) {
     this.transport.close(code);
   } else {
     this.pendingReconnect = false;
+    this.pendingReconnectTimeout = null;
     clearTimeout(this._reconnectTimeoutRef);
   }
 };
@@ -571,7 +574,7 @@ SCSocket.prototype.authenticate = function (signedAuthToken, callback) {
 SCSocket.prototype._tryReconnect = function (initialDelay) {
   var self = this;
 
-  var exponent = this._connectAttempts++;
+  var exponent = this.connectAttempts++;
   var reconnectOptions = this.options.autoReconnectOptions;
   var timeout;
 
@@ -590,6 +593,7 @@ SCSocket.prototype._tryReconnect = function (initialDelay) {
   clearTimeout(this._reconnectTimeoutRef);
 
   this.pendingReconnect = true;
+  this.pendingReconnectTimeout = timeout;
   this._reconnectTimeoutRef = setTimeout(function () {
     self.connect();
   }, timeout);
@@ -611,7 +615,7 @@ SCSocket.prototype._onSCOpen = function (status) {
     this._changeToUnauthenticatedState();
   }
 
-  this._connectAttempts = 0;
+  this.connectAttempts = 0;
   if (this.options.autoProcessSubscriptions) {
     this.processPendingSubscriptions();
   } else {
@@ -668,16 +672,11 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
     this.transport.off();
   }
   this.pendingReconnect = false;
+  this.pendingReconnectTimeout = null;
   clearTimeout(this._reconnectTimeoutRef);
 
   this._changeToPendingAuthState();
   this._suspendSubscriptions();
-
-  if (openAbort) {
-    SCEmitter.prototype.emit.call(self, 'connectAbort', code, data);
-  } else {
-    SCEmitter.prototype.emit.call(self, 'disconnect', code, data);
-  }
 
   // Try to reconnect
   // on server ping timeout (4000)
@@ -696,6 +695,12 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
     } else if (code != 1000) {
       this._tryReconnect();
     }
+  }
+
+  if (openAbort) {
+    SCEmitter.prototype.emit.call(self, 'connectAbort', code, data);
+  } else {
+    SCEmitter.prototype.emit.call(self, 'disconnect', code, data);
   }
 
   if (!SCSocket.ignoreStatuses[code]) {
