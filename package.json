@@ -22,5 +22,6 @@
     "sc-formatter": "1.0.x",
     "sc-ws": "1.0.x"
   },
-  "readmeFilename": "README.md"
+  "readmeFilename": "README.md",
+  "license": "MIT"
 }
