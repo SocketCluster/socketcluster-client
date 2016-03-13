@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.8';
+module.exports.version = '4.3.9';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -165,6 +165,7 @@ var SCSocket = function (opts) {
 
   this.connectTimeout = opts.connectTimeout;
   this.ackTimeout = opts.ackTimeout;
+  this.channelPrefix = opts.channelPrefix || null;
 
   // pingTimeout will be ackTimeout at the start, but it will
   // be updated with values provided by the 'connect' event
@@ -286,18 +287,19 @@ SCSocket.errorStatuses = scErrors.socketProtocolErrorStatuses;
 
 SCSocket.prototype._privateEventHandlerMap = {
   '#publish': function (data) {
-    var isSubscribed = this.isSubscribed(data.channel, true);
+    var undecoratedChannelName = this._undecorateChannelName(data.channel);
+    var isSubscribed = this.isSubscribed(undecoratedChannelName, true);
 
     if (isSubscribed) {
-      this._channelEmitter.emit(data.channel, data.data);
+      this._channelEmitter.emit(undecoratedChannelName, data.data);
     }
   },
   '#kickOut': function (data) {
-    var channelName = data.channel;
-    var channel = this._channels[channelName];
+    var undecoratedChannelName = this._undecorateChannelName(data.channel);
+    var channel = this._channels[undecoratedChannelName];
     if (channel) {
-      SCEmitter.prototype.emit.call(this, 'kickOut', data.message, channelName);
-      channel.emit('kickOut', data.message, channelName);
+      SCEmitter.prototype.emit.call(this, 'kickOut', data.message, undecoratedChannelName);
+      channel.emit('kickOut', data.message, undecoratedChannelName);
       this._triggerChannelUnsubscribe(channel);
     }
   },
@@ -793,7 +795,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
 
 SCSocket.prototype.publish = function (channelName, data, callback) {
   var pubData = {
-    channel: channelName,
+    channel: this._decorateChannelName(channelName),
     data: data
   };
   this.emit('#publish', pubData, callback);
@@ -838,6 +840,20 @@ SCSocket.prototype._cancelPendingSubscribeCallback = function (channel) {
   }
 };
 
+SCSocket.prototype._decorateChannelName = function (channelName) {
+  if (this.channelPrefix) {
+    channelName = this.channelPrefix + channelName;
+  }
+  return channelName;
+};
+
+SCSocket.prototype._undecorateChannelName = function (decoratedChannelName) {
+  if (this.channelPrefix && decoratedChannelName.indexOf(this.channelPrefix) == 0) {
+    return decoratedChannelName.replace(this.channelPrefix, '');
+  }
+  return decoratedChannelName;
+};
+
 SCSocket.prototype._trySubscribe = function (channel) {
   var self = this;
 
@@ -852,7 +868,7 @@ SCSocket.prototype._trySubscribe = function (channel) {
     };
 
     var subscriptionData = {
-      channel: channel.name
+      channel: this._decorateChannelName(channel.name)
     };
     if (channel.waitForAuth) {
       options.waitForAuth = true;
@@ -928,7 +944,8 @@ SCSocket.prototype._tryUnsubscribe = function (channel) {
     // so long as the connection remains open. If the connection closes,
     // the server will automatically unsubscribe the socket and thus complete
     // the operation on the server side.
-    this.transport.emit('#unsubscribe', channel.name, options);
+    var decoratedChannelName = this._decorateChannelName(channel.name);
+    this.transport.emit('#unsubscribe', decoratedChannelName, options);
   }
 };
 
@@ -984,8 +1001,8 @@ SCSocket.prototype.subscriptions = function (includePending) {
   return subs;
 };
 
-SCSocket.prototype.isSubscribed = function (channel, includePending) {
-  var channel = this._channels[channel];
+SCSocket.prototype.isSubscribed = function (channelName, includePending) {
+  var channel = this._channels[channelName];
   if (includePending) {
     return !!channel && (channel.state == channel.SUBSCRIBED ||
       channel.state == channel.PENDING);
