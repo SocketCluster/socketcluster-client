@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.9';
+module.exports.version = '4.3.10';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -2844,7 +2844,7 @@ module.exports.stringify = function (object) {
  * Module dependencies.
  */
 
-var global = (function() { return this; })();
+var global = typeof window != 'undefined' && window || (function() { return this; })();
 
 /**
  * WebSocket constructor.
