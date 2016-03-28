@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.11';
+module.exports.version = '4.3.12';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -1056,7 +1056,24 @@ var _connections = {};
 
 function getMultiplexId(options) {
   var protocolPrefix = options.secure ? 'https://' : 'http://';
-  return protocolPrefix + options.hostname + ':' + options.port + options.path;
+  var queryString = '';
+  if (options.query) {
+    if (typeof options.query == 'string') {
+      queryString = options.query;
+    } else {
+      var queryArray = [];
+      var queryMap = options.query;
+      for (var key in queryMap) {
+        if (queryMap.hasOwnProperty(key)) {
+          queryArray.push(key + '=' + queryMap[key]);
+        }
+      }
+      if (queryArray.length) {
+        queryString = '?' + queryArray.join('&');
+      }
+    }
+  }
+  return protocolPrefix + options.hostname + ':' + options.port + options.path + queryString;
 }
 
 function isUrlSecure() {
