@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.12';
+module.exports.version = '4.3.13';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -28,6 +28,11 @@ AuthEngine.prototype._isLocalStorageEnabled = function () {
   try {
     // Some browsers will throw an error here if localStorage is disabled.
     global.localStorage;
+    
+    // Safari, in Private Browsing Mode, looks like it supports localStorage but all calls to setItem
+    // throw QuotaExceededError. We're going to detect this and avoid hard to debug edge cases.
+    global.localStorage.setItem('__scLocalStorageTest', 1);
+    global.localStorage.removeItem('__scLocalStorageTest');
   } catch (e) {
     err = e;
   }
