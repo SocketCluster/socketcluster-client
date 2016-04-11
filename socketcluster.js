@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.13';
+module.exports.version = '4.3.14';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -806,7 +806,7 @@ SCSocket.prototype.publish = function (channelName, data, callback) {
   this.emit('#publish', pubData, callback);
 };
 
-SCSocket.prototype._triggerChannelSubscribe = function (channel) {
+SCSocket.prototype._triggerChannelSubscribe = function (channel, subscriptionOptions) {
   var channelName = channel.name;
 
   if (channel.state != channel.SUBSCRIBED) {
@@ -816,24 +816,25 @@ SCSocket.prototype._triggerChannelSubscribe = function (channel) {
     var stateChangeData = {
       channel: channelName,
       oldState: oldState,
-      newState: channel.state
+      newState: channel.state,
+      subscriptionOptions: subscriptionOptions
     };
     channel.emit('subscribeStateChange', stateChangeData);
-    channel.emit('subscribe', channelName);
+    channel.emit('subscribe', channelName, subscriptionOptions);
     SCEmitter.prototype.emit.call(this, 'subscribeStateChange', stateChangeData);
-    SCEmitter.prototype.emit.call(this, 'subscribe', channelName);
+    SCEmitter.prototype.emit.call(this, 'subscribe', channelName, subscriptionOptions);
   }
 };
 
-SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel) {
+SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel, subscriptionOptions) {
   var channelName = channel.name;
   var meetsAuthRequirements = !channel.waitForAuth || this.authState == this.AUTHENTICATED;
 
   if (channel.state != channel.UNSUBSCRIBED && meetsAuthRequirements) {
     channel.state = channel.UNSUBSCRIBED;
 
-    channel.emit('subscribeFail', err, channelName);
-    SCEmitter.prototype.emit.call(this, 'subscribeFail', err, channelName);
+    channel.emit('subscribeFail', err, channelName, subscriptionOptions);
+    SCEmitter.prototype.emit.call(this, 'subscribeFail', err, channelName, subscriptionOptions);
   }
 };
 
@@ -872,26 +873,29 @@ SCSocket.prototype._trySubscribe = function (channel) {
       noTimeout: true
     };
 
-    var subscriptionData = {
+    var subscriptionOptions = {
       channel: this._decorateChannelName(channel.name)
     };
     if (channel.waitForAuth) {
       options.waitForAuth = true;
-      subscriptionData.waitForAuth = options.waitForAuth;
+      subscriptionOptions.waitForAuth = options.waitForAuth;
+    }
+    if (channel.data) {
+      subscriptionOptions.data = channel.data;
     }
 
     channel._pendingSubscriptionCid = this.transport.emit(
-      '#subscribe', subscriptionData, options,
+      '#subscribe', subscriptionOptions, options,
       function (err) {
         delete channel._pendingSubscriptionCid;
         if (err) {
-          self._triggerChannelSubscribeFail(err, channel);
+          self._triggerChannelSubscribeFail(err, channel, subscriptionOptions);
         } else {
-          self._triggerChannelSubscribe(channel);
+          self._triggerChannelSubscribe(channel, subscriptionOptions);
         }
       }
     );
-    SCEmitter.prototype.emit.call(this, 'subscribeRequest', channel.name);
+    SCEmitter.prototype.emit.call(this, 'subscribeRequest', channel.name, subscriptionOptions);
   }
 };
 
@@ -901,6 +905,8 @@ SCSocket.prototype.subscribe = function (channelName, options) {
   if (!channel) {
     channel = new SCChannel(channelName, this, options);
     this._channels[channelName] = channel;
+  } else if (options) {
+    channel.setOptions(options);
   }
 
   if (channel.state == channel.UNSUBSCRIBED) {
@@ -2237,17 +2243,27 @@ var SCChannel = function (name, client, options) {
   this.client = client;
 
   this.options = options || {};
-  this.waitForAuth = this.options.waitForAuth || false;
+  this.setOptions(this.options);
 };
 
 SCChannel.prototype = Object.create(SCEmitter.prototype);
+
+SCChannel.prototype.setOptions = function (options) {
+  if (!options) {
+    options = {};
+  }
+  this.waitForAuth = options.waitForAuth || false;
+  if (options.data !== undefined) {
+    this.data = options.data;
+  }
+};
 
 SCChannel.prototype.getState = function () {
   return this.state;
 };
 
-SCChannel.prototype.subscribe = function () {
-  this.client.subscribe(this.name);
+SCChannel.prototype.subscribe = function (options) {
+  this.client.subscribe(this.name, options);
 };
 
 SCChannel.prototype.unsubscribe = function () {
