@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.14';
+module.exports.version = '4.3.15';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -711,7 +711,13 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
   }
 
   if (!SCSocket.ignoreStatuses[code]) {
-    var err = new SocketProtocolError(SCSocket.errorStatuses[code] || 'Socket connection failed for unknown reasons', code);
+    var failureMessage;
+    if (data) {
+      failureMessage = 'Socket connection failed: ' + data;
+    } else {
+      failureMessage = 'Socket connection failed for unknown reasons';
+    }
+    var err = new SocketProtocolError(SCSocket.errorStatuses[code] || failureMessage, code);
     this._onSCError(err);
   }
 };
