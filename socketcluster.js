@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.15';
+module.exports.version = '4.3.16';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -699,7 +699,9 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
       // want to re-establish the connection as soon as possible.
       this._tryReconnect(0);
 
-    } else if (code != 1000) {
+      // Codes 4500 and above will be treated as permanent disconnects.
+      // Socket will not try to auto-reconnect.
+    } else if (code != 1000 && code < 4500) {
       this._tryReconnect();
     }
   }
