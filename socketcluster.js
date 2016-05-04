@@ -28,7 +28,7 @@ AuthEngine.prototype._isLocalStorageEnabled = function () {
   try {
     // Some browsers will throw an error here if localStorage is disabled.
     global.localStorage;
-    
+
     // Safari, in Private Browsing Mode, looks like it supports localStorage but all calls to setItem
     // throw QuotaExceededError. We're going to detect this and avoid hard to debug edge cases.
     global.localStorage.setItem('__scLocalStorageTest', 1);
@@ -2321,9 +2321,9 @@ SCEmitter.prototype.emit = function (event) {
   if (event == 'error' && this.domain) {
     // Emit the error on the domain if it has one.
     // See https://github.com/joyent/node/blob/ef4344311e19a4f73c031508252b21712b22fe8a/lib/events.js#L78-85
-    
+
     var err = arguments[1];
-    
+
     if (!err) {
       err = new Error('Uncaught, unspecified "error" event.');
     }
@@ -2806,7 +2806,7 @@ module.exports.parse = function (input) {
    return null;
   }
   var message = input.toString();
-  
+
   try {
     return JSON.parse(message);
   } catch (err) {}
@@ -2835,14 +2835,7 @@ var arrayBufferToBase64 = function (arraybuffer) {
 };
 
 var isOwnDescendant = function (object, ancestors) {
-  for (var i in ancestors) {
-    if (ancestors.hasOwnProperty(i)) {
-      if (ancestors[i] === object) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return ancestors.indexOf(object) > -1;
 };
 
 var convertBuffersToBase64 = function (object, ancestors) {
@@ -2853,7 +2846,7 @@ var convertBuffersToBase64 = function (object, ancestors) {
     throw new Error('Cannot traverse circular structure');
   }
   var newAncestors = ancestors.concat([object]);
-  
+
   if (global.ArrayBuffer && object instanceof global.ArrayBuffer) {
     object = {
       base64: true,
