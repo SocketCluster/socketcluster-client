@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.16';
+module.exports.version = '4.3.17';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -2806,7 +2806,7 @@ module.exports.parse = function (input) {
    return null;
   }
   var message = input.toString();
-  
+
   try {
     return JSON.parse(message);
   } catch (err) {}
@@ -2835,14 +2835,7 @@ var arrayBufferToBase64 = function (arraybuffer) {
 };
 
 var isOwnDescendant = function (object, ancestors) {
-  for (var i in ancestors) {
-    if (ancestors.hasOwnProperty(i)) {
-      if (ancestors[i] === object) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return ancestors.indexOf(object) > -1;
 };
 
 var convertBuffersToBase64 = function (object, ancestors) {
@@ -2853,7 +2846,7 @@ var convertBuffersToBase64 = function (object, ancestors) {
     throw new Error('Cannot traverse circular structure');
   }
   var newAncestors = ancestors.concat([object]);
-  
+
   if (global.ArrayBuffer && object instanceof global.ArrayBuffer) {
     object = {
       base64: true,
