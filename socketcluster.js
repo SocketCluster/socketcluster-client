@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.17';
+module.exports.version = '4.3.18';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -434,10 +434,10 @@ SCSocket.prototype.disconnect = function (code, data) {
       data: data
     };
     this.transport.emit('#disconnect', packet);
-    this.transport.close(code);
+    this.transport.close(code, data);
 
   } else if (this.state == this.CONNECTING) {
-    this.transport.close(code);
+    this.transport.close(code, data);
   } else {
     this.pendingReconnect = false;
     this.pendingReconnectTimeout = null;
