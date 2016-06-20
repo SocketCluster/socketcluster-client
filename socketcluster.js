@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '4.3.18';
+module.exports.version = '4.3.19';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -472,15 +472,17 @@ SCSocket.prototype._changeToUnauthenticatedState = function () {
     if (oldState == this.AUTHENTICATED) {
       SCEmitter.prototype.emit.call(this, 'deauthenticate');
     }
+    SCEmitter.prototype.emit.call(this, 'authTokenChange', this.signedAuthToken);
   }
 };
 
 SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
+  this.signedAuthToken = signedAuthToken;
+  this.authToken = this._extractAuthTokenData(signedAuthToken);
+
   if (this.authState != this.AUTHENTICATED) {
     var oldState = this.authState;
     this.authState = this.AUTHENTICATED;
-    this.signedAuthToken = signedAuthToken;
-    this.authToken = this._extractAuthTokenData(signedAuthToken);
     var stateChangeData = {
       oldState: oldState,
       newState: this.authState,
@@ -492,6 +494,7 @@ SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
     SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
     SCEmitter.prototype.emit.call(this, 'authenticate', signedAuthToken);
   }
+  SCEmitter.prototype.emit.call(this, 'authTokenChange', signedAuthToken);
 };
 
 SCSocket.prototype.decodeBase64 = function (encodedString) {
