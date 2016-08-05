@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "4.3.19",
+  "version": "5.0.0",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -20,7 +20,10 @@
     "sc-emitter": "1.0.x",
     "sc-errors": "1.0.x",
     "sc-formatter": "1.0.x",
-    "sc-ws": "1.0.x"
+    "ws": "1.1.1"
+  },
+  "browser": {
+    "./lib/ws.js": "./lib/ws-browser.js"
   },
   "readmeFilename": "README.md",
   "license": "MIT"
