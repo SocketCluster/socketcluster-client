@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.4';
+module.exports.version = '5.0.5';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
@@ -1508,12 +1508,7 @@ SCTransport.prototype.sendObject = function (object) {
 module.exports.SCTransport = SCTransport;
 
 },{"./response":3,"querystring":24,"sc-emitter":14,"sc-errors":16,"sc-formatter":17,"ws":7}],7:[function(require,module,exports){
-
-/**
- * Module dependencies.
- */
-
-var global = typeof window != 'undefined' && window || (function() { return this; })();
+(function (global){
 
 /**
  * WebSocket constructor.
@@ -1552,6 +1547,7 @@ function ws(uri, protocols, opts) {
 
 if (WebSocket) ws.prototype = WebSocket.prototype;
 
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],8:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/base64 v0.1.0 by @mathias | MIT license */
