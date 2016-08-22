@@ -23,7 +23,7 @@
     "ws": "1.1.1"
   },
   "browser": {
-    "./lib/ws.js": "./lib/ws-browser.js"
+    "ws": "./lib/ws-browser.js"
   },
   "readmeFilename": "README.md",
   "license": "MIT"
