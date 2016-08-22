@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.3';
+module.exports.version = '5.0.4';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
@@ -1178,7 +1178,7 @@ var SCEmitter = require('sc-emitter').SCEmitter;
 var formatter = require('sc-formatter');
 var Response = require('./response').Response;
 var querystring = require('querystring');
-var WebSocket = require('./ws');
+var WebSocket = require('ws');
 
 var scErrors = require('sc-errors');
 var TimeoutError = scErrors.TimeoutError;
@@ -1342,12 +1342,7 @@ SCTransport.prototype._onMessage = function (message) {
       this.socket.send('#2');
     }
   } else {
-    var obj;
-    try {
-      obj = this.parse(message);
-    } catch (err) {
-      obj = message;
-    }
+    var obj = this.parse(message);
     var event = obj.event;
 
     if (event) {
@@ -1512,7 +1507,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":3,"./ws":7,"querystring":24,"sc-emitter":14,"sc-errors":16,"sc-formatter":17}],7:[function(require,module,exports){
+},{"./response":3,"querystring":24,"sc-emitter":14,"sc-errors":16,"sc-formatter":17,"ws":7}],7:[function(require,module,exports){
 
 /**
  * Module dependencies.
