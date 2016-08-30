@@ -16,7 +16,7 @@
   "dependencies": {
     "base-64": "0.1.0",
     "linked-list": "0.1.0",
-    "querystring": "1.2.0",
+    "querystring": "0.2.0",
     "sc-channel": "1.0.x",
     "sc-emitter": "1.0.x",
     "sc-errors": "1.0.x",
