@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.7';
+module.exports.version = '5.0.8';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
