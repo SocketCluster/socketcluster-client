@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.8';
+module.exports.version = '5.0.9';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
@@ -171,6 +171,7 @@ var SCSocket = function (opts) {
   this.connectTimeout = opts.connectTimeout;
   this.ackTimeout = opts.ackTimeout;
   this.channelPrefix = opts.channelPrefix || null;
+  this.disconnectOnUnload = opts.disconnectOnUnload == null ? true : opts.disconnectOnUnload;
 
   // pingTimeout will be ackTimeout at the start, but it will
   // be updated with values provided by the 'connect' event
@@ -264,7 +265,7 @@ var SCSocket = function (opts) {
 
   this._channelEmitter = new SCEmitter();
 
-  if (isBrowser) {
+  if (isBrowser && this.disconnectOnUnload) {
     var unloadHandler = function () {
       self.disconnect();
     };
