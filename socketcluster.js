@@ -15,7 +15,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.9';
+module.exports.version = '5.0.10';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
@@ -367,15 +367,15 @@ SCSocket.prototype.deauthenticate = function (callback) {
   var self = this;
 
   this.auth.removeToken(this.options.authTokenName, function (err, oldToken) {
-    self.emit('#removeAuthToken');
-    callback && callback(err);
     if (err) {
       // Non-fatal error - Do not close the connection
       self._onSCError(err);
     } else {
+      self.emit('#removeAuthToken');
       SCEmitter.prototype.emit.call(self, 'removeAuthToken', oldToken);
       self._changeToUnauthenticatedState();
     }
+    callback && callback(err);
   });
 };
 
