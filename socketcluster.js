@@ -1,4 +1,86 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function (global){
+var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+module.exports.decode = function (input) {
+  if (input == null) {
+   return null;
+  }
+  var message = input.toString();
+
+  try {
+    return JSON.parse(message);
+  } catch (err) {}
+  return message;
+};
+
+var arrayBufferToBase64 = function (arraybuffer) {
+  var bytes = new Uint8Array(arraybuffer);
+  var len = bytes.length;
+  var base64 = '';
+
+  for (var i = 0; i < len; i += 3) {
+    base64 += base64Chars[bytes[i] >> 2];
+    base64 += base64Chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+    base64 += base64Chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+    base64 += base64Chars[bytes[i + 2] & 63];
+  }
+
+  if ((len % 3) === 2) {
+    base64 = base64.substring(0, base64.length - 1) + '=';
+  } else if (len % 3 === 1) {
+    base64 = base64.substring(0, base64.length - 2) + '==';
+  }
+
+  return base64;
+};
+
+var isOwnDescendant = function (object, ancestors) {
+  return ancestors.indexOf(object) > -1;
+};
+
+var convertBuffersToBase64 = function (object, ancestors) {
+  if (!ancestors) {
+    ancestors = [];
+  }
+  if (isOwnDescendant(object, ancestors)) {
+    throw new Error('Cannot traverse circular structure');
+  }
+  var newAncestors = ancestors.concat([object]);
+
+  if (global.ArrayBuffer && object instanceof global.ArrayBuffer) {
+    object = {
+      base64: true,
+      data: arrayBufferToBase64(object)
+    };
+  } else if (global.Buffer && object instanceof global.Buffer) {
+    object = {
+      base64: true,
+      data: object.toString('base64')
+    };
+  } else if (object instanceof Array) {
+    for (var i in object) {
+      if (object.hasOwnProperty(i)) {
+        object[i] = convertBuffersToBase64(object[i], newAncestors);
+      }
+    }
+  } else if (object instanceof Object) {
+    for (var j in object) {
+      if (object.hasOwnProperty(j)) {
+        object[j] = convertBuffersToBase64(object[j], newAncestors);
+      }
+    }
+  }
+  return object;
+};
+
+module.exports.encode = function (object) {
+  var base64Object = convertBuffersToBase64(object);
+  return JSON.stringify(base64Object);
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],2:[function(require,module,exports){
 var SCSocket = require('./lib/scsocket');
 var SCSocketCreator = require('./lib/scsocketcreator');
 
@@ -15,9 +97,9 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.10';
+module.exports.version = '5.0.12';
 
-},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
+},{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -77,7 +159,7 @@ AuthEngine.prototype.loadToken = function (name, callback) {
 module.exports.AuthEngine = AuthEngine;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var scErrors = require('sc-errors');
 var InvalidActionError = scErrors.InvalidActionError;
 
@@ -92,7 +174,7 @@ Response.prototype._respond = function (responseData) {
     throw new InvalidActionError('Response ' + this.id + ' has already been sent');
   } else {
     this.sent = true;
-    this.socket.send(this.socket.stringify(responseData));
+    this.socket.send(this.socket.encode(responseData));
   }
 };
 
@@ -134,12 +216,13 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 
-},{"sc-errors":16}],4:[function(require,module,exports){
+},{"sc-errors":17}],5:[function(require,module,exports){
 (function (global,Buffer){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var SCChannel = require('sc-channel').SCChannel;
 var Response = require('./response').Response;
 var AuthEngine = require('./auth').AuthEngine;
+var formatter = require('sc-formatter');
 var SCTransport = require('./sctransport').SCTransport;
 var querystring = require('querystring');
 var LinkedList = require('linked-list');
@@ -252,6 +335,13 @@ var SCSocket = function (opts) {
     this.auth = this.options.authEngine;
   } else {
     this.auth = new AuthEngine();
+  }
+
+  if (this.options.codecEngine) {
+    this.codec = this.options.codecEngine;
+  } else {
+    // Default codec engine
+    this.codec = formatter;
   }
 
   this.options.path = this.options.path.replace(/\/$/, '') + '/';
@@ -394,7 +484,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
       this.transport.off();
     }
 
-    this.transport = new SCTransport(this.auth, this.options);
+    this.transport = new SCTransport(this.auth, this.codec, this.options);
 
     this.transport.on('open', function (status) {
       self.state = self.OPEN;
@@ -739,12 +829,12 @@ SCSocket.prototype._onSCEvent = function (event, data, res) {
   }
 };
 
-SCSocket.prototype.parse = function (message) {
-  return this.transport.parse(message);
+SCSocket.prototype.decode = function (message) {
+  return this.transport.decode(message);
 };
 
-SCSocket.prototype.stringify = function (object) {
-  return this.transport.stringify(object);
+SCSocket.prototype.encode = function (object) {
+  return this.transport.encode(object);
 };
 
 SCSocket.prototype._flushEmitBuffer = function () {
@@ -1071,7 +1161,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./auth":2,"./response":3,"./sctransport":6,"base-64":8,"buffer":19,"linked-list":12,"querystring":24,"sc-channel":13,"sc-emitter":14,"sc-errors":16}],5:[function(require,module,exports){
+},{"./auth":3,"./response":4,"./sctransport":7,"base-64":9,"buffer":19,"linked-list":13,"querystring":24,"sc-channel":14,"sc-emitter":15,"sc-errors":17,"sc-formatter":1}],6:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
 
@@ -1174,9 +1264,8 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./scsocket":4}],6:[function(require,module,exports){
+},{"./scsocket":5}],7:[function(require,module,exports){
 var SCEmitter = require('sc-emitter').SCEmitter;
-var formatter = require('sc-formatter');
 var Response = require('./response').Response;
 var querystring = require('querystring');
 var WebSocket = require('ws');
@@ -1185,9 +1274,10 @@ var scErrors = require('sc-errors');
 var TimeoutError = scErrors.TimeoutError;
 
 
-var SCTransport = function (authEngine, options) {
+var SCTransport = function (authEngine, codecEngine, options) {
   this.state = this.CLOSED;
   this.auth = authEngine;
+  this.codec = codecEngine;
   this.options = options;
   this.connectTimeout = options.connectTimeout;
   this.pingTimeout = options.ackTimeout;
@@ -1219,7 +1309,7 @@ SCTransport.prototype.uri = function () {
     query[this.options.timestampParam] = (new Date()).getTime();
   }
 
-  query = querystring.stringify(query);
+  query = querystring.encode(query);
 
   if (query.length) {
     query = '?' + query;
@@ -1343,7 +1433,7 @@ SCTransport.prototype._onMessage = function (message) {
       this.socket.send('#2');
     }
   } else {
-    var obj = this.parse(message);
+    var obj = this.decode(message);
     var event = obj.event;
 
     if (event) {
@@ -1477,12 +1567,12 @@ SCTransport.prototype.cancelPendingResponse = function (cid) {
   delete this._callbackMap[cid];
 };
 
-SCTransport.prototype.parse = function (message) {
-  return formatter.parse(message);
+SCTransport.prototype.decode = function (message) {
+  return this.codec.decode(message);
 };
 
-SCTransport.prototype.stringify = function (object) {
-  return formatter.stringify(object);
+SCTransport.prototype.encode = function (object) {
+  return this.codec.encode(object);
 };
 
 SCTransport.prototype.send = function (data) {
@@ -1496,7 +1586,7 @@ SCTransport.prototype.send = function (data) {
 SCTransport.prototype.sendObject = function (object) {
   var str, formatError;
   try {
-    str = this.stringify(object);
+    str = this.encode(object);
   } catch (err) {
     formatError = err;
     this._onError(formatError);
@@ -1508,7 +1598,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
-},{"./response":3,"querystring":24,"sc-emitter":14,"sc-errors":16,"sc-formatter":17,"ws":7}],7:[function(require,module,exports){
+},{"./response":4,"querystring":24,"sc-emitter":15,"sc-errors":17,"ws":8}],8:[function(require,module,exports){
 
 var global = typeof window != 'undefined' && window || (function() { return this; })();
 
@@ -1541,7 +1631,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 
 module.exports = WebSocket ? ws : null;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/base64 v0.1.0 by @mathias | MIT license */
 ;(function(root) {
@@ -1710,7 +1800,7 @@ module.exports = WebSocket ? ws : null;
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -1873,7 +1963,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /*
     cycle.js
     2013-02-19
@@ -2045,7 +2135,7 @@ cycle.retrocycle = function retrocycle($) {
     return $;
 };
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict';
 
 /**
@@ -2433,12 +2523,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":11}],13:[function(require,module,exports){
+},{"./_source/linked-list.js":12}],14:[function(require,module,exports){
 var SCEmitter = require('sc-emitter').SCEmitter;
 
 var SCChannel = function (name, client, options) {
@@ -2508,7 +2598,7 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"sc-emitter":14}],14:[function(require,module,exports){
+},{"sc-emitter":15}],15:[function(require,module,exports){
 var Emitter = require('component-emitter');
 
 if (!Object.create) {
@@ -2541,7 +2631,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"./objectcreate":15,"component-emitter":9}],15:[function(require,module,exports){
+},{"./objectcreate":16,"component-emitter":10}],16:[function(require,module,exports){
 module.exports.create = (function () {
   function F() {};
 
@@ -2553,7 +2643,7 @@ module.exports.create = (function () {
     return new F();
   }
 })();
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 var cycle = require('cycle');
 
 var isStrict = (function () { return !this; })();
@@ -2829,89 +2919,7 @@ module.exports.hydrateError = function (error) {
   return hydratedError;
 };
 
-},{"cycle":10}],17:[function(require,module,exports){
-(function (global){
-var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-module.exports.parse = function (input) {
-  if (input == null) {
-   return null;
-  }
-  var message = input.toString();
-
-  try {
-    return JSON.parse(message);
-  } catch (err) {}
-  return message;
-};
-
-var arrayBufferToBase64 = function (arraybuffer) {
-  var bytes = new Uint8Array(arraybuffer);
-  var len = bytes.length;
-  var base64 = '';
-
-  for (var i = 0; i < len; i += 3) {
-    base64 += base64Chars[bytes[i] >> 2];
-    base64 += base64Chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
-    base64 += base64Chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
-    base64 += base64Chars[bytes[i + 2] & 63];
-  }
-
-  if ((len % 3) === 2) {
-    base64 = base64.substring(0, base64.length - 1) + '=';
-  } else if (len % 3 === 1) {
-    base64 = base64.substring(0, base64.length - 2) + '==';
-  }
-
-  return base64;
-};
-
-var isOwnDescendant = function (object, ancestors) {
-  return ancestors.indexOf(object) > -1;
-};
-
-var convertBuffersToBase64 = function (object, ancestors) {
-  if (!ancestors) {
-    ancestors = [];
-  }
-  if (isOwnDescendant(object, ancestors)) {
-    throw new Error('Cannot traverse circular structure');
-  }
-  var newAncestors = ancestors.concat([object]);
-
-  if (global.ArrayBuffer && object instanceof global.ArrayBuffer) {
-    object = {
-      base64: true,
-      data: arrayBufferToBase64(object)
-    };
-  } else if (global.Buffer && object instanceof global.Buffer) {
-    object = {
-      base64: true,
-      data: object.toString('base64')
-    };
-  } else if (object instanceof Array) {
-    for (var i in object) {
-      if (object.hasOwnProperty(i)) {
-        object[i] = convertBuffersToBase64(object[i], newAncestors);
-      }
-    }
-  } else if (object instanceof Object) {
-    for (var j in object) {
-      if (object.hasOwnProperty(j)) {
-        object[j] = convertBuffersToBase64(object[j], newAncestors);
-      }
-    }
-  }
-  return object;
-};
-
-module.exports.stringify = function (object) {
-  var base64Object = convertBuffersToBase64(object);
-  return JSON.stringify(base64Object);
-};
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],18:[function(require,module,exports){
+},{"cycle":11}],18:[function(require,module,exports){
 ;(function (exports) {
   'use strict'
 
@@ -4759,5 +4767,5 @@ var objectKeys = Object.keys || function (obj) {
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":22,"./encode":23}]},{},[1])(1)
+},{"./decode":22,"./encode":23}]},{},[2])(2)
 });
