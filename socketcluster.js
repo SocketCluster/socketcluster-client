@@ -100,7 +100,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.13';
+module.exports.version = '5.0.14';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
@@ -1327,7 +1327,7 @@ SCTransport.prototype.open = function () {
   this.state = this.CONNECTING;
   var uri = this.uri();
 
-  var wsSocket = new WebSocket(uri, null, this.options);
+  var wsSocket = new WebSocket(uri, [], this.options);
   wsSocket.binaryType = this.options.binaryType;
   this.socket = wsSocket;
 
@@ -1602,8 +1602,12 @@ SCTransport.prototype.sendObject = function (object) {
 module.exports.SCTransport = SCTransport;
 
 },{"./response":4,"querystring":24,"sc-emitter":15,"sc-errors":17,"ws":8}],8:[function(require,module,exports){
-
-var global = typeof window != 'undefined' && window || (function() { return this; })();
+var global;
+if (typeof WorkerGlobalScope !== 'undefined') {
+  global = self;
+} else {
+  global = typeof window != 'undefined' && window || (function() { return this; })();
+}
 
 var WebSocket = global.WebSocket || global.MozWebSocket;
 
