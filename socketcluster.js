@@ -100,7 +100,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.14';
+module.exports.version = '5.0.15';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
@@ -1268,10 +1268,11 @@ module.exports = {
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./scsocket":5}],7:[function(require,module,exports){
+(function (global){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var Response = require('./response').Response;
 var querystring = require('querystring');
-var WebSocket = require('ws');
+var WebSocket = global.WebSocket || require('ws');
 
 var scErrors = require('sc-errors');
 var TimeoutError = scErrors.TimeoutError;
@@ -1601,6 +1602,7 @@ SCTransport.prototype.sendObject = function (object) {
 
 module.exports.SCTransport = SCTransport;
 
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./response":4,"querystring":24,"sc-emitter":15,"sc-errors":17,"ws":8}],8:[function(require,module,exports){
 var global;
 if (typeof WorkerGlobalScope !== 'undefined') {
