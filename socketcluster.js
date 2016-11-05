@@ -100,7 +100,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.17';
+module.exports.version = '5.0.18';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
@@ -1277,13 +1277,13 @@ var createWebSocket;
 
 if (global.WebSocket) {
   WebSocket = global.WebSocket;
-  createWebSocket = function (uri, protocols, options) {
-    return new WebSocket(uri, protocols);
+  createWebSocket = function (uri, options) {
+    return new WebSocket(uri);
   };
 } else {
   WebSocket = require('ws');
-  createWebSocket = function (uri, protocols, options) {
-    return new WebSocket(uri, protocols, options);
+  createWebSocket = function (uri, options) {
+    return new WebSocket(uri, null, options);
   };
 }
 
@@ -1341,7 +1341,7 @@ SCTransport.prototype.open = function () {
   this.state = this.CONNECTING;
   var uri = this.uri();
 
-  var wsSocket = createWebSocket(uri, [], this.options);
+  var wsSocket = createWebSocket(uri, this.options);
   wsSocket.binaryType = this.options.binaryType;
   this.socket = wsSocket;
 
