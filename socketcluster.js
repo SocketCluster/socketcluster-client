@@ -100,7 +100,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.18';
+module.exports.version = '5.0.19';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
@@ -1167,6 +1167,8 @@ module.exports = SCSocket;
 },{"./auth":3,"./response":4,"./sctransport":7,"base-64":9,"buffer":19,"linked-list":13,"querystring":24,"sc-channel":14,"sc-emitter":15,"sc-errors":17,"sc-formatter":1}],6:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
+var scErrors = require('sc-errors');
+var InvalidArgumentsError = scErrors.InvalidArgumentsError;
 
 var _connections = {};
 
@@ -1205,6 +1207,13 @@ function connect(options) {
   var self = this;
 
   options = options || {};
+
+  if (options.host && options.port) {
+    throw new InvalidArgumentsError('The host option should already include the' +
+      ' port number in the format hostname:port - Because of this, the host and port options' +
+      ' cannot be specified together; use the hostname option instead');
+  }
+
   var isSecureDefault = isUrlSecure();
 
   var opts = {
@@ -1267,7 +1276,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./scsocket":5}],7:[function(require,module,exports){
+},{"./scsocket":5,"sc-errors":17}],7:[function(require,module,exports){
 (function (global){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var Response = require('./response').Response;
@@ -1315,12 +1324,6 @@ SCTransport.CLOSED = SCTransport.prototype.CLOSED = 'closed';
 SCTransport.prototype.uri = function () {
   var query = this.options.query || {};
   var schema = this.options.secure ? 'wss' : 'ws';
-  var port = '';
-
-  if (this.options.port && (('wss' == schema && this.options.port != 443)
-    || ('ws' == schema && this.options.port != 80))) {
-    port = ':' + this.options.port;
-  }
 
   if (this.options.timestampRequests) {
     query[this.options.timestampParam] = (new Date()).getTime();
@@ -1332,7 +1335,20 @@ SCTransport.prototype.uri = function () {
     query = '?' + query;
   }
 
-  return schema + '://' + this.options.hostname + port + this.options.path + query;
+  var host;
+  if (this.options.host) {
+    host = this.options.host;
+  } else {
+    var port = '';
+
+    if (this.options.port && ((schema == 'wss' && this.options.port != 443)
+      || (schema == 'ws' && this.options.port != 80))) {
+      port = ':' + this.options.port;
+    }
+    host = this.options.hostname + port;
+  }
+
+  return schema + '://' + host + this.options.path + query;
 };
 
 SCTransport.prototype.open = function () {
