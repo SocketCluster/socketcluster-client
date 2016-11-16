@@ -100,7 +100,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.20';
+module.exports.version = '5.0.21';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
@@ -1191,7 +1191,13 @@ function getMultiplexId(options) {
       }
     }
   }
-  return protocolPrefix + options.hostname + ':' + options.port + options.path + queryString;
+  var host;
+  if (options.host) {
+    host = options.host;
+  } else {
+    host = options.hostname + ':' + options.port;
+  }
+  return protocolPrefix + host + options.path + queryString;
 }
 
 function isUrlSecure() {
