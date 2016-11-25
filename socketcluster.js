@@ -61,6 +61,10 @@ module.exports.decode = function (input) {
   if (input == null) {
    return null;
   }
+  // Leave ping or pong message as is
+  if (input == '#1' || input == '#2') {
+    return input;
+  }
   var message = input.toString();
 
   try {
@@ -79,6 +83,10 @@ module.exports.decode = function (input) {
 // See https://github.com/SocketCluster/socketcluster/blob/master/socketcluster-protocol.md
 // for details about the SC protocol.
 module.exports.encode = function (object) {
+  // Leave ping or pong message as is
+  if (object == '#1' || object == '#2') {
+    return object;
+  }
   return JSON.stringify(object, binaryToBase64Replacer);
 };
 
@@ -100,7 +108,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.0.21';
+module.exports.version = '5.1.0';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
@@ -1465,14 +1473,15 @@ SCTransport.prototype._onClose = function (code, data) {
 SCTransport.prototype._onMessage = function (message) {
   SCEmitter.prototype.emit.call(this, 'event', 'message', message);
 
+  var obj = this.decode(message);
+
   // If ping
-  if (message == '#1') {
+  if (obj == '#1') {
     this._resetPingTimeout();
     if (this.socket.readyState == this.socket.OPEN) {
-      this.socket.send('#2');
+      this.sendObject('#2');
     }
   } else {
-    var obj = this.decode(message);
     var event = obj.event;
 
     if (event) {
