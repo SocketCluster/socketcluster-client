@@ -108,7 +108,7 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.1.0';
+module.exports.version = '5.1.1';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":15}],3:[function(require,module,exports){
 (function (global){
@@ -865,10 +865,10 @@ SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
   if (eventNode) {
     eventNode.detach();
   }
-  var error = new TimeoutError("Event response for '" + eventObject.event + "' timed out");
   var callback = eventObject.callback;
   if (callback) {
     delete eventObject.callback;
+    var error = new TimeoutError("Event response for '" + eventObject.event + "' timed out");
     callback.call(eventObject, error, eventObject);
   }
 };
@@ -1545,20 +1545,18 @@ SCTransport.prototype.close = function (code, data) {
 };
 
 SCTransport.prototype.emitRaw = function (eventObject) {
-  eventObject.cid = this.callIdGenerator();
+  var simpleEventObject = {
+    event: eventObject.event,
+    data: eventObject.data
+  };
 
   if (eventObject.callback) {
+    simpleEventObject.cid = eventObject.cid = this.callIdGenerator();
     this._callbackMap[eventObject.cid] = eventObject;
   }
 
-  var simpleEventObject = {
-    event: eventObject.event,
-    data: eventObject.data,
-    cid: eventObject.cid
-  };
-
   this.sendObject(simpleEventObject);
-  return eventObject.cid;
+  return eventObject.cid || null;
 };
 
 
