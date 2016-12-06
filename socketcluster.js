@@ -336,6 +336,9 @@ var SCSocket = function (opts) {
     if (reconnectOptions.maxDelay == null) {
       reconnectOptions.maxDelay = 60000;
     }
+	if(reconnectOptions.mexAttempts == null){
+		reconnectOptions.maxAttempts = 1000; // default? ///
+	}
   }
 
   if (this.options.subscriptionRetryOptions == null) {
@@ -704,6 +707,11 @@ SCSocket.prototype._tryReconnect = function (initialDelay) {
 
   clearTimeout(this._reconnectTimeoutRef);
 
+  ///// stop recoonecting after reaching max. number of connection attempts ///
+  if( exponent >= reconnectOptions.maxAttempts ){
+	  return; 
+  }
+  
   this.pendingReconnect = true;
   this.pendingReconnectTimeout = timeout;
   this._reconnectTimeoutRef = setTimeout(function () {
