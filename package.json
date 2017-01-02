@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "5.1.1",
+  "version": "5.2.0",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -16,6 +16,7 @@
   "dependencies": {
     "base-64": "0.1.0",
     "linked-list": "0.1.0",
+    "lodash.clonedeep": "4.5.0",
     "querystring": "0.2.0",
     "sc-channel": "1.0.x",
     "sc-emitter": "1.0.x",
