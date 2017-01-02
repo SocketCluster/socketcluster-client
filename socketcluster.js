@@ -108,7 +108,9 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.2.1';
+module.exports.connections = SCSocketCreator.connections;
+
+module.exports.version = '5.2.2';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":18}],3:[function(require,module,exports){
 (function (global){
@@ -1293,7 +1295,8 @@ function destroy(options) {
 
 module.exports = {
   connect: connect,
-  destroy: destroy
+  destroy: destroy,
+  connections: _connections
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})

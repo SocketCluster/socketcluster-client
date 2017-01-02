@@ -14,4 +14,6 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.2.1';
+module.exports.connections = SCSocketCreator.connections;
+
+module.exports.version = '5.2.2';
