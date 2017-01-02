@@ -108,9 +108,9 @@ module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.version = '5.2.0';
+module.exports.version = '5.2.1';
 
-},{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":16}],3:[function(require,module,exports){
+},{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":18}],3:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -227,7 +227,7 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 
-},{"sc-errors":18}],5:[function(require,module,exports){
+},{"sc-errors":20}],5:[function(require,module,exports){
 (function (global,Buffer){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var SCChannel = require('sc-channel').SCChannel;
@@ -1178,7 +1178,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./auth":3,"./response":4,"./sctransport":7,"base-64":9,"buffer":20,"linked-list":13,"lodash.clonedeep":14,"querystring":25,"sc-channel":15,"sc-emitter":16,"sc-errors":18,"sc-formatter":1}],6:[function(require,module,exports){
+},{"./auth":3,"./response":4,"./sctransport":7,"base-64":9,"buffer":22,"linked-list":13,"lodash.clonedeep":14,"querystring":27,"sc-channel":15,"sc-emitter":18,"sc-errors":20,"sc-formatter":1}],6:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
 var scErrors = require('sc-errors');
@@ -1297,7 +1297,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./scsocket":5,"sc-errors":18}],7:[function(require,module,exports){
+},{"./scsocket":5,"sc-errors":20}],7:[function(require,module,exports){
 (function (global){
 var SCEmitter = require('sc-emitter').SCEmitter;
 var Response = require('./response').Response;
@@ -1659,7 +1659,7 @@ SCTransport.prototype.sendObject = function (object) {
 module.exports.SCTransport = SCTransport;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./response":4,"querystring":25,"sc-emitter":16,"sc-errors":18,"ws":8}],8:[function(require,module,exports){
+},{"./response":4,"querystring":27,"sc-emitter":18,"sc-errors":20,"ws":8}],8:[function(require,module,exports){
 var global;
 if (typeof WorkerGlobalScope !== 'undefined') {
   global = self;
@@ -4461,6 +4461,53 @@ module.exports.create = (function () {
   }
 })();
 },{}],18:[function(require,module,exports){
+var Emitter = require('component-emitter');
+
+if (!Object.create) {
+  Object.create = require('./objectcreate');
+}
+
+var SCEmitter = function () {
+  Emitter.call(this);
+};
+
+SCEmitter.prototype = Object.create(Emitter.prototype);
+
+SCEmitter.prototype.emit = function (event) {
+  if (event == 'error') {
+
+    // To work with sc-domain.
+    // See https://github.com/SocketCluster/sc-domain
+    var domainErrorArgs = ['__domainError'];
+    if (arguments[1] !== undefined) {
+      domainErrorArgs.push(arguments[1]);
+    }
+
+    Emitter.prototype.emit.apply(this, domainErrorArgs);
+
+    if (this.domain) {
+      // Emit the error on the domain if it has one.
+      // See https://github.com/joyent/node/blob/ef4344311e19a4f73c031508252b21712b22fe8a/lib/events.js#L78-85
+
+      var err = arguments[1];
+
+      if (!err) {
+        err = new Error('Uncaught, unspecified "error" event.');
+      }
+      err.domainEmitter = this;
+      err.domain = this.domain;
+      err.domainThrown = false;
+      this.domain.emit('error', err);
+    }
+  }
+  Emitter.prototype.emit.apply(this, arguments);
+};
+
+module.exports.SCEmitter = SCEmitter;
+
+},{"./objectcreate":19,"component-emitter":10}],19:[function(require,module,exports){
+arguments[4][17][0].apply(exports,arguments)
+},{"dup":17}],20:[function(require,module,exports){
 var cycle = require('cycle');
 
 var isStrict = (function () { return !this; })();
@@ -4736,7 +4783,7 @@ module.exports.hydrateError = function (error) {
   return hydratedError;
 };
 
-},{"cycle":11}],19:[function(require,module,exports){
+},{"cycle":11}],21:[function(require,module,exports){
 ;(function (exports) {
   'use strict'
 
@@ -4856,7 +4903,7 @@ module.exports.hydrateError = function (error) {
   exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],20:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 (function (global){
 /*!
  * The buffer module from node.js, for the browser.
@@ -6312,14 +6359,14 @@ function blitBuffer (src, dst, offset, length) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":19,"ieee754":22,"isarray":21}],21:[function(require,module,exports){
+},{"base64-js":21,"ieee754":24,"isarray":23}],23:[function(require,module,exports){
 var toString = {}.toString;
 
 module.exports = Array.isArray || function (arr) {
   return toString.call(arr) == '[object Array]';
 };
 
-},{}],22:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -6405,7 +6452,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],23:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -6491,7 +6538,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],24:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -6578,11 +6625,11 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],25:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":23,"./encode":24}]},{},[2])(2)
+},{"./decode":25,"./encode":26}]},{},[2])(2)
 });
