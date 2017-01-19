@@ -16,7 +16,7 @@
   "dependencies": {
     "base-64": "0.1.0",
     "linked-list": "0.1.0",
-    "lodash.clonedeep": "4.5.0",
+    "clone": "2.1.x",
     "querystring": "0.2.0",
     "sc-channel": "1.0.x",
     "sc-emitter": "1.x.x",
