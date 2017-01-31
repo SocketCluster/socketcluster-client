@@ -110,7 +110,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '5.2.4';
+module.exports.version = '5.2.5';
 
 },{"./lib/scsocket":5,"./lib/scsocketcreator":6,"sc-emitter":18}],3:[function(require,module,exports){
 (function (global){
@@ -532,6 +532,10 @@ SCSocket.prototype.reconnect = function () {
 
 SCSocket.prototype.disconnect = function (code, data) {
   code = code || 1000;
+
+  if (typeof code != 'number') {
+    throw new InvalidArgumentsError('If specified, the code argument must be a number');
+  }
 
   if (this.state == this.OPEN) {
     var packet = {
