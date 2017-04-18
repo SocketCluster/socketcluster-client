@@ -17,7 +17,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '5.3.0';
+module.exports.version = '5.3.1';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":15}],2:[function(require,module,exports){
 (function (global){
@@ -448,15 +448,7 @@ SCSocket.prototype.disconnect = function (code, data) {
     throw new InvalidArgumentsError('If specified, the code argument must be a number');
   }
 
-  if (this.state == this.OPEN) {
-    var packet = {
-      code: code,
-      data: data
-    };
-    this.transport.emit('#disconnect', packet);
-    this.transport.close(code, data);
-
-  } else if (this.state == this.CONNECTING) {
+  if (this.state == this.OPEN || this.state == this.CONNECTING) {
     this.transport.close(code, data);
   } else {
     this.pendingReconnect = false;
