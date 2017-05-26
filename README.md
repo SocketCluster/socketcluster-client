@@ -32,21 +32,21 @@ Once that's done, you will be able to emit events to the server and listen to in
 
 ```js
 var options = {
-    port: 8000
+  port: 8000
 };
 
 // Initiate the connection to the server
 var socket = socketCluster.connect(options);
 socket.on('connect', function () {
-    console.log('CONNECTED');
+  console.log('CONNECTED');
 });
 
 // Listen to an event called 'rand' from the server
 socket.on('rand', function (num) {
-    console.log('RANDOM: ' + num);
-    var curHTML = document.body.innerHTML;
-    curHTML += 'RANDOM: ' + num + '<br />';
-    document.body.innerHTML = curHTML;
+  console.log('RANDOM: ' + num);
+  var curHTML = document.body.innerHTML;
+  curHTML += 'RANDOM: ' + num + '<br />';
+  document.body.innerHTML = curHTML;
 });
 ```
 
@@ -58,7 +58,7 @@ var options = {
   secure: true,
   port: 443,
   rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
-}
+};
 
 // Initiate the connection to the server
 var socket = socketCluster.connect(options);
