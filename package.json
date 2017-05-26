@@ -21,11 +21,11 @@
     "linked-list": "0.1.0",
     "clone": "2.1.1",
     "querystring": "0.2.0",
-    "sc-channel": "1.0.x",
-    "sc-emitter": "1.x.x",
-    "sc-errors": "1.0.x",
-    "sc-formatter": "3.0.x",
-    "ws": "1.1.2"
+    "sc-channel": "~1.0.6",
+    "sc-emitter": "~1.1.0",
+    "sc-errors": "~1.2.0",
+    "sc-formatter": "~3.0.0",
+    "ws": "3.0.0"
   },
   "browser": {
     "ws": "./lib/ws-browser.js"
