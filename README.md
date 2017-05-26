@@ -54,10 +54,11 @@ Example with HTTPS:
 
 ```js
 var options = {
-    protocol: 'https',
-    hostname: 'example.com',
-    port: 443
-};
+  hostname: 'securedomain.com',
+  secure: true,
+  port: 443,
+  rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
+}
 
 // Initiate the connection to the server
 var socket = socketCluster.connect(options);
