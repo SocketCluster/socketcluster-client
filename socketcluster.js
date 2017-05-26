@@ -17,9 +17,9 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '5.4.0';
+module.exports.version = '5.5.0';
 
-},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":15}],2:[function(require,module,exports){
+},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -1087,7 +1087,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./auth":2,"./response":3,"./sctransport":6,"base-64":8,"buffer":20,"clone":9,"linked-list":13,"querystring":24,"sc-channel":14,"sc-emitter":15,"sc-errors":17,"sc-formatter":18}],5:[function(require,module,exports){
+},{"./auth":2,"./response":3,"./sctransport":6,"base-64":8,"buffer":20,"clone":9,"linked-list":12,"querystring":24,"sc-channel":13,"sc-emitter":14,"sc-errors":17,"sc-formatter":18}],5:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
 var scErrors = require('sc-errors');
@@ -1574,7 +1574,7 @@ SCTransport.prototype.sendObject = function (object) {
 module.exports.SCTransport = SCTransport;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./response":3,"querystring":24,"sc-emitter":15,"sc-errors":17,"ws":7}],7:[function(require,module,exports){
+},{"./response":3,"querystring":24,"sc-emitter":14,"sc-errors":17,"ws":7}],7:[function(require,module,exports){
 var global;
 if (typeof WorkerGlobalScope !== 'undefined') {
   global = self;
@@ -2199,178 +2199,6 @@ Emitter.prototype.hasListeners = function(event){
 };
 
 },{}],11:[function(require,module,exports){
-/*
-    cycle.js
-    2013-02-19
-
-    Public Domain.
-
-    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
-
-    This code should be minified before deployment.
-    See http://javascript.crockford.com/jsmin.html
-
-    USE YOUR OWN COPY. IT IS EXTREMELY UNWISE TO LOAD CODE FROM SERVERS YOU DO
-    NOT CONTROL.
-*/
-
-/*jslint evil: true, regexp: true */
-
-/*members $ref, apply, call, decycle, hasOwnProperty, length, prototype, push,
-    retrocycle, stringify, test, toString
-*/
-
-var cycle = exports;
-
-cycle.decycle = function decycle(object) {
-    'use strict';
-
-// Make a deep copy of an object or array, assuring that there is at most
-// one instance of each object or array in the resulting structure. The
-// duplicate references (which might be forming cycles) are replaced with
-// an object of the form
-//      {$ref: PATH}
-// where the PATH is a JSONPath string that locates the first occurance.
-// So,
-//      var a = [];
-//      a[0] = a;
-//      return JSON.stringify(JSON.decycle(a));
-// produces the string '[{"$ref":"$"}]'.
-
-// JSONPath is used to locate the unique object. $ indicates the top level of
-// the object or array. [NUMBER] or [STRING] indicates a child member or
-// property.
-
-    var objects = [],   // Keep a reference to each unique object or array
-        paths = [];     // Keep the path to each unique object or array
-
-    return (function derez(value, path) {
-
-// The derez recurses through the object, producing the deep copy.
-
-        var i,          // The loop counter
-            name,       // Property name
-            nu;         // The new object or array
-
-// typeof null === 'object', so go on if this value is really an object but not
-// one of the weird builtin objects.
-
-        if (typeof value === 'object' && value !== null &&
-                !(value instanceof Boolean) &&
-                !(value instanceof Date)    &&
-                !(value instanceof Number)  &&
-                !(value instanceof RegExp)  &&
-                !(value instanceof String)) {
-
-// If the value is an object or array, look to see if we have already
-// encountered it. If so, return a $ref/path object. This is a hard way,
-// linear search that will get slower as the number of unique objects grows.
-
-            for (i = 0; i < objects.length; i += 1) {
-                if (objects[i] === value) {
-                    return {$ref: paths[i]};
-                }
-            }
-
-// Otherwise, accumulate the unique value and its path.
-
-            objects.push(value);
-            paths.push(path);
-
-// If it is an array, replicate the array.
-
-            if (Object.prototype.toString.apply(value) === '[object Array]') {
-                nu = [];
-                for (i = 0; i < value.length; i += 1) {
-                    nu[i] = derez(value[i], path + '[' + i + ']');
-                }
-            } else {
-
-// If it is an object, replicate the object.
-
-                nu = {};
-                for (name in value) {
-                    if (Object.prototype.hasOwnProperty.call(value, name)) {
-                        nu[name] = derez(value[name],
-                            path + '[' + JSON.stringify(name) + ']');
-                    }
-                }
-            }
-            return nu;
-        }
-        return value;
-    }(object, '$'));
-};
-
-
-cycle.retrocycle = function retrocycle($) {
-    'use strict';
-
-// Restore an object that was reduced by decycle. Members whose values are
-// objects of the form
-//      {$ref: PATH}
-// are replaced with references to the value found by the PATH. This will
-// restore cycles. The object will be mutated.
-
-// The eval function is used to locate the values described by a PATH. The
-// root object is kept in a $ variable. A regular expression is used to
-// assure that the PATH is extremely well formed. The regexp contains nested
-// * quantifiers. That has been known to have extremely bad performance
-// problems on some browsers for very long strings. A PATH is expected to be
-// reasonably short. A PATH is allowed to belong to a very restricted subset of
-// Goessner's JSONPath.
-
-// So,
-//      var s = '[{"$ref":"$"}]';
-//      return JSON.retrocycle(JSON.parse(s));
-// produces an array containing a single element which is the array itself.
-
-    var px =
-        /^\$(?:\[(?:\d+|\"(?:[^\\\"\u0000-\u001f]|\\([\\\"\/bfnrt]|u[0-9a-zA-Z]{4}))*\")\])*$/;
-
-    (function rez(value) {
-
-// The rez function walks recursively through the object looking for $ref
-// properties. When it finds one that has a value that is a path, then it
-// replaces the $ref object with a reference to the value that is found by
-// the path.
-
-        var i, item, name, path;
-
-        if (value && typeof value === 'object') {
-            if (Object.prototype.toString.apply(value) === '[object Array]') {
-                for (i = 0; i < value.length; i += 1) {
-                    item = value[i];
-                    if (item && typeof item === 'object') {
-                        path = item.$ref;
-                        if (typeof path === 'string' && px.test(path)) {
-                            value[i] = eval(path);
-                        } else {
-                            rez(item);
-                        }
-                    }
-                }
-            } else {
-                for (name in value) {
-                    if (typeof value[name] === 'object') {
-                        item = value[name];
-                        if (item) {
-                            path = item.$ref;
-                            if (typeof path === 'string' && px.test(path)) {
-                                value[name] = eval(path);
-                            } else {
-                                rez(item);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }($));
-    return $;
-};
-
-},{}],12:[function(require,module,exports){
 'use strict';
 
 /**
@@ -2758,12 +2586,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],13:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":12}],14:[function(require,module,exports){
+},{"./_source/linked-list.js":11}],13:[function(require,module,exports){
 var SCEmitter = require('sc-emitter').SCEmitter;
 
 var SCChannel = function (name, client, options) {
@@ -2833,7 +2661,7 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"sc-emitter":15}],15:[function(require,module,exports){
+},{"sc-emitter":14}],14:[function(require,module,exports){
 var Emitter = require('component-emitter');
 
 if (!Object.create) {
@@ -2878,7 +2706,7 @@ SCEmitter.prototype.emit = function (event) {
 
 module.exports.SCEmitter = SCEmitter;
 
-},{"./objectcreate":16,"component-emitter":10}],16:[function(require,module,exports){
+},{"./objectcreate":15,"component-emitter":10}],15:[function(require,module,exports){
 module.exports.create = (function () {
   function F() {};
 
@@ -2890,8 +2718,89 @@ module.exports.create = (function () {
     return new F();
   }
 })();
+},{}],16:[function(require,module,exports){
+// Based on https://github.com/dscape/cycle/blob/master/cycle.js
+
+module.exports = function decycle(object) {
+// Make a deep copy of an object or array, assuring that there is at most
+// one instance of each object or array in the resulting structure. The
+// duplicate references (which might be forming cycles) are replaced with
+// an object of the form
+//      {$ref: PATH}
+// where the PATH is a JSONPath string that locates the first occurance.
+// So,
+//      var a = [];
+//      a[0] = a;
+//      return JSON.stringify(JSON.decycle(a));
+// produces the string '[{"$ref":"$"}]'.
+
+// JSONPath is used to locate the unique object. $ indicates the top level of
+// the object or array. [NUMBER] or [STRING] indicates a child member or
+// property.
+
+    var objects = [],   // Keep a reference to each unique object or array
+        paths = [];     // Keep the path to each unique object or array
+
+    return (function derez(value, path) {
+
+// The derez recurses through the object, producing the deep copy.
+
+        var i,          // The loop counter
+            name,       // Property name
+            nu;         // The new object or array
+
+// typeof null === 'object', so go on if this value is really an object but not
+// one of the weird builtin objects.
+
+        if (typeof value === 'object' && value !== null &&
+                !(value instanceof Boolean) &&
+                !(value instanceof Date)    &&
+                !(value instanceof Number)  &&
+                !(value instanceof RegExp)  &&
+                !(value instanceof String)) {
+
+// If the value is an object or array, look to see if we have already
+// encountered it. If so, return a $ref/path object. This is a hard way,
+// linear search that will get slower as the number of unique objects grows.
+
+            for (i = 0; i < objects.length; i += 1) {
+                if (objects[i] === value) {
+                    return {$ref: paths[i]};
+                }
+            }
+
+// Otherwise, accumulate the unique value and its path.
+
+            objects.push(value);
+            paths.push(path);
+
+// If it is an array, replicate the array.
+
+            if (Object.prototype.toString.apply(value) === '[object Array]') {
+                nu = [];
+                for (i = 0; i < value.length; i += 1) {
+                    nu[i] = derez(value[i], path + '[' + i + ']');
+                }
+            } else {
+
+// If it is an object, replicate the object.
+
+                nu = {};
+                for (name in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, name)) {
+                        nu[name] = derez(value[name],
+                            path + '[' + JSON.stringify(name) + ']');
+                    }
+                }
+            }
+            return nu;
+        }
+        return value;
+    }(object, '$'));
+};
+
 },{}],17:[function(require,module,exports){
-var cycle = require('cycle');
+var decycle = require('./decycle');
 
 var isStrict = (function () { return !this; })();
 
@@ -2918,6 +2827,31 @@ function AuthTokenInvalidError(message) {
   this.message = message;
 };
 AuthTokenInvalidError.prototype = Object.create(Error.prototype);
+
+
+function AuthTokenNotBeforeError(message) {
+  if (Error.captureStackTrace && !isStrict) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
+  this.name = 'AuthTokenNotBeforeError';
+  this.message = message;
+};
+AuthTokenNotBeforeError.prototype = Object.create(Error.prototype);
+
+
+// For any other auth token error.
+function AuthTokenError(message) {
+  if (Error.captureStackTrace && !isStrict) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
+  this.name = 'AuthTokenError';
+  this.message = message;
+};
+AuthTokenError.prototype = Object.create(Error.prototype);
 
 
 function SilentMiddlewareBlockedError(message, type) {
@@ -3081,6 +3015,8 @@ UnknownError.prototype = Object.create(Error.prototype);
 module.exports = {
   AuthTokenExpiredError: AuthTokenExpiredError,
   AuthTokenInvalidError: AuthTokenInvalidError,
+  AuthTokenNotBeforeError: AuthTokenNotBeforeError,
+  AuthTokenError: AuthTokenError,
   SilentMiddlewareBlockedError: SilentMiddlewareBlockedError,
   InvalidActionError: InvalidActionError,
   InvalidArgumentsError: InvalidArgumentsError,
@@ -3146,7 +3082,7 @@ module.exports.dehydrateError = function (error, includeStackTrace) {
       }
     }
   }
-  return cycle.decycle(dehydratedError);
+  return decycle(dehydratedError);
 };
 
 module.exports.hydrateError = function (error) {
@@ -3166,7 +3102,7 @@ module.exports.hydrateError = function (error) {
   return hydratedError;
 };
 
-},{"cycle":11}],18:[function(require,module,exports){
+},{"./decycle":16}],18:[function(require,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
