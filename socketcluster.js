@@ -17,7 +17,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '5.5.0';
+module.exports.version = '5.5.1';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
@@ -2805,207 +2805,207 @@ var decycle = require('./decycle');
 var isStrict = (function () { return !this; })();
 
 function AuthTokenExpiredError(message, expiry) {
+  this.name = 'AuthTokenExpiredError';
+  this.message = message;
+  this.expiry = expiry;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'AuthTokenExpiredError';
-  this.message = message;
-  this.expiry = expiry;
 };
 AuthTokenExpiredError.prototype = Object.create(Error.prototype);
 
 
 function AuthTokenInvalidError(message) {
+  this.name = 'AuthTokenInvalidError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'AuthTokenInvalidError';
-  this.message = message;
 };
 AuthTokenInvalidError.prototype = Object.create(Error.prototype);
 
 
 function AuthTokenNotBeforeError(message) {
+  this.name = 'AuthTokenNotBeforeError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'AuthTokenNotBeforeError';
-  this.message = message;
 };
 AuthTokenNotBeforeError.prototype = Object.create(Error.prototype);
 
 
 // For any other auth token error.
 function AuthTokenError(message) {
+  this.name = 'AuthTokenError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'AuthTokenError';
-  this.message = message;
 };
 AuthTokenError.prototype = Object.create(Error.prototype);
 
 
 function SilentMiddlewareBlockedError(message, type) {
+  this.name = 'SilentMiddlewareBlockedError';
+  this.message = message;
+  this.type = type;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'SilentMiddlewareBlockedError';
-  this.message = message;
-  this.type = type;
 };
 SilentMiddlewareBlockedError.prototype = Object.create(Error.prototype);
 
 
 function InvalidActionError(message) {
+  this.name = 'InvalidActionError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'InvalidActionError';
-  this.message = message;
 };
 InvalidActionError.prototype = Object.create(Error.prototype);
 
 function InvalidArgumentsError(message) {
+  this.name = 'InvalidArgumentsError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'InvalidArgumentsError';
-  this.message = message;
 };
 InvalidArgumentsError.prototype = Object.create(Error.prototype);
 
 function InvalidOptionsError(message) {
+  this.name = 'InvalidOptionsError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'InvalidOptionsError';
-  this.message = message;
 };
 InvalidOptionsError.prototype = Object.create(Error.prototype);
 
 
 function InvalidMessageError(message) {
+  this.name = 'InvalidMessageError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'InvalidMessageError';
-  this.message = message;
 };
 InvalidMessageError.prototype = Object.create(Error.prototype);
 
 
 function SocketProtocolError(message, code) {
+  this.name = 'SocketProtocolError';
+  this.message = message;
+  this.code = code;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'SocketProtocolError';
-  this.message = message;
-  this.code = code;
 };
 SocketProtocolError.prototype = Object.create(Error.prototype);
 
 
 function ServerProtocolError(message) {
+  this.name = 'ServerProtocolError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'ServerProtocolError';
-  this.message = message;
 };
 ServerProtocolError.prototype = Object.create(Error.prototype);
 
 function HTTPServerError(message) {
+  this.name = 'HTTPServerError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'HTTPServerError';
-  this.message = message;
 };
 HTTPServerError.prototype = Object.create(Error.prototype);
 
 
 function ResourceLimitError(message) {
+  this.name = 'ResourceLimitError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'ResourceLimitError';
-  this.message = message;
 };
 ResourceLimitError.prototype = Object.create(Error.prototype);
 
 
 function TimeoutError(message) {
+  this.name = 'TimeoutError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'TimeoutError';
-  this.message = message;
 };
 TimeoutError.prototype = Object.create(Error.prototype);
 
 
 function BrokerError(message) {
+  this.name = 'BrokerError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'BrokerError';
-  this.message = message;
 };
 BrokerError.prototype = Object.create(Error.prototype);
 
 
 function ProcessExitError(message, code) {
+  this.name = 'ProcessExitError';
+  this.message = message;
+  this.code = code;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'ProcessExitError';
-  this.message = message;
-  this.code = code;
 };
 ProcessExitError.prototype = Object.create(Error.prototype);
 
 
 function UnknownError(message) {
+  this.name = 'UnknownError';
+  this.message = message;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
     this.stack = (new Error()).stack;
   }
-  this.name = 'UnknownError';
-  this.message = message;
 };
 UnknownError.prototype = Object.create(Error.prototype);
 
