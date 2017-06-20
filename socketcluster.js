@@ -17,7 +17,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '5.5.1';
+module.exports.version = '5.5.2';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"sc-emitter":14}],2:[function(require,module,exports){
 (function (global){
@@ -1302,7 +1302,17 @@ SCTransport.prototype.open = function () {
   };
 
   wsSocket.onclose = function (event) {
-    self._onClose(event.code, event.reason);
+    var code;
+    if (event.code == null) {
+      // This is to handle an edge case in React Native whereby
+      // event.code is undefined when the mobile device is locked.
+      // TODO: This is not perfect since this condition could also apply to
+      // an abnormal close (no close control frame) which would be a 1006.
+      code = 1005;
+    } else {
+      code = event.code;
+    }
+    self._onClose(code, event.reason);
   };
 
   wsSocket.onmessage = function (message, flags) {
@@ -2829,9 +2839,10 @@ function AuthTokenInvalidError(message) {
 AuthTokenInvalidError.prototype = Object.create(Error.prototype);
 
 
-function AuthTokenNotBeforeError(message) {
+function AuthTokenNotBeforeError(message, date) {
   this.name = 'AuthTokenNotBeforeError';
   this.message = message;
+  this.date = date;
   if (Error.captureStackTrace && !isStrict) {
     Error.captureStackTrace(this, arguments.callee);
   } else {
