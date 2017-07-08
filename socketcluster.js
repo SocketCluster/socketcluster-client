@@ -416,7 +416,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '6.1.0';
+module.exports.version = '6.1.1';
 
 },{"./lib/scsocket":6,"./lib/scsocketcreator":7,"sc-emitter":16}],4:[function(require,module,exports){
 (function (global){
@@ -623,7 +623,7 @@ var SCSocket = function (opts) {
   this._cid = 1;
 
   this.options.callIdGenerator = function () {
-    return self._callIdGenerator();
+    return self._cid++;
   };
 
   if (this.options.autoReconnect) {
@@ -762,10 +762,6 @@ SCSocket.prototype._privateEventHandlerMap = {
   '#disconnect': function (data) {
     this.transport.close(data.code, data.data);
   }
-};
-
-SCSocket.prototype._callIdGenerator = function () {
-  return this._cid++;
 };
 
 SCSocket.prototype.getState = function () {
@@ -1200,6 +1196,8 @@ SCSocket.prototype._handleEventAckTimeout = function (eventObject, eventNode) {
   if (eventNode) {
     eventNode.detach();
   }
+  delete eventObject.timeout;
+
   var callback = eventObject.callback;
   if (callback) {
     delete eventObject.callback;
@@ -1941,15 +1939,18 @@ SCTransport.prototype.emitObject = function (eventObject) {
 };
 
 SCTransport.prototype._handleEventAckTimeout = function (eventObject) {
-  var errorMessage = "Event response for '" + eventObject.event + "' timed out";
-  var error = new TimeoutError(errorMessage);
 
   if (eventObject.cid) {
     delete this._callbackMap[eventObject.cid];
   }
+  delete eventObject.timeout;
+
   var callback = eventObject.callback;
-  delete eventObject.callback;
-  callback.call(eventObject, error, eventObject);
+  if (callback) {
+    delete eventObject.callback;
+    var error = new TimeoutError("Event response for '" + eventObject.event + "' timed out");
+    callback.call(eventObject, error, eventObject);
+  }
 };
 
 // The last two optional arguments (a and b) can be options and/or callback
