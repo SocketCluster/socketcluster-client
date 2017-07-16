@@ -64,6 +64,10 @@ var options = {
 var socket = socketCluster.connect(options);
 ```
 
+## Change log
+
+See the 'releases' section for changes: https://github.com/SocketCluster/socketcluster-client/releases
+
 ## License
 
 (The MIT License)
