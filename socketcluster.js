@@ -416,7 +416,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '6.1.1';
+module.exports.version = '6.2.0';
 
 },{"./lib/scsocket":6,"./lib/scsocketcreator":7,"sc-emitter":16}],4:[function(require,module,exports){
 (function (global){
@@ -570,7 +570,7 @@ var SCSocket = function (opts) {
   this.authToken = null;
   this.pendingReconnect = false;
   this.pendingReconnectTimeout = null;
-  this.pendingConnectCallback = false;
+  this.preparingPendingSubscriptions = false;
 
   this.connectTimeout = opts.connectTimeout;
   this.ackTimeout = opts.ackTimeout;
@@ -884,7 +884,7 @@ SCSocket.prototype._changeToUnauthenticatedState = function () {
   }
 };
 
-SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
+SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken, skipSubscriptionProcessing) {
   this.signedAuthToken = signedAuthToken;
   this.authToken = this._extractAuthTokenData(signedAuthToken);
 
@@ -897,7 +897,9 @@ SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
       signedAuthToken: signedAuthToken,
       authToken: this.authToken
     };
-    this.processPendingSubscriptions();
+    if (!skipSubscriptionProcessing) {
+      this.processPendingSubscriptions();
+    }
 
     SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
     SCEmitter.prototype.emit.call(this, 'authenticate', signedAuthToken);
@@ -1020,12 +1022,14 @@ SCSocket.prototype._tryReconnect = function (initialDelay) {
 SCSocket.prototype._onSCOpen = function (status) {
   var self = this;
 
+  this.preparingPendingSubscriptions = true;
+
   if (status) {
     this.id = status.id;
     this.pingTimeout = status.pingTimeout;
     this.transport.pingTimeout = this.pingTimeout;
     if (status.isAuthenticated) {
-      this._changeToAuthenticatedState(status.authToken);
+      this._changeToAuthenticatedState(status.authToken, true);
     } else {
       this._changeToUnauthenticatedState();
     }
@@ -1034,14 +1038,13 @@ SCSocket.prototype._onSCOpen = function (status) {
   }
 
   this.connectAttempts = 0;
-  if (this.options.autoProcessSubscriptions) {
+
+  if (this.options.autoSubscribeOnConnect) {
     this.processPendingSubscriptions();
-  } else {
-    this.pendingConnectCallback = true;
   }
 
-  // If the user invokes the callback while in autoProcessSubscriptions mode, it
-  // won't break anything - The processPendingSubscriptions() call will be a no-op.
+  // If the user invokes the callback while in autoSubscribeOnConnect mode, it
+  // won't break anything.
   SCEmitter.prototype.emit.call(this, 'connect', status, function () {
     self.processPendingSubscriptions();
   });
@@ -1317,7 +1320,7 @@ SCSocket.prototype._trySubscribe = function (channel) {
   var meetsAuthRequirements = !channel.waitForAuth || this.authState == this.AUTHENTICATED;
 
   // We can only ever have one pending subscribe action at any given time on a channel
-  if (this.state == this.OPEN && !this.pendingConnectCallback &&
+  if (this.state == this.OPEN && !this.preparingPendingSubscriptions &&
     channel._pendingSubscriptionCid == null && meetsAuthRequirements) {
 
     var options = {
@@ -1475,17 +1478,34 @@ SCSocket.prototype.isSubscribed = function (channelName, includePending) {
 SCSocket.prototype.processPendingSubscriptions = function () {
   var self = this;
 
-  this.pendingConnectCallback = false;
+  this.preparingPendingSubscriptions = false;
+
+  var pendingChannels = [];
 
   for (var i in this._channels) {
     if (this._channels.hasOwnProperty(i)) {
-      (function (channel) {
-        if (channel.state == channel.PENDING) {
-          self._trySubscribe(channel);
-        }
-      })(this._channels[i]);
+      var channel = this._channels[i];
+      if (channel.state == channel.PENDING) {
+        pendingChannels.push(channel);
+      }
     }
   }
+
+  pendingChannels.sort(function (a, b) {
+    var ap = a.priority || 0;
+    var bp = b.priority || 0;
+    if (ap > bp) {
+      return -1;
+    }
+    if (ap < bp) {
+      return 1;
+    }
+    return 0;
+  });
+
+  pendingChannels.forEach(function (channel) {
+    self._trySubscribe(channel);
+  });
 };
 
 SCSocket.prototype.watch = function (channelName, handler) {
@@ -1575,7 +1595,7 @@ function connect(options) {
     secure: isSecureDefault,
     autoConnect: true,
     autoReconnect: true,
-    autoProcessSubscriptions: true,
+    autoSubscribeOnConnect: true,
     connectTimeout: 20000,
     ackTimeout: 10000,
     timestampRequests: false,
