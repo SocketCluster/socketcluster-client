@@ -416,7 +416,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '6.2.1';
+module.exports.version = '6.2.2';
 
 },{"./lib/scsocket":6,"./lib/scsocketcreator":7,"sc-emitter":16}],4:[function(require,module,exports){
 (function (global){
@@ -884,7 +884,7 @@ SCSocket.prototype._changeToUnauthenticatedState = function () {
   }
 };
 
-SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken, skipSubscriptionProcessing) {
+SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
   this.signedAuthToken = signedAuthToken;
   this.authToken = this._extractAuthTokenData(signedAuthToken);
 
@@ -897,7 +897,7 @@ SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken, skip
       signedAuthToken: signedAuthToken,
       authToken: this.authToken
     };
-    if (!skipSubscriptionProcessing) {
+    if (!this.preparingPendingSubscriptions) {
       this.processPendingSubscriptions();
     }
 
@@ -1029,7 +1029,7 @@ SCSocket.prototype._onSCOpen = function (status) {
     this.pingTimeout = status.pingTimeout;
     this.transport.pingTimeout = this.pingTimeout;
     if (status.isAuthenticated) {
-      this._changeToAuthenticatedState(status.authToken, true);
+      this._changeToAuthenticatedState(status.authToken);
     } else {
       this._changeToUnauthenticatedState();
     }
