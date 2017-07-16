@@ -416,7 +416,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '6.2.0';
+module.exports.version = '6.2.1';
 
 },{"./lib/scsocket":6,"./lib/scsocketcreator":7,"sc-emitter":16}],4:[function(require,module,exports){
 (function (global){
@@ -616,7 +616,7 @@ var SCSocket = function (opts) {
   this.connectAttempts = 0;
 
   this._emitBuffer = new LinkedList();
-  this._channels = {};
+  this.channels = {};
 
   this.options = opts;
 
@@ -715,7 +715,7 @@ SCSocket.prototype._privateEventHandlerMap = {
   },
   '#kickOut': function (data) {
     var undecoratedChannelName = this._undecorateChannelName(data.channel);
-    var channel = this._channels[undecoratedChannelName];
+    var channel = this.channels[undecoratedChannelName];
     if (channel) {
       SCEmitter.prototype.emit.call(this, 'kickOut', data.message, undecoratedChannelName);
       channel.emit('kickOut', data.message, undecoratedChannelName);
@@ -1068,9 +1068,9 @@ SCSocket.prototype._onSCError = function (err) {
 
 SCSocket.prototype._suspendSubscriptions = function () {
   var channel, newState;
-  for (var channelName in this._channels) {
-    if (this._channels.hasOwnProperty(channelName)) {
-      channel = this._channels[channelName];
+  for (var channelName in this.channels) {
+    if (this.channels.hasOwnProperty(channelName)) {
+      channel = this.channels[channelName];
       if (channel.state == channel.SUBSCRIBED ||
         channel.state == channel.PENDING) {
 
@@ -1354,11 +1354,11 @@ SCSocket.prototype._trySubscribe = function (channel) {
 };
 
 SCSocket.prototype.subscribe = function (channelName, options) {
-  var channel = this._channels[channelName];
+  var channel = this.channels[channelName];
 
   if (!channel) {
     channel = new SCChannel(channelName, this, options);
-    this._channels[channelName] = channel;
+    this.channels[channelName] = channel;
   } else if (options) {
     channel.setOptions(options);
   }
@@ -1416,7 +1416,7 @@ SCSocket.prototype._tryUnsubscribe = function (channel) {
 
 SCSocket.prototype.unsubscribe = function (channelName) {
 
-  var channel = this._channels[channelName];
+  var channel = this.channels[channelName];
 
   if (channel) {
     if (channel.state != channel.UNSUBSCRIBED) {
@@ -1428,28 +1428,28 @@ SCSocket.prototype.unsubscribe = function (channelName) {
 };
 
 SCSocket.prototype.channel = function (channelName, options) {
-  var currentChannel = this._channels[channelName];
+  var currentChannel = this.channels[channelName];
 
   if (!currentChannel) {
     currentChannel = new SCChannel(channelName, this, options);
-    this._channels[channelName] = currentChannel;
+    this.channels[channelName] = currentChannel;
   }
   return currentChannel;
 };
 
 SCSocket.prototype.destroyChannel = function (channelName) {
-  var channel = this._channels[channelName];
+  var channel = this.channels[channelName];
   channel.unwatch();
   channel.unsubscribe();
-  delete this._channels[channelName];
+  delete this.channels[channelName];
 };
 
 SCSocket.prototype.subscriptions = function (includePending) {
   var subs = [];
   var channel, includeChannel;
-  for (var channelName in this._channels) {
-    if (this._channels.hasOwnProperty(channelName)) {
-      channel = this._channels[channelName];
+  for (var channelName in this.channels) {
+    if (this.channels.hasOwnProperty(channelName)) {
+      channel = this.channels[channelName];
 
       if (includePending) {
         includeChannel = channel && (channel.state == channel.SUBSCRIBED ||
@@ -1467,7 +1467,7 @@ SCSocket.prototype.subscriptions = function (includePending) {
 };
 
 SCSocket.prototype.isSubscribed = function (channelName, includePending) {
-  var channel = this._channels[channelName];
+  var channel = this.channels[channelName];
   if (includePending) {
     return !!channel && (channel.state == channel.SUBSCRIBED ||
       channel.state == channel.PENDING);
@@ -1482,9 +1482,9 @@ SCSocket.prototype.processPendingSubscriptions = function () {
 
   var pendingChannels = [];
 
-  for (var i in this._channels) {
-    if (this._channels.hasOwnProperty(i)) {
-      var channel = this._channels[i];
+  for (var i in this.channels) {
+    if (this.channels.hasOwnProperty(i)) {
+      var channel = this.channels[i];
       if (channel.state == channel.PENDING) {
         pendingChannels.push(channel);
       }
