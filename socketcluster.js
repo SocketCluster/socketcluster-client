@@ -362,9 +362,8 @@ var unserializableErrorProperties = {
 
 module.exports.dehydrateError = function (error, includeStackTrace) {
   var dehydratedError;
-  if (!error || typeof error == 'string') {
-      dehydratedError = error;
-  } else {
+
+  if (error && typeof error == 'object') {
     dehydratedError = {
       message: error.message
     };
@@ -376,26 +375,33 @@ module.exports.dehydrateError = function (error, includeStackTrace) {
         dehydratedError[i] = error[i];
       }
     }
+  } else if (typeof error == 'function') {
+    dehydratedError = '[function ' + (error.name || 'anonymous') + ']';
+  } else {
+    dehydratedError = error;
   }
+
   return decycle(dehydratedError);
 };
 
 module.exports.hydrateError = function (error) {
   var hydratedError = null;
   if (error != null) {
-    if (typeof error == 'string') {
-      hydratedError = error;
-    } else {
+    if (typeof error == 'object') {
       hydratedError = new Error(error.message);
       for (var i in error) {
         if (error.hasOwnProperty(i)) {
           hydratedError[i] = error[i];
         }
       }
+    } else {
+      hydratedError = error;
     }
   }
   return hydratedError;
 };
+
+module.exports.decycle = decycle;
 
 },{"./decycle":1}],3:[function(require,module,exports){
 var SCSocket = require('./lib/scsocket');
@@ -416,7 +422,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '6.2.2';
+module.exports.version = '6.3.0';
 
 },{"./lib/scsocket":6,"./lib/scsocketcreator":7,"sc-emitter":16}],4:[function(require,module,exports){
 (function (global){
