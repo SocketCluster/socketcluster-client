@@ -410,7 +410,7 @@ var SCSocketCreator = require('./lib/scsocketcreator');
 module.exports.SCSocketCreator = SCSocketCreator;
 module.exports.SCSocket = SCSocket;
 
-module.exports.SCEmitter = require('sc-emitter').SCEmitter;
+module.exports.Emitter = require('component-emitter');
 
 module.exports.connect = function (options) {
   return SCSocketCreator.connect(options);
@@ -422,9 +422,9 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '6.3.0';
+module.exports.version = '6.4.0';
 
-},{"./lib/scsocket":6,"./lib/scsocketcreator":7,"sc-emitter":16}],4:[function(require,module,exports){
+},{"./lib/scsocket":6,"./lib/scsocketcreator":7,"component-emitter":12}],4:[function(require,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -543,7 +543,7 @@ module.exports.Response = Response;
 
 },{"sc-errors":2}],6:[function(require,module,exports){
 (function (global,Buffer){
-var SCEmitter = require('sc-emitter').SCEmitter;
+var Emitter = require('component-emitter');
 var SCChannel = require('sc-channel').SCChannel;
 var Response = require('./response').Response;
 var AuthEngine = require('./auth').AuthEngine;
@@ -567,7 +567,7 @@ var isBrowser = typeof window != 'undefined';
 var SCSocket = function (opts) {
   var self = this;
 
-  SCEmitter.call(this);
+  Emitter.call(this);
 
   this.id = null;
   this.state = this.CLOSED;
@@ -682,7 +682,7 @@ var SCSocket = function (opts) {
     this.connect();
   }
 
-  this._channelEmitter = new SCEmitter();
+  this._channelEmitter = new Emitter();
 
   if (isBrowser && this.disconnectOnUnload) {
     var unloadHandler = function () {
@@ -697,7 +697,7 @@ var SCSocket = function (opts) {
   }
 };
 
-SCSocket.prototype = Object.create(SCEmitter.prototype);
+SCSocket.prototype = Object.create(Emitter.prototype);
 
 SCSocket.CONNECTING = SCSocket.prototype.CONNECTING = SCTransport.prototype.CONNECTING;
 SCSocket.OPEN = SCSocket.prototype.OPEN = SCTransport.prototype.OPEN;
@@ -723,7 +723,7 @@ SCSocket.prototype._privateEventHandlerMap = {
     var undecoratedChannelName = this._undecorateChannelName(data.channel);
     var channel = this.channels[undecoratedChannelName];
     if (channel) {
-      SCEmitter.prototype.emit.call(this, 'kickOut', data.message, undecoratedChannelName);
+      Emitter.prototype.emit.call(this, 'kickOut', data.message, undecoratedChannelName);
       channel.emit('kickOut', data.message, undecoratedChannelName);
       this._triggerChannelUnsubscribe(channel);
     }
@@ -759,7 +759,7 @@ SCSocket.prototype._privateEventHandlerMap = {
         response.error(err);
         self._onSCError(err);
       } else {
-        SCEmitter.prototype.emit.call(self, 'removeAuthToken', oldToken);
+        Emitter.prototype.emit.call(self, 'removeAuthToken', oldToken);
         self._changeToUnauthenticatedState();
         response.end();
       }
@@ -787,7 +787,7 @@ SCSocket.prototype.deauthenticate = function (callback) {
       self._onSCError(err);
     } else {
       self.emit('#removeAuthToken');
-      SCEmitter.prototype.emit.call(self, 'removeAuthToken', oldToken);
+      Emitter.prototype.emit.call(self, 'removeAuthToken', oldToken);
       self._changeToUnauthenticatedState();
     }
     callback && callback(err);
@@ -803,7 +803,7 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     clearTimeout(this._reconnectTimeoutRef);
 
     this.state = this.CONNECTING;
-    SCEmitter.prototype.emit.call(this, 'connecting');
+    Emitter.prototype.emit.call(this, 'connecting');
 
     this._changeToPendingAuthState();
 
@@ -867,7 +867,7 @@ SCSocket.prototype._changeToPendingAuthState = function () {
       oldState: oldState,
       newState: this.authState
     };
-    SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
+    Emitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
   }
 };
 
@@ -882,11 +882,11 @@ SCSocket.prototype._changeToUnauthenticatedState = function () {
       oldState: oldState,
       newState: this.authState
     };
-    SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
+    Emitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
     if (oldState == this.AUTHENTICATED) {
-      SCEmitter.prototype.emit.call(this, 'deauthenticate');
+      Emitter.prototype.emit.call(this, 'deauthenticate');
     }
-    SCEmitter.prototype.emit.call(this, 'authTokenChange', this.signedAuthToken);
+    Emitter.prototype.emit.call(this, 'authTokenChange', this.signedAuthToken);
   }
 };
 
@@ -907,10 +907,10 @@ SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
       this.processPendingSubscriptions();
     }
 
-    SCEmitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
-    SCEmitter.prototype.emit.call(this, 'authenticate', signedAuthToken);
+    Emitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
+    Emitter.prototype.emit.call(this, 'authenticate', signedAuthToken);
   }
-  SCEmitter.prototype.emit.call(this, 'authTokenChange', signedAuthToken);
+  Emitter.prototype.emit.call(this, 'authTokenChange', signedAuthToken);
 };
 
 SCSocket.prototype.decodeBase64 = function (encodedString) {
@@ -1051,7 +1051,7 @@ SCSocket.prototype._onSCOpen = function (status) {
 
   // If the user invokes the callback while in autoSubscribeOnConnect mode, it
   // won't break anything.
-  SCEmitter.prototype.emit.call(this, 'connect', status, function () {
+  Emitter.prototype.emit.call(this, 'connect', status, function () {
     self.processPendingSubscriptions();
   });
 
@@ -1067,7 +1067,7 @@ SCSocket.prototype._onSCError = function (err) {
     if (self.listeners('error').length < 1) {
       throw err;
     } else {
-      SCEmitter.prototype.emit.call(self, 'error', err);
+      Emitter.prototype.emit.call(self, 'error', err);
     }
   }, 0);
 };
@@ -1150,9 +1150,9 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
   }
 
   if (openAbort) {
-    SCEmitter.prototype.emit.call(self, 'connectAbort', code, data);
+    Emitter.prototype.emit.call(self, 'connectAbort', code, data);
   } else {
-    SCEmitter.prototype.emit.call(self, 'disconnect', code, data);
+    Emitter.prototype.emit.call(self, 'disconnect', code, data);
   }
 
   if (!SCSocket.ignoreStatuses[code]) {
@@ -1174,7 +1174,7 @@ SCSocket.prototype._onSCEvent = function (event, data, res) {
   if (handler) {
     handler.call(this, data, res);
   } else {
-    SCEmitter.prototype.emit.call(this, event, data, function () {
+    Emitter.prototype.emit.call(this, event, data, function () {
       res && res.callback.apply(res, arguments);
     });
   }
@@ -1254,7 +1254,7 @@ SCSocket.prototype.emit = function (event, data, callback) {
   if (this._localEvents[event] == null) {
     this._emit(event, data, callback);
   } else {
-    SCEmitter.prototype.emit.call(this, event, data);
+    Emitter.prototype.emit.call(this, event, data);
   }
 };
 
@@ -1281,8 +1281,8 @@ SCSocket.prototype._triggerChannelSubscribe = function (channel, subscriptionOpt
     };
     channel.emit('subscribeStateChange', stateChangeData);
     channel.emit('subscribe', channelName, subscriptionOptions);
-    SCEmitter.prototype.emit.call(this, 'subscribeStateChange', stateChangeData);
-    SCEmitter.prototype.emit.call(this, 'subscribe', channelName, subscriptionOptions);
+    Emitter.prototype.emit.call(this, 'subscribeStateChange', stateChangeData);
+    Emitter.prototype.emit.call(this, 'subscribe', channelName, subscriptionOptions);
   }
 };
 
@@ -1294,7 +1294,7 @@ SCSocket.prototype._triggerChannelSubscribeFail = function (err, channel, subscr
     channel.state = channel.UNSUBSCRIBED;
 
     channel.emit('subscribeFail', err, channelName, subscriptionOptions);
-    SCEmitter.prototype.emit.call(this, 'subscribeFail', err, channelName, subscriptionOptions);
+    Emitter.prototype.emit.call(this, 'subscribeFail', err, channelName, subscriptionOptions);
   }
 };
 
@@ -1355,7 +1355,7 @@ SCSocket.prototype._trySubscribe = function (channel) {
         }
       }
     );
-    SCEmitter.prototype.emit.call(this, 'subscribeRequest', channel.name, subscriptionOptions);
+    Emitter.prototype.emit.call(this, 'subscribeRequest', channel.name, subscriptionOptions);
   }
 };
 
@@ -1396,8 +1396,8 @@ SCSocket.prototype._triggerChannelUnsubscribe = function (channel, newState) {
     };
     channel.emit('subscribeStateChange', stateChangeData);
     channel.emit('unsubscribe', channelName);
-    SCEmitter.prototype.emit.call(this, 'subscribeStateChange', stateChangeData);
-    SCEmitter.prototype.emit.call(this, 'unsubscribe', channelName);
+    Emitter.prototype.emit.call(this, 'subscribeStateChange', stateChangeData);
+    Emitter.prototype.emit.call(this, 'unsubscribe', channelName);
   }
 };
 
@@ -1536,7 +1536,7 @@ SCSocket.prototype.watchers = function (channelName) {
 module.exports = SCSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./auth":4,"./response":5,"./sctransport":8,"base-64":10,"buffer":20,"clone":11,"linked-list":14,"querystring":24,"sc-channel":15,"sc-emitter":16,"sc-errors":2,"sc-formatter":18}],7:[function(require,module,exports){
+},{"./auth":4,"./response":5,"./sctransport":8,"base-64":10,"buffer":18,"clone":11,"component-emitter":12,"linked-list":14,"querystring":22,"sc-channel":15,"sc-errors":2,"sc-formatter":16}],7:[function(require,module,exports){
 (function (global){
 var SCSocket = require('./scsocket');
 var scErrors = require('sc-errors');
@@ -1663,7 +1663,7 @@ module.exports = {
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./scsocket":6,"sc-errors":2}],8:[function(require,module,exports){
 (function (global){
-var SCEmitter = require('sc-emitter').SCEmitter;
+var Emitter = require('component-emitter');
 var Response = require('./response').Response;
 var querystring = require('querystring');
 var WebSocket;
@@ -1701,7 +1701,7 @@ var SCTransport = function (authEngine, codecEngine, options) {
   this.open();
 };
 
-SCTransport.prototype = Object.create(SCEmitter.prototype);
+SCTransport.prototype = Object.create(Emitter.prototype);
 
 SCTransport.CONNECTING = SCTransport.prototype.CONNECTING = 'connecting';
 SCTransport.OPEN = SCTransport.prototype.OPEN = 'open';
@@ -1800,7 +1800,7 @@ SCTransport.prototype._onOpen = function () {
       self.socket.close(4003);
     } else {
       self.state = self.OPEN;
-      SCEmitter.prototype.emit.call(self, 'open', status);
+      Emitter.prototype.emit.call(self, 'open', status);
       self._resetPingTimeout();
     }
   });
@@ -1864,18 +1864,18 @@ SCTransport.prototype._onClose = function (code, data) {
 
   if (this.state == this.OPEN) {
     this.state = this.CLOSED;
-    SCEmitter.prototype.emit.call(this, 'close', code, data);
+    Emitter.prototype.emit.call(this, 'close', code, data);
     this._abortAllPendingEventsDueToBadConnection('disconnect');
 
   } else if (this.state == this.CONNECTING) {
     this.state = this.CLOSED;
-    SCEmitter.prototype.emit.call(this, 'openAbort', code, data);
+    Emitter.prototype.emit.call(this, 'openAbort', code, data);
     this._abortAllPendingEventsDueToBadConnection('connectAbort');
   }
 };
 
 SCTransport.prototype._onMessage = function (message) {
-  SCEmitter.prototype.emit.call(this, 'event', 'message', message);
+  Emitter.prototype.emit.call(this, 'event', 'message', message);
 
   var obj = this.decode(message);
 
@@ -1890,7 +1890,7 @@ SCTransport.prototype._onMessage = function (message) {
 
     if (event) {
       var response = new Response(this, obj.cid);
-      SCEmitter.prototype.emit.call(this, 'event', event, obj.data, response);
+      Emitter.prototype.emit.call(this, 'event', event, obj.data, response);
     } else if (obj.rid != null) {
 
       var eventObject = this._callbackMap[obj.rid];
@@ -1905,13 +1905,13 @@ SCTransport.prototype._onMessage = function (message) {
         }
       }
     } else {
-      SCEmitter.prototype.emit.call(this, 'event', 'raw', obj);
+      Emitter.prototype.emit.call(this, 'event', 'raw', obj);
     }
   }
 };
 
 SCTransport.prototype._onError = function (err) {
-  SCEmitter.prototype.emit.call(this, 'error', err);
+  Emitter.prototype.emit.call(this, 'error', err);
 };
 
 SCTransport.prototype._resetPingTimeout = function () {
@@ -2060,7 +2060,7 @@ SCTransport.prototype.sendObject = function (object) {
 module.exports.SCTransport = SCTransport;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./response":5,"querystring":24,"sc-emitter":16,"sc-errors":2,"ws":9}],9:[function(require,module,exports){
+},{"./response":5,"component-emitter":12,"querystring":22,"sc-errors":2,"ws":9}],9:[function(require,module,exports){
 var global;
 if (typeof WorkerGlobalScope !== 'undefined') {
   global = self;
@@ -2521,13 +2521,15 @@ if (typeof module === 'object' && module.exports) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":20}],12:[function(require,module,exports){
+},{"buffer":18}],12:[function(require,module,exports){
 
 /**
  * Expose `Emitter`.
  */
 
-module.exports = Emitter;
+if (typeof module !== 'undefined') {
+  module.exports = Emitter;
+}
 
 /**
  * Initialize a new `Emitter`.
@@ -3078,12 +3080,12 @@ module.exports = List;
 module.exports = require('./_source/linked-list.js');
 
 },{"./_source/linked-list.js":13}],15:[function(require,module,exports){
-var SCEmitter = require('sc-emitter').SCEmitter;
+var Emitter = require('component-emitter');
 
 var SCChannel = function (name, client, options) {
   var self = this;
 
-  SCEmitter.call(this);
+  Emitter.call(this);
 
   this.PENDING = 'pending';
   this.SUBSCRIBED = 'subscribed';
@@ -3097,7 +3099,7 @@ var SCChannel = function (name, client, options) {
   this.setOptions(this.options);
 };
 
-SCChannel.prototype = Object.create(SCEmitter.prototype);
+SCChannel.prototype = Object.create(Emitter.prototype);
 
 SCChannel.prototype.setOptions = function (options) {
   if (!options) {
@@ -3147,64 +3149,7 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"sc-emitter":16}],16:[function(require,module,exports){
-var Emitter = require('component-emitter');
-
-if (!Object.create) {
-  Object.create = require('./objectcreate');
-}
-
-var SCEmitter = function () {
-  Emitter.call(this);
-};
-
-SCEmitter.prototype = Object.create(Emitter.prototype);
-
-SCEmitter.prototype.emit = function (event) {
-  if (event == 'error') {
-
-    // To work with sc-domain.
-    // See https://github.com/SocketCluster/sc-domain
-    var domainErrorArgs = ['__domainError'];
-    if (arguments[1] !== undefined) {
-      domainErrorArgs.push(arguments[1]);
-    }
-
-    Emitter.prototype.emit.apply(this, domainErrorArgs);
-
-    if (this.domain) {
-      // Emit the error on the domain if it has one.
-      // See https://github.com/joyent/node/blob/ef4344311e19a4f73c031508252b21712b22fe8a/lib/events.js#L78-85
-
-      var err = arguments[1];
-
-      if (!err) {
-        err = new Error('Uncaught, unspecified "error" event.');
-      }
-      err.domainEmitter = this;
-      err.domain = this.domain;
-      err.domainThrown = false;
-      this.domain.emit('error', err);
-    }
-  }
-  Emitter.prototype.emit.apply(this, arguments);
-};
-
-module.exports.SCEmitter = SCEmitter;
-
-},{"./objectcreate":17,"component-emitter":12}],17:[function(require,module,exports){
-module.exports.create = (function () {
-  function F() {};
-
-  return function (o) {
-    if (arguments.length != 1) {
-      throw new Error('Object.create implementation only accepts one parameter.');
-    }
-    F.prototype = o;
-    return new F();
-  }
-})();
-},{}],18:[function(require,module,exports){
+},{"component-emitter":12}],16:[function(require,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -3297,7 +3242,7 @@ module.exports.encode = function (object) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],19:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -3413,7 +3358,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],20:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -5121,7 +5066,7 @@ function isnan (val) {
   return val !== val // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":19,"ieee754":21}],21:[function(require,module,exports){
+},{"base64-js":17,"ieee754":19}],19:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -5207,7 +5152,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],22:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5293,7 +5238,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],23:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5380,11 +5325,11 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],24:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":22,"./encode":23}]},{},[3])(3)
+},{"./decode":20,"./encode":21}]},{},[3])(3)
 });
