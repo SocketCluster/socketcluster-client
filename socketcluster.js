@@ -422,7 +422,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '6.5.0';
+module.exports.version = '7.0.0';
 
 },{"./lib/scsocket":6,"./lib/scsocketcreator":7,"component-emitter":14}],4:[function(require,module,exports){
 (function (global){
@@ -807,8 +807,6 @@ SCSocket.prototype.connect = SCSocket.prototype.open = function () {
     this.state = this.CONNECTING;
     Emitter.prototype.emit.call(this, 'connecting');
 
-    this._changeToUnauthenticatedState();
-
     if (this.transport) {
       this.transport.off();
     }
@@ -866,18 +864,6 @@ SCSocket.prototype.destroy = function () {
     global.removeEventListener('beforeunload', this._unloadHandler, false);
   }
   this.disconnect();
-};
-
-SCSocket.prototype._changeToUnauthenticatedState = function () {
-  if (this.authState != this.UNAUTHENTICATED) {
-    var oldState = this.authState;
-    this.authState = this.UNAUTHENTICATED;
-    var stateChangeData = {
-      oldState: oldState,
-      newState: this.authState
-    };
-    Emitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
-  }
 };
 
 SCSocket.prototype._changeToUnauthenticatedStateAndClearTokens = function () {
@@ -979,28 +965,41 @@ SCSocket.prototype.getSignedAuthToken = function () {
 SCSocket.prototype.authenticate = function (signedAuthToken, callback) {
   var self = this;
 
-  this._changeToUnauthenticatedState();
-
   this.emit('#authenticate', signedAuthToken, function (err, authStatus) {
-    if (authStatus && authStatus.authError) {
-      authStatus.authError = scErrors.hydrateError(authStatus.authError);
+
+    if (authStatus && authStatus.isAuthenticated != null) {
+      // If authStatus is correctly formatted (has an isAuthenticated property),
+      // then we will rehydrate the authError.
+      if (authStatus.authError) {
+        authStatus.authError = scErrors.hydrateError(authStatus.authError);
+      }
+    } else {
+      // Some errors like BadConnectionError and TimeoutError will not pass a valid
+      // authStatus object to the current function, so we need to create it ourselves.
+      authStatus = {
+        isAuthenticated: self.authState,
+        authError: null
+      };
     }
     if (err) {
-      self._changeToUnauthenticatedStateAndClearTokens();
+      if (err.name != 'BadConnectionError' && err.name != 'TimeoutError') {
+        // In case of a bad/closed connection or a timeout, we maintain the last
+        // known auth state since those errors don't mean that the token is invalid.
+
+        self._changeToUnauthenticatedStateAndClearTokens();
+      }
       callback && callback(err, authStatus);
     } else {
       self.auth.saveToken(self.authTokenName, signedAuthToken, {}, function (err) {
-        callback && callback(err, authStatus);
         if (err) {
-          self._changeToUnauthenticatedStateAndClearTokens();
           self._onSCError(err);
-        } else {
-          if (authStatus.isAuthenticated) {
-            self._changeToAuthenticatedState(signedAuthToken);
-          } else {
-            self._changeToUnauthenticatedStateAndClearTokens();
-          }
         }
+        if (authStatus.isAuthenticated) {
+          self._changeToAuthenticatedState(signedAuthToken);
+        } else {
+          self._changeToUnauthenticatedStateAndClearTokens();
+        }
+        callback && callback(err, authStatus);
       });
     }
   });
@@ -1049,6 +1048,9 @@ SCSocket.prototype._onSCOpen = function (status) {
       this._changeToUnauthenticatedStateAndClearTokens();
     }
   } else {
+    // This can happen if auth.loadToken (in sctransport.js) fails with
+    // an error - This means that the signedAuthToken cannot be loaded by
+    // the auth engine and therefore, we need to unauthenticate the socket.
     this._changeToUnauthenticatedStateAndClearTokens();
   }
 
@@ -1134,8 +1136,8 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
   this.pendingReconnectTimeout = null;
   clearTimeout(this._reconnectTimeoutRef);
 
-  this._changeToUnauthenticatedState();
   this._suspendSubscriptions();
+  this._abortAllPendingEventsDueToBadConnection(openAbort ? 'connectAbort' : 'disconnect');
 
   // Try to reconnect
   // on server ping timeout (4000)
@@ -1174,8 +1176,6 @@ SCSocket.prototype._onSCClose = function (code, data, openAbort) {
     var err = new SocketProtocolError(SCSocket.errorStatuses[code] || failureMessage, code);
     this._onSCError(err);
   }
-
-  this._abortAllPendingEventsDueToBadConnection(openAbort ? 'connectAbort' : 'disconnect');
 };
 
 SCSocket.prototype._onSCEvent = function (event, data, res) {
