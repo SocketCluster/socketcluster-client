@@ -14,7 +14,8 @@
     "url": "git://github.com/SocketCluster/socketcluster-client.git"
   },
   "scripts": {
-    "build": "browserify -s socketCluster index.js > socketcluster.js; uglifyjs socketcluster.js -o socketcluster.min.js"
+    "build": "browserify -s socketCluster index.js > socketcluster.js; uglifyjs socketcluster.js -o socketcluster.min.js",
+    "test": "mocha --reporter spec --timeout 3000 --slow 3000"
   },
   "dependencies": {
     "base-64": "0.1.0",
@@ -34,6 +35,9 @@
   "license": "MIT",
   "devDependencies": {
     "browserify": "^13.3.0",
+    "localStorage": "^1.0.3",
+    "mocha": "3.0.2",
+    "socketcluster-server": "^6.3.0",
     "uglify-js": "^2.8.29"
   }
 }
