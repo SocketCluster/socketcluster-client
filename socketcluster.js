@@ -17,7 +17,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '7.0.0';
+module.exports.version = '7.0.1';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"component-emitter":12}],2:[function(require,module,exports){
 (function (global){
@@ -174,12 +174,6 @@ var SCSocket = function (opts) {
   this.pendingReconnect = false;
   this.pendingReconnectTimeout = null;
   this.preparingPendingSubscriptions = false;
-
-  // Check to see if promises are even available on this browser
-  this.allowPromises = false
-  if(typeof Promise !== "undefined" && Promise.toString().indexOf("[native code]") !== -1){
-    this.allowPromises = true
-  }
 
   this.connectTimeout = opts.connectTimeout;
   this.ackTimeout = opts.ackTimeout;
@@ -861,28 +855,11 @@ SCSocket.prototype.send = function (data) {
 };
 
 SCSocket.prototype.emit = function (event, data, callback) {
-  if (!this.allowPromises) {
-    if (this._localEvents[event] == null) {
-      return this._emit(event, data, callback);
-    }
-
-    return Emitter.prototype.emit.call(this, event, data);
+  if (this._localEvents[event] == null) {
+    this._emit(event, data, callback);
+  } else {
+    Emitter.prototype.emit.call(this, event, data);
   }
-
-  return new Promise(function(resolve,reject) {
-    if (this._localEvents[event] == null) {
-      return this._emit(event, data, function() {
-        callback && callback.apply(arguments)
-        if (arguments[0]) {
-          return reject.apply(arguments)
-        }
-
-        resolve.apply(arguments)
-      });
-    }
-
-    return Emitter.prototype.emit.call(this, event, data);
-  })
 };
 
 SCSocket.prototype.publish = function (channelName, data, callback) {
@@ -890,21 +867,7 @@ SCSocket.prototype.publish = function (channelName, data, callback) {
     channel: this._decorateChannelName(channelName),
     data: data
   };
-
-  if (!this.allowPromises) {
-    return this.emit('#publish', pubData, callback);
-  }
-
-  return new Promise(function(resolve,reject) {
-    this.emit('#publish', pubData, function() {
-      callback && callback.apply(arguments)
-      if (arguments[0]) {
-        return reject.apply(arguments)
-      }
-
-      resolve.apply(arguments)
-    });
-  })
+  this.emit('#publish', pubData, callback);
 };
 
 SCSocket.prototype._triggerChannelSubscribe = function (channel, subscriptionOptions) {
