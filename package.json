@@ -15,7 +15,8 @@
   },
   "scripts": {
     "build": "browserify -s socketCluster index.js > socketcluster.js; uglifyjs socketcluster.js -o socketcluster.min.js",
-    "test": "mocha --reporter spec --timeout 3000 --slow 3000"
+    "test": "mocha --reporter spec --timeout 3000 --slow 3000",
+    "test::promises":"node test/promises.js"
   },
   "dependencies": {
     "base-64": "0.1.0",
