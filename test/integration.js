@@ -25,13 +25,16 @@ var allowedUsers = {
 };
 
 var server, client;
-var validSignedAuthTokenBob = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImJvYiIsImlhdCI6MTUwMjY0OTU2MiwiZXhwIjoxNTAyNzM1OTYyfQ.t9oprRhjDOBTHPx11hCkZLVcDqvqKDzmbUGh21VdYr0';
-var validSignedAuthTokenKate = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImthdGUiLCJpYXQiOjE1MDI2NTA1OTQsImV4cCI6MTUwMjczNjk5NH0.BJ16x_tf278uU9vkwVIfnydD78DgSBlupf8VuiefBhM';
+var validSignedAuthTokenBob = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImJvYiIsImV4cCI6MTU5NjE0NzQ3NzQ3LCJpYXQiOjE1MDI3NDc3NDZ9.hjR769TX0vpDzZPl7a1UgudYtuUj8KikJ105IV3UHsc';
+var validSignedAuthTokenKate = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImthdGUiLCJleHAiOjE1OTYxNDc0Nzc5NiwiaWF0IjoxNTAyNzQ3Nzk1fQ.mIyyBLYZIvVCS1dFTpv-vlYXqUj8mndGx9Znp9Nko_c';
 var invalidSignedAuthToken = 'fakebGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.fakec2VybmFtZSI6ImJvYiIsImlhdCI6MTUwMjYyNTIxMywiZXhwIjoxNTAyNzExNjEzfQ.fakemYcOOjM9bzmS4UYRvlWSk_lm3WGHvclmFjLbyOk';
+
+var TOKEN_EXPIRY_IN_SECONDS = 60 * 60 * 24 * 366 * 5000;
 
 var connectionHandler = function (socket) {
   socket.once('login', function (userDetails, respond) {
     if (allowedUsers[userDetails.username]) {
+      userDetails.exp = Math.round(Date.now() / 1000) + TOKEN_EXPIRY_IN_SECONDS;
       socket.setAuthToken(userDetails);
       respond();
     } else {
