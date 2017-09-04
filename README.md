@@ -5,10 +5,10 @@ SocketCluster Client is the client-side component of SocketCluster.
 
 ## Usage Overview
 
-* [Initialization](https://github.com/SocketCluster/socketcluster-client#initialization)
-* [Build](https://github.com/SocketCluster/socketcluster-client#build)
-
-## Initialization
+* [How to use](https://github.com/SocketCluster/socketcluster-client#how-to-use)
+* [Connect Options](https://github.com/SocketCluster/socketcluster-client#connection-options)
+* [Events](https://github.com/SocketCluster/socketcluster-client#events)
+* [Building](https://github.com/SocketCluster/socketcluster-client#building)
 
 To install, run:
 
@@ -35,7 +35,9 @@ Once that's done, you will be able to emit events to the server and listen to in
 var options = {
   port: 8000
 };
+```
 
+```js
 // Initiate the connection to the server
 var socket = socketCluster.connect(options);
 socket.on('connect', function () {
@@ -60,14 +62,76 @@ var options = {
   port: 443,
   rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
 };
+```
 
+```js
 // Initiate the connection to the server
 var socket = socketCluster.connect(options);
 ```
 
-## Build
+## Connect Options
 
-### Install Dependencies
+See all available options : https://socketcluster.io/#!/docs/api-socketcluster-client
+
+```js
+var options = {
+  path: '/socketcluster/',
+  port: 8000,
+  hostname: '127.0.0.1',
+  autoConnect: true,
+  secure: false,
+  rejectUnauthorized: false,
+  connectTimeout: 10000, //milliseconds
+  ackTimeout: 10000, //milliseconds
+  channelPrefix: null,
+  disconnectOnUnload: true,
+  multiplex: true,
+  autoReconnectOptions: {
+    initialDelay: 10000, //milliseconds
+    randomness: 10000, //milliseconds
+    multiplier: 1.5, //decimal
+    maxDelay: 60000 //milliseconds
+  },
+  authEngine: null,
+  codecEngine: null,
+  subscriptionRetryOptions: {},
+  query: {
+    yourparam: 'hello'
+  }
+};
+```
+
+## Events
+
+See https://socketcluster.io/#!/docs/api-scsocket-client for details
+
+```js
+socket.on('subscribe', function(channelname) {
+  console.log('subscribe:' + channelname);
+});
+
+socket.on('subscribeFail', function(channelname) {
+  console.log('subscribeFail:' + channelname);
+});
+
+socket.on('unsubscribe', function(channelname) {
+  console.log('unsubscribe:' + channelname);
+});
+
+socket.on('subscribeStateChange', function(data) {
+  console.log('subscribeStateChange:' + JSON.stringify(data));
+});
+
+socket.on('message', function(data) {
+  console.log('message:' + data);
+});
+
+//... bla.. blaahh.. blaaahh
+```
+
+## Building
+
+#### Install all dependencies
 
 ```bash
 cd socketcluster-client
@@ -77,7 +141,7 @@ npm install -g gulp gulp-cli browserify uglify-js
 npm install
 ```
 
-### Using Browserify
+#### Using Browserify
 
 To build SocketCluster Client with browserify, use:
 
@@ -85,7 +149,13 @@ To build SocketCluster Client with browserify, use:
 ./browserify-build.sh
 ```
 
-### Using Gulp
+Or use
+
+```bash
+browserify -s socketCluster index.js > socketcluster.js; uglifyjs socketcluster.js -o socketcluster.min.js
+```
+
+#### Using Gulp
 
 To build SocketCluster Client with Gulp, use:
 
