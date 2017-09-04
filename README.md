@@ -1,4 +1,4 @@
-SocketCluster Client
+SocketCluster JavaScript Client
 ======
 
 SocketCluster Client is the client-side component of SocketCluster.
@@ -8,7 +8,7 @@ SocketCluster Client is the client-side component of SocketCluster.
 * [How to use](https://github.com/SocketCluster/socketcluster-client#how-to-use)
 * [Connect Options](https://github.com/SocketCluster/socketcluster-client#connection-options)
 * [Events](https://github.com/SocketCluster/socketcluster-client#events)
-* [Building](https://github.com/SocketCluster/socketcluster-client#building)
+* [Developing](https://github.com/SocketCluster/socketcluster-client#developing)
 
 To install, run:
 
@@ -129,7 +129,7 @@ socket.on('message', function(data) {
 //... bla.. blaahh.. blaaahh
 ```
 
-## Building
+## Developing
 
 #### Install all dependencies
 
@@ -141,7 +141,9 @@ npm install -g gulp gulp-cli browserify uglify-js
 npm install
 ```
 
-#### Using Browserify
+#### Building
+
+#### Via Browserify
 
 To build SocketCluster Client with browserify, use:
 
@@ -155,7 +157,7 @@ Or use
 browserify -s socketCluster index.js > socketcluster.js; uglifyjs socketcluster.js -o socketcluster.min.js
 ```
 
-#### Using Gulp
+#### Via Gulp
 
 To build SocketCluster Client with Gulp, use:
 
