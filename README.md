@@ -154,7 +154,7 @@ To build SocketCluster Client with browserify, use:
 Or use
 
 ```bash
-browserify -s socketCluster index.js > socketcluster.js; uglifyjs socketcluster.js -o socketcluster.min.js
+browserify -s socketCluster index.js > socketcluster.js && uglifyjs socketcluster.js -o socketcluster.min.js
 ```
 
 #### Via Gulp
