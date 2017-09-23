@@ -7,6 +7,7 @@ var insert = require('gulp-insert');
 var rename = require('gulp-rename');
 var source = require('vinyl-source-stream');
 var uglify = require('gulp-uglify');
+var convertNewline = require('gulp-convert-newline');
 
 var BUILD = 'browser';
 var DIST = './';
@@ -26,6 +27,10 @@ gulp.task('browserify', function() {
     .ignore('_process')
     .bundle();
   return stream.pipe(source('socketcluster.js'))
+    .pipe(convertNewline({
+      newline: 'lf',
+      encoding: 'utf8'
+    }))
     .pipe(derequire())
     .pipe(insert.prepend(FULL_HEADER))
     .pipe(gulp.dest(DIST));
@@ -37,7 +42,7 @@ gulp.task('minify', function() {
       comments: false
     }))
     .pipe(babel({
-      plugins: ["minify-dead-code-elimination"]
+      plugins: ['minify-dead-code-elimination']
     }))
     .pipe(uglify())
     .pipe(insert.prepend(FULL_HEADER))

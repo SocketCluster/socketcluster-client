@@ -1,11 +1,251 @@
-(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var SCSocket = require('./lib/scsocket');
-var SCSocketCreator = require('./lib/scsocketcreator');
+/**
+ * SocketCluster JavaScript client v8.0.0
+ */
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
+var Emitter = _dereq_('component-emitter');
+
+var SCChannel = function (name, client, options) {
+  var self = this;
+
+  Emitter.call(this);
+
+  this.PENDING = 'pending';
+  this.SUBSCRIBED = 'subscribed';
+  this.UNSUBSCRIBED = 'unsubscribed';
+
+  this.name = name;
+  this.state = this.UNSUBSCRIBED;
+  this.client = client;
+
+  this.options = options || {};
+  this.setOptions(this.options);
+};
+
+SCChannel.prototype = Object.create(Emitter.prototype);
+
+SCChannel.prototype.setOptions = function (options) {
+  if (!options) {
+    options = {};
+  }
+  this.waitForAuth = options.waitForAuth || false;
+  this.batch = options.batch || false;
+
+  if (options.data !== undefined) {
+    this.data = options.data;
+  }
+};
+
+SCChannel.prototype.getState = function () {
+  return this.state;
+};
+
+SCChannel.prototype.subscribe = function (options) {
+  this.client.subscribe(this.name, options);
+};
+
+SCChannel.prototype.unsubscribe = function () {
+  this.client.unsubscribe(this.name);
+};
+
+SCChannel.prototype.isSubscribed = function (includePending) {
+  return this.client.isSubscribed(this.name, includePending);
+};
+
+SCChannel.prototype.publish = function (data, callback) {
+  this.client.publish(this.name, data, callback);
+};
+
+SCChannel.prototype.watch = function (handler) {
+  this.client.watch(this.name, handler);
+};
+
+SCChannel.prototype.unwatch = function (handler) {
+  this.client.unwatch(this.name, handler);
+};
+
+SCChannel.prototype.watchers = function () {
+  return this.client.watchers(this.name);
+};
+
+SCChannel.prototype.destroy = function () {
+  this.client.destroyChannel(this.name);
+};
+
+module.exports.SCChannel = SCChannel;
+
+},{"component-emitter":2}],2:[function(_dereq_,module,exports){
+
+/**
+ * Expose `Emitter`.
+ */
+
+if (typeof module !== 'undefined') {
+  module.exports = Emitter;
+}
+
+/**
+ * Initialize a new `Emitter`.
+ *
+ * @api public
+ */
+
+function Emitter(obj) {
+  if (obj) return mixin(obj);
+};
+
+/**
+ * Mixin the emitter properties.
+ *
+ * @param {Object} obj
+ * @return {Object}
+ * @api private
+ */
+
+function mixin(obj) {
+  for (var key in Emitter.prototype) {
+    obj[key] = Emitter.prototype[key];
+  }
+  return obj;
+}
+
+/**
+ * Listen on the given `event` with `fn`.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.on =
+Emitter.prototype.addEventListener = function(event, fn){
+  this._callbacks = this._callbacks || {};
+  (this._callbacks['$' + event] = this._callbacks['$' + event] || [])
+    .push(fn);
+  return this;
+};
+
+/**
+ * Adds an `event` listener that will be invoked a single
+ * time then automatically removed.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.once = function(event, fn){
+  function on() {
+    this.off(event, on);
+    fn.apply(this, arguments);
+  }
+
+  on.fn = fn;
+  this.on(event, on);
+  return this;
+};
+
+/**
+ * Remove the given callback for `event` or all
+ * registered callbacks.
+ *
+ * @param {String} event
+ * @param {Function} fn
+ * @return {Emitter}
+ * @api public
+ */
+
+Emitter.prototype.off =
+Emitter.prototype.removeListener =
+Emitter.prototype.removeAllListeners =
+Emitter.prototype.removeEventListener = function(event, fn){
+  this._callbacks = this._callbacks || {};
+
+  // all
+  if (0 == arguments.length) {
+    this._callbacks = {};
+    return this;
+  }
+
+  // specific event
+  var callbacks = this._callbacks['$' + event];
+  if (!callbacks) return this;
+
+  // remove all handlers
+  if (1 == arguments.length) {
+    delete this._callbacks['$' + event];
+    return this;
+  }
+
+  // remove specific handler
+  var cb;
+  for (var i = 0; i < callbacks.length; i++) {
+    cb = callbacks[i];
+    if (cb === fn || cb.fn === fn) {
+      callbacks.splice(i, 1);
+      break;
+    }
+  }
+  return this;
+};
+
+/**
+ * Emit `event` with the given args.
+ *
+ * @param {String} event
+ * @param {Mixed} ...
+ * @return {Emitter}
+ */
+
+Emitter.prototype.emit = function(event){
+  this._callbacks = this._callbacks || {};
+  var args = [].slice.call(arguments, 1)
+    , callbacks = this._callbacks['$' + event];
+
+  if (callbacks) {
+    callbacks = callbacks.slice(0);
+    for (var i = 0, len = callbacks.length; i < len; ++i) {
+      callbacks[i].apply(this, args);
+    }
+  }
+
+  return this;
+};
+
+/**
+ * Return array of callbacks for `event`.
+ *
+ * @param {String} event
+ * @return {Array}
+ * @api public
+ */
+
+Emitter.prototype.listeners = function(event){
+  this._callbacks = this._callbacks || {};
+  return this._callbacks['$' + event] || [];
+};
+
+/**
+ * Check if this emitter has `event` handlers.
+ *
+ * @param {String} event
+ * @return {Boolean}
+ * @api public
+ */
+
+Emitter.prototype.hasListeners = function(event){
+  return !! this.listeners(event).length;
+};
+
+},{}],3:[function(_dereq_,module,exports){
+var SCSocket = _dereq_('./lib/scsocket');
+var SCSocketCreator = _dereq_('./lib/scsocketcreator');
 
 module.exports.SCSocketCreator = SCSocketCreator;
 module.exports.SCSocket = SCSocket;
 
-module.exports.Emitter = require('component-emitter');
+module.exports.Emitter = _dereq_('component-emitter');
 
 module.exports.connect = function (options) {
   return SCSocketCreator.connect(options);
@@ -17,9 +257,9 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '7.0.2';
+module.exports.version = '8.0.0';
 
-},{"./lib/scsocket":4,"./lib/scsocketcreator":5,"component-emitter":12}],2:[function(require,module,exports){
+},{"./lib/scsocket":6,"./lib/scsocketcreator":7,"component-emitter":14}],4:[function(_dereq_,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -81,8 +321,8 @@ AuthEngine.prototype.loadToken = function (name, callback) {
 module.exports.AuthEngine = AuthEngine;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],3:[function(require,module,exports){
-var scErrors = require('sc-errors');
+},{}],5:[function(_dereq_,module,exports){
+var scErrors = _dereq_('sc-errors');
 var InvalidActionError = scErrors.InvalidActionError;
 
 var Response = function (socket, id) {
@@ -138,20 +378,20 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 
-},{"sc-errors":21}],4:[function(require,module,exports){
+},{"sc-errors":22}],6:[function(_dereq_,module,exports){
 (function (global,Buffer){
-var Emitter = require('component-emitter');
-var SCChannel = require('sc-channel').SCChannel;
-var Response = require('./response').Response;
-var AuthEngine = require('./auth').AuthEngine;
-var formatter = require('sc-formatter');
-var SCTransport = require('./sctransport').SCTransport;
-var querystring = require('querystring');
-var LinkedList = require('linked-list');
-var base64 = require('base-64');
-var clone = require('clone');
+var Emitter = _dereq_('component-emitter');
+var SCChannel = _dereq_('sc-channel').SCChannel;
+var Response = _dereq_('./response').Response;
+var AuthEngine = _dereq_('./auth').AuthEngine;
+var formatter = _dereq_('sc-formatter');
+var SCTransport = _dereq_('./sctransport').SCTransport;
+var querystring = _dereq_('querystring');
+var LinkedList = _dereq_('linked-list');
+var base64 = _dereq_('base-64');
+var clone = _dereq_('clone');
 
-var scErrors = require('sc-errors');
+var scErrors = _dereq_('sc-errors');
 var InvalidArgumentsError = scErrors.InvalidArgumentsError;
 var InvalidMessageError = scErrors.InvalidMessageError;
 var SocketProtocolError = scErrors.SocketProtocolError;
@@ -947,6 +1187,10 @@ SCSocket.prototype._trySubscribe = function (channel) {
     if (channel.data) {
       subscriptionOptions.data = channel.data;
     }
+    if (channel.batch) {
+      options.batch = true;
+      subscriptionOptions.batch = true;
+    }
 
     channel._pendingSubscriptionCid = this.transport.emit(
       '#subscribe', subscriptionOptions, options,
@@ -1139,11 +1383,11 @@ SCSocket.prototype.watchers = function (channelName) {
 
 module.exports = SCSocket;
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./auth":2,"./response":3,"./sctransport":6,"base-64":8,"buffer":10,"clone":11,"component-emitter":12,"linked-list":15,"querystring":18,"sc-channel":19,"sc-errors":21,"sc-formatter":22}],5:[function(require,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},_dereq_("buffer").Buffer)
+},{"./auth":4,"./response":5,"./sctransport":8,"base-64":10,"buffer":12,"clone":13,"component-emitter":14,"linked-list":17,"querystring":20,"sc-channel":1,"sc-errors":22,"sc-formatter":23}],7:[function(_dereq_,module,exports){
 (function (global){
-var SCSocket = require('./scsocket');
-var scErrors = require('sc-errors');
+var SCSocket = _dereq_('./scsocket');
+var scErrors = _dereq_('sc-errors');
 var InvalidArgumentsError = scErrors.InvalidArgumentsError;
 
 var _connections = {};
@@ -1214,6 +1458,7 @@ function connect(options) {
     authTokenName: 'socketCluster.authToken',
     binaryType: 'arraybuffer',
     multiplex: true,
+    pubSubBatchDuration: null,
     cloneData: false
   };
   for (var i in options) {
@@ -1265,11 +1510,11 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./scsocket":4,"sc-errors":21}],6:[function(require,module,exports){
+},{"./scsocket":6,"sc-errors":22}],8:[function(_dereq_,module,exports){
 (function (global){
-var Emitter = require('component-emitter');
-var Response = require('./response').Response;
-var querystring = require('querystring');
+var Emitter = _dereq_('component-emitter');
+var Response = _dereq_('./response').Response;
+var querystring = _dereq_('querystring');
 var WebSocket;
 var createWebSocket;
 
@@ -1279,13 +1524,13 @@ if (global.WebSocket) {
     return new WebSocket(uri);
   };
 } else {
-  WebSocket = require('ws');
+  WebSocket = _dereq_('ws');
   createWebSocket = function (uri, options) {
     return new WebSocket(uri, null, options);
   };
 }
 
-var scErrors = require('sc-errors');
+var scErrors = _dereq_('sc-errors');
 var TimeoutError = scErrors.TimeoutError;
 var BadConnectionError = scErrors.BadConnectionError;
 
@@ -1302,6 +1547,7 @@ var SCTransport = function (authEngine, codecEngine, options) {
 
   this._pingTimeoutTicker = null;
   this._callbackMap = {};
+  this._batchSendList = [];
 
   this.open();
 };
@@ -1479,6 +1725,27 @@ SCTransport.prototype._onClose = function (code, data) {
   }
 };
 
+SCTransport.prototype._handleEventObject = function (obj, message) {
+  if (obj && obj.event != null) {
+    var response = new Response(this, obj.cid);
+    Emitter.prototype.emit.call(this, 'event', obj.event, obj.data, response);
+  } else if (obj && obj.rid != null) {
+    var eventObject = this._callbackMap[obj.rid];
+    if (eventObject) {
+      clearTimeout(eventObject.timeout);
+      delete eventObject.timeout;
+      delete this._callbackMap[obj.rid];
+
+      if (eventObject.callback) {
+        var rehydratedError = scErrors.hydrateError(obj.error);
+        eventObject.callback(rehydratedError, obj.data);
+      }
+    }
+  } else {
+    Emitter.prototype.emit.call(this, 'event', 'raw', message);
+  }
+};
+
 SCTransport.prototype._onMessage = function (message) {
   Emitter.prototype.emit.call(this, 'event', 'message', message);
 
@@ -1491,26 +1758,13 @@ SCTransport.prototype._onMessage = function (message) {
       this.sendObject('#2');
     }
   } else {
-    var event = obj.event;
-
-    if (event) {
-      var response = new Response(this, obj.cid);
-      Emitter.prototype.emit.call(this, 'event', event, obj.data, response);
-    } else if (obj.rid != null) {
-
-      var eventObject = this._callbackMap[obj.rid];
-      if (eventObject) {
-        clearTimeout(eventObject.timeout);
-        delete eventObject.timeout;
-        delete this._callbackMap[obj.rid];
-
-        if (eventObject.callback) {
-          var rehydratedError = scErrors.hydrateError(obj.error);
-          eventObject.callback(rehydratedError, obj.data);
-        }
+    if (Array.isArray(obj)) {
+      var len = obj.length;
+      for (var i = 0; i < len; i++) {
+        this._handleEventObject(obj[i], message);
       }
     } else {
-      Emitter.prototype.emit.call(this, 'event', 'raw', obj);
+      this._handleEventObject(obj, message);
     }
   }
 };
@@ -1554,7 +1808,7 @@ SCTransport.prototype.close = function (code, data) {
   }
 };
 
-SCTransport.prototype.emitObject = function (eventObject) {
+SCTransport.prototype.emitObject = function (eventObject, options) {
   var simpleEventObject = {
     event: eventObject.event,
     data: eventObject.data
@@ -1565,7 +1819,8 @@ SCTransport.prototype.emitObject = function (eventObject) {
     this._callbackMap[eventObject.cid] = eventObject;
   }
 
-  this.sendObject(simpleEventObject);
+  this.sendObject(simpleEventObject, options);
+
   return eventObject.cid || null;
 };
 
@@ -1616,7 +1871,7 @@ SCTransport.prototype.emit = function (event, data, a, b) {
 
   var cid = null;
   if (this.state == this.OPEN || options.force) {
-    cid = this.emitObject(eventObject);
+    cid = this.emitObject(eventObject, options);
   }
   return cid;
 };
@@ -1655,17 +1910,45 @@ SCTransport.prototype.serializeObject = function (object) {
   return null;
 };
 
-SCTransport.prototype.sendObject = function (object) {
+SCTransport.prototype.sendObjectBatch = function (object) {
+  var self = this;
+
+  this._batchSendList.push(object);
+  if (this._batchTimeout) {
+    return;
+  }
+
+  this._batchTimeout = setTimeout(function () {
+    delete self._batchTimeout;
+    if (self._batchSendList.length) {
+      var str = self.serializeObject(self._batchSendList);
+      if (str != null) {
+        self.send(str);
+      }
+      self._batchSendList = [];
+    }
+  }, this.options.pubSubBatchDuration || 0);
+};
+
+SCTransport.prototype.sendObjectSingle = function (object) {
   var str = this.serializeObject(object);
   if (str != null) {
     this.send(str);
   }
 };
 
+SCTransport.prototype.sendObject = function (object, options) {
+  if (options && options.batch) {
+    this.sendObjectBatch(object);
+  } else {
+    this.sendObjectSingle(object);
+  }
+};
+
 module.exports.SCTransport = SCTransport;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./response":3,"component-emitter":12,"querystring":18,"sc-errors":21,"ws":7}],7:[function(require,module,exports){
+},{"./response":5,"component-emitter":14,"querystring":20,"sc-errors":22,"ws":9}],9:[function(_dereq_,module,exports){
 var global;
 if (typeof WorkerGlobalScope !== 'undefined') {
   global = self;
@@ -1702,7 +1985,7 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 
 module.exports = WebSocket ? ws : null;
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(_dereq_,module,exports){
 (function (global){
 /*! http://mths.be/base64 v0.1.0 by @mathias | MIT license */
 ;(function(root) {
@@ -1871,7 +2154,7 @@ module.exports = WebSocket ? ws : null;
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],9:[function(require,module,exports){
+},{}],11:[function(_dereq_,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -1987,7 +2270,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],10:[function(require,module,exports){
+},{}],12:[function(_dereq_,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -1998,8 +2281,8 @@ function fromByteArray (uint8) {
 
 'use strict'
 
-var base64 = require('base64-js')
-var ieee754 = require('ieee754')
+var base64 = _dereq_('base64-js')
+var ieee754 = _dereq_('ieee754')
 
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
@@ -3703,7 +3986,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":9,"ieee754":13}],11:[function(require,module,exports){
+},{"base64-js":11,"ieee754":15}],13:[function(_dereq_,module,exports){
 (function (Buffer){
 var clone = (function() {
 'use strict';
@@ -3957,173 +4240,10 @@ if (typeof module === 'object' && module.exports) {
   module.exports = clone;
 }
 
-}).call(this,require("buffer").Buffer)
-},{"buffer":10}],12:[function(require,module,exports){
-
-/**
- * Expose `Emitter`.
- */
-
-if (typeof module !== 'undefined') {
-  module.exports = Emitter;
-}
-
-/**
- * Initialize a new `Emitter`.
- *
- * @api public
- */
-
-function Emitter(obj) {
-  if (obj) return mixin(obj);
-};
-
-/**
- * Mixin the emitter properties.
- *
- * @param {Object} obj
- * @return {Object}
- * @api private
- */
-
-function mixin(obj) {
-  for (var key in Emitter.prototype) {
-    obj[key] = Emitter.prototype[key];
-  }
-  return obj;
-}
-
-/**
- * Listen on the given `event` with `fn`.
- *
- * @param {String} event
- * @param {Function} fn
- * @return {Emitter}
- * @api public
- */
-
-Emitter.prototype.on =
-Emitter.prototype.addEventListener = function(event, fn){
-  this._callbacks = this._callbacks || {};
-  (this._callbacks['$' + event] = this._callbacks['$' + event] || [])
-    .push(fn);
-  return this;
-};
-
-/**
- * Adds an `event` listener that will be invoked a single
- * time then automatically removed.
- *
- * @param {String} event
- * @param {Function} fn
- * @return {Emitter}
- * @api public
- */
-
-Emitter.prototype.once = function(event, fn){
-  function on() {
-    this.off(event, on);
-    fn.apply(this, arguments);
-  }
-
-  on.fn = fn;
-  this.on(event, on);
-  return this;
-};
-
-/**
- * Remove the given callback for `event` or all
- * registered callbacks.
- *
- * @param {String} event
- * @param {Function} fn
- * @return {Emitter}
- * @api public
- */
-
-Emitter.prototype.off =
-Emitter.prototype.removeListener =
-Emitter.prototype.removeAllListeners =
-Emitter.prototype.removeEventListener = function(event, fn){
-  this._callbacks = this._callbacks || {};
-
-  // all
-  if (0 == arguments.length) {
-    this._callbacks = {};
-    return this;
-  }
-
-  // specific event
-  var callbacks = this._callbacks['$' + event];
-  if (!callbacks) return this;
-
-  // remove all handlers
-  if (1 == arguments.length) {
-    delete this._callbacks['$' + event];
-    return this;
-  }
-
-  // remove specific handler
-  var cb;
-  for (var i = 0; i < callbacks.length; i++) {
-    cb = callbacks[i];
-    if (cb === fn || cb.fn === fn) {
-      callbacks.splice(i, 1);
-      break;
-    }
-  }
-  return this;
-};
-
-/**
- * Emit `event` with the given args.
- *
- * @param {String} event
- * @param {Mixed} ...
- * @return {Emitter}
- */
-
-Emitter.prototype.emit = function(event){
-  this._callbacks = this._callbacks || {};
-  var args = [].slice.call(arguments, 1)
-    , callbacks = this._callbacks['$' + event];
-
-  if (callbacks) {
-    callbacks = callbacks.slice(0);
-    for (var i = 0, len = callbacks.length; i < len; ++i) {
-      callbacks[i].apply(this, args);
-    }
-  }
-
-  return this;
-};
-
-/**
- * Return array of callbacks for `event`.
- *
- * @param {String} event
- * @return {Array}
- * @api public
- */
-
-Emitter.prototype.listeners = function(event){
-  this._callbacks = this._callbacks || {};
-  return this._callbacks['$' + event] || [];
-};
-
-/**
- * Check if this emitter has `event` handlers.
- *
- * @param {String} event
- * @return {Boolean}
- * @api public
- */
-
-Emitter.prototype.hasListeners = function(event){
-  return !! this.listeners(event).length;
-};
-
-},{}],13:[function(require,module,exports){
+}).call(this,_dereq_("buffer").Buffer)
+},{"buffer":12}],14:[function(_dereq_,module,exports){
+arguments[4][2][0].apply(exports,arguments)
+},{"dup":2}],15:[function(_dereq_,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -4209,7 +4329,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],14:[function(require,module,exports){
+},{}],16:[function(_dereq_,module,exports){
 'use strict';
 
 /**
@@ -4597,12 +4717,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(_dereq_,module,exports){
 'use strict';
 
-module.exports = require('./_source/linked-list.js');
+module.exports = _dereq_('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":14}],16:[function(require,module,exports){
+},{"./_source/linked-list.js":16}],18:[function(_dereq_,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4688,7 +4808,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],17:[function(require,module,exports){
+},{}],19:[function(_dereq_,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4775,83 +4895,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],18:[function(require,module,exports){
+},{}],20:[function(_dereq_,module,exports){
 'use strict';
 
-exports.decode = exports.parse = require('./decode');
-exports.encode = exports.stringify = require('./encode');
+exports.decode = exports.parse = _dereq_('./decode');
+exports.encode = exports.stringify = _dereq_('./encode');
 
-},{"./decode":16,"./encode":17}],19:[function(require,module,exports){
-var Emitter = require('component-emitter');
-
-var SCChannel = function (name, client, options) {
-  var self = this;
-
-  Emitter.call(this);
-
-  this.PENDING = 'pending';
-  this.SUBSCRIBED = 'subscribed';
-  this.UNSUBSCRIBED = 'unsubscribed';
-
-  this.name = name;
-  this.state = this.UNSUBSCRIBED;
-  this.client = client;
-
-  this.options = options || {};
-  this.setOptions(this.options);
-};
-
-SCChannel.prototype = Object.create(Emitter.prototype);
-
-SCChannel.prototype.setOptions = function (options) {
-  if (!options) {
-    options = {};
-  }
-  this.waitForAuth = options.waitForAuth || false;
-  if (options.data !== undefined) {
-    this.data = options.data;
-  }
-};
-
-SCChannel.prototype.getState = function () {
-  return this.state;
-};
-
-SCChannel.prototype.subscribe = function (options) {
-  this.client.subscribe(this.name, options);
-};
-
-SCChannel.prototype.unsubscribe = function () {
-  this.client.unsubscribe(this.name);
-};
-
-SCChannel.prototype.isSubscribed = function (includePending) {
-  return this.client.isSubscribed(this.name, includePending);
-};
-
-SCChannel.prototype.publish = function (data, callback) {
-  this.client.publish(this.name, data, callback);
-};
-
-SCChannel.prototype.watch = function (handler) {
-  this.client.watch(this.name, handler);
-};
-
-SCChannel.prototype.unwatch = function (handler) {
-  this.client.unwatch(this.name, handler);
-};
-
-SCChannel.prototype.watchers = function () {
-  return this.client.watchers(this.name);
-};
-
-SCChannel.prototype.destroy = function () {
-  this.client.destroyChannel(this.name);
-};
-
-module.exports.SCChannel = SCChannel;
-
-},{"component-emitter":12}],20:[function(require,module,exports){
+},{"./decode":18,"./encode":19}],21:[function(_dereq_,module,exports){
 // Based on https://github.com/dscape/cycle/blob/master/cycle.js
 
 module.exports = function decycle(object) {
@@ -4932,8 +4982,8 @@ module.exports = function decycle(object) {
     }(object, '$'));
 };
 
-},{}],21:[function(require,module,exports){
-var decycle = require('./decycle');
+},{}],22:[function(_dereq_,module,exports){
+var decycle = _dereq_('./decycle');
 
 var isStrict = (function () { return !this; })();
 
@@ -5256,7 +5306,7 @@ module.exports.hydrateError = function (error) {
 
 module.exports.decycle = decycle;
 
-},{"./decycle":20}],22:[function(require,module,exports){
+},{"./decycle":21}],23:[function(_dereq_,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -5349,5 +5399,5 @@ module.exports.encode = function (object) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}]},{},[1])(1)
+},{}]},{},[3])(3)
 });
