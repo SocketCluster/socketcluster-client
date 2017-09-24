@@ -6,7 +6,7 @@ SocketCluster Client is the client-side component of SocketCluster.
 ## Usage Overview
 
 * [How to use](https://github.com/SocketCluster/socketcluster-client#how-to-use)
-* [Connect Options](https://github.com/SocketCluster/socketcluster-client#connection-options)
+* [Connect Options](https://github.com/SocketCluster/socketcluster-client#connect-options)
 * [Events](https://github.com/SocketCluster/socketcluster-client#events)
 * [Developing](https://github.com/SocketCluster/socketcluster-client#developing)
 
