@@ -136,7 +136,7 @@ socket.on('message', function(data) {
 ```bash
 cd socketcluster-client
 
-npm install -g gulp gulp-cli browserify uglify-js
+npm install -g gulp gulp-cli eslint browserify uglify-js
 
 npm install
 ```
