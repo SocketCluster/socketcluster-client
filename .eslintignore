@@ -1,0 +1,4 @@
+coverage
+node_modules
+socketcluster.js
+socketcluster.min.js
