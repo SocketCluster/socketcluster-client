@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v8.0.1
+ * SocketCluster JavaScript client v8.0.2
  */
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 var Emitter = _dereq_('component-emitter');
@@ -257,7 +257,7 @@ module.exports.destroy = function (options) {
 
 module.exports.connections = SCSocketCreator.connections;
 
-module.exports.version = '8.0.1';
+module.exports.version = '8.0.2';
 
 },{"./lib/scsocket":6,"./lib/scsocketcreator":7,"component-emitter":14}],4:[function(_dereq_,module,exports){
 (function (global){
@@ -5350,7 +5350,7 @@ var binaryToBase64Replacer = function (key, value) {
     // Some versions of Node.js convert Buffers to Objects before they are passed to
     // the replacer function - Because of this, we need to rehydrate Buffers
     // before we can convert them to base64 strings.
-    if (value && value.type == 'Buffer' && value.data instanceof Array) {
+    if (value && value.type === 'Buffer' && Array.isArray(value.data)) {
       var rehydratedBuffer;
       if (global.Buffer.from) {
         rehydratedBuffer = global.Buffer.from(value.data);
@@ -5373,7 +5373,7 @@ module.exports.decode = function (input) {
    return null;
   }
   // Leave ping or pong message as is
-  if (input == '#1' || input == '#2') {
+  if (input === '#1' || input === '#2') {
     return input;
   }
   var message = input.toString();
@@ -5383,7 +5383,6 @@ module.exports.decode = function (input) {
   } catch (err) {}
   return message;
 };
-
 
 // Encode a raw JavaScript object (which is in the SC protocol format) into a format for
 // transfering it over the wire. In this case, we just convert it into a simple JSON string.
@@ -5395,7 +5394,7 @@ module.exports.decode = function (input) {
 // for details about the SC protocol.
 module.exports.encode = function (object) {
   // Leave ping or pong message as is
-  if (object == '#1' || object == '#2') {
+  if (object === '#1' || object === '#2') {
     return object;
   }
   return JSON.stringify(object, binaryToBase64Replacer);
