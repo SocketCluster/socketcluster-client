@@ -536,5 +536,59 @@ describe('integration tests', function () {
         done();
       }, 1000);
     });
+
+    it('should trigger the close event if the socket disconnects in the middle of the handshake phase', function (done) {
+      client = socketClusterClient.connect(clientOptions);
+      var aborted = false;
+      var diconnected = false;
+      var closed = false;
+
+      client.on('connectAbort', function () {
+        aborted = true;
+      });
+      client.on('disconnect', function () {
+        diconnected = true;
+      });
+      client.on('close', function () {
+        closed = true;
+      });
+
+      client.disconnect();
+
+      setTimeout(function () {
+        assert.equal(aborted, true);
+        assert.equal(diconnected, false);
+        assert.equal(closed, true);
+        done();
+      }, 300);
+    });
+
+    it('should trigger the close event if the socket disconnects in the after the handshake phase', function (done) {
+      client = socketClusterClient.connect(clientOptions);
+      var aborted = false;
+      var diconnected = false;
+      var closed = false;
+
+      client.on('connectAbort', function () {
+        aborted = true;
+      });
+      client.on('disconnect', function () {
+        diconnected = true;
+      });
+      client.on('close', function () {
+        closed = true;
+      });
+
+      client.on('connect', function () {
+        client.disconnect();
+      });
+
+      setTimeout(function () {
+        assert.equal(aborted, false);
+        assert.equal(diconnected, true);
+        assert.equal(closed, true);
+        done();
+      }, 300);
+    });
   });
 });
