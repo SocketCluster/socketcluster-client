@@ -11,11 +11,13 @@ var PORT = 8008;
 var clientOptions = {
   hostname: '127.0.0.1',
   port: PORT,
-  multiplex: false
+  multiplex: false,
+  ackTimeout: 200
 };
 
 var serverOptions = {
-  authKey: 'testkey'
+  authKey: 'testkey',
+  ackTimeout: 200
 };
 
 var allowedUsers = {
@@ -47,6 +49,11 @@ var connectionHandler = function (socket) {
     server.signatureKey = newAuthKey;
     server.verificationKey = newAuthKey;
     respond();
+  });
+  socket.on('performTask', function (action, respond) {
+    setTimeout(function () {
+      respond();
+    }, 1000);
   });
 };
 
@@ -563,7 +570,7 @@ describe('integration tests', function () {
       }, 300);
     });
 
-    it('should trigger the close event if the socket disconnects in the after the handshake phase', function (done) {
+    it('should trigger the close event if the socket disconnects after the handshake phase', function (done) {
       client = socketClusterClient.connect(clientOptions);
       var aborted = false;
       var diconnected = false;
@@ -587,6 +594,40 @@ describe('integration tests', function () {
         assert.equal(aborted, false);
         assert.equal(diconnected, true);
         assert.equal(closed, true);
+        done();
+      }, 300);
+    });
+  });
+
+  describe('emitting events', function () {
+    it('should not throw error on socket if ackTimeout elapses before response to event is sent back', function (done) {
+      client = socketClusterClient.connect(clientOptions);
+
+      var caughtError;
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      var responseError;
+
+      client.on('connect', function () {
+        client.emit('performTask', 123, function (err) {
+          responseError = err;
+        });
+        setTimeout(function () {
+          try {
+            client.disconnect();
+          } catch (e) {
+            caughtError = e;
+          }
+        }, 250);
+      });
+
+      setTimeout(function () {
+        assert.notEqual(responseError, null);
+        assert.equal(caughtError, null);
         done();
       }, 300);
     });
