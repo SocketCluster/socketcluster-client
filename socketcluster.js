@@ -1601,7 +1601,6 @@ SCTransport.prototype.emitObject = function (eventObject, options) {
 };
 
 SCTransport.prototype._handleEventAckTimeout = function (eventObject) {
-
   if (eventObject.cid) {
     delete this._callbackMap[eventObject.cid];
   }
@@ -2050,7 +2049,7 @@ function fromByteArray (uint8) {
 /*!
  * The buffer module from node.js, for the browser.
  *
- * @author   Feross Aboukhadijeh <https://feross.org>
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
  * @license  MIT
  */
 /* eslint-disable no-proto */
