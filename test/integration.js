@@ -8,12 +8,7 @@ global.localStorage = localStorage;
 
 var PORT = 8008;
 
-var clientOptions = {
-  hostname: '127.0.0.1',
-  port: PORT,
-  multiplex: false,
-  ackTimeout: 200
-};
+var clientOptions;
 
 var serverOptions = {
   authKey: 'testkey',
@@ -82,6 +77,16 @@ describe('integration tests', function () {
     done();
   });
 
+  beforeEach('Prepare data for test case', function (done) {
+    clientOptions = {
+      hostname: '127.0.0.1',
+      port: PORT,
+      multiplex: false,
+      ackTimeout: 200
+    };
+    done();
+  });
+
   afterEach('shut down client after each test', function (done) {
     global.localStorage.removeItem('socketCluster.authToken');
     if (client && client.state != client.CLOSED) {
@@ -93,6 +98,7 @@ describe('integration tests', function () {
       });
       client.destroy();
     } else {
+      client.destroy();
       done();
     }
   });
@@ -100,7 +106,7 @@ describe('integration tests', function () {
   describe('authentication', function () {
 
     it('should not send back error if JWT is not provided in handshake', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       client.once('connect', function (status) {
         assert.equal(status.authError === undefined, true);
         done()
@@ -109,7 +115,7 @@ describe('integration tests', function () {
 
     it('should be authenticated on connect if previous JWT token is present', function (done) {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       client.once('connect', function (statusA) {
         assert.equal(client.authState, 'authenticated');
         assert.equal(statusA.isAuthenticated, true);
@@ -120,7 +126,7 @@ describe('integration tests', function () {
 
     it('should send back error if JWT is invalid during handshake', function (done) {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       client.once('connect', function (statusA) {
         assert.notEqual(statusA, null);
@@ -162,7 +168,7 @@ describe('integration tests', function () {
     });
 
     it('should allow switching between users', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       client.once('connect', function (statusA) {
         client.emit('login', {username: 'alice'});
 
@@ -184,7 +190,7 @@ describe('integration tests', function () {
       });
       server.once('connection', connectionHandler);
       server.once('ready', function () {
-        client = socketClusterClient.connect({
+        client = socketClusterClient.create({
           hostname: clientOptions.hostname,
           port: port,
           multiplex: false
@@ -208,7 +214,7 @@ describe('integration tests', function () {
       });
       server.once('connection', connectionHandler);
       server.once('ready', function () {
-        client = socketClusterClient.connect({
+        client = socketClusterClient.create({
           hostname: clientOptions.hostname,
           port: port,
           multiplex: false
@@ -233,7 +239,7 @@ describe('integration tests', function () {
       });
       server.once('connection', connectionHandler);
       server.once('ready', function () {
-        client = socketClusterClient.connect({
+        client = socketClusterClient.create({
           hostname: clientOptions.hostname,
           port: port,
           multiplex: false
@@ -257,7 +263,7 @@ describe('integration tests', function () {
     });
 
     it('should start out in pending authState and switch to unauthenticated if no token exists', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       assert.equal(client.authState, 'unauthenticated');
 
       var handler = function (status) {
@@ -274,7 +280,7 @@ describe('integration tests', function () {
 
     it('should deal with auth engine errors related to saveToken function', function (done) {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       var caughtError;
       client.on('error', function (err) {
@@ -314,7 +320,7 @@ describe('integration tests', function () {
     });
 
     it('should gracefully handle authenticate abortion due to disconnection', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       client.once('connect', function (statusA) {
         client.authenticate(validSignedAuthTokenBob, function (err, authStatus) {
@@ -332,7 +338,7 @@ describe('integration tests', function () {
     });
 
     it('should go through the correct sequence of authentication state changes when dealing with disconnections; part 1', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       var expectedAuthStateChanges = [
         'unauthenticated->authenticated'
@@ -369,7 +375,7 @@ describe('integration tests', function () {
 
     it('should go through the correct sequence of authentication state changes when dealing with disconnections; part 2', function (done) {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       var expectedAuthStateChanges = [
         'unauthenticated->authenticated',
@@ -406,7 +412,7 @@ describe('integration tests', function () {
 
     it('should go through the correct sequence of authentication state changes when dealing with disconnections; part 3', function (done) {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       var expectedAuthStateChanges = [
         'unauthenticated->authenticated',
@@ -434,7 +440,7 @@ describe('integration tests', function () {
 
     it('should go through the correct sequence of authentication state changes when authenticating as a user while already authenticated as another user', function (done) {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       var expectedAuthStateChanges = [
         'unauthenticated->authenticated'
@@ -471,7 +477,7 @@ describe('integration tests', function () {
     });
 
     it('should wait for socket to be authenticated before subscribing to waitForAuth channel', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       var privateChannel = client.subscribe('priv', {waitForAuth: true});
       assert.equal(privateChannel.state, 'pending');
 
@@ -495,7 +501,7 @@ describe('integration tests', function () {
 
     it('subscriptions (including those with waitForAuth option) should have priority over the authenticate action', function (done) {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       var expectedAuthStateChanges = [
         'unauthenticated->authenticated',
@@ -545,7 +551,7 @@ describe('integration tests', function () {
     });
 
     it('should trigger the close event if the socket disconnects in the middle of the handshake phase', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       var aborted = false;
       var diconnected = false;
       var closed = false;
@@ -571,7 +577,7 @@ describe('integration tests', function () {
     });
 
     it('should trigger the close event if the socket disconnects after the handshake phase', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       var aborted = false;
       var diconnected = false;
       var closed = false;
@@ -601,7 +607,7 @@ describe('integration tests', function () {
 
   describe('emitting events', function () {
     it('should not throw error on socket if ackTimeout elapses before response to event is sent back', function (done) {
-      client = socketClusterClient.connect(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       var caughtError;
 
@@ -630,6 +636,108 @@ describe('integration tests', function () {
         assert.equal(caughtError, null);
         done();
       }, 300);
+    });
+  });
+
+  describe('destroying socket', function () {
+
+    it('should disconnect socket when socket.destroy() is called', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      client.on('connect', function () {
+        client.destroy();
+      });
+
+      client.on('disconnect', function () {
+        done();
+      });
+    });
+
+    it('should destroy all references of socket when socket.destroy() is called before connect', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
+      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
+
+      client.destroy();
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
+      assert.equal(socketClusterClient.clients[client.clientId], null);
+      done();
+    });
+
+    it('should destroy all references of socket when socket.destroy() is called after connect', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
+      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
+
+      client.on('connect', function () {
+        client.destroy();
+        assert.equal(Object.keys(socketClusterClient.clients).length, 0);
+        assert.equal(socketClusterClient.clients[client.clientId], null);
+        done();
+      });
+    });
+
+    it('should destroy all references of socket when socketClusterClient.destroy(socket) is called', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
+      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
+
+      socketClusterClient.destroy(client);
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
+      assert.equal(socketClusterClient.clients[client.clientId], null);
+      done();
+    });
+
+    it('should destroy all references of multiplexed socket when socket.destroy() is called', function (done) {
+      clientOptions.multiplex = true;
+      clientA = socketClusterClient.create(clientOptions);
+      clientB = socketClusterClient.create(clientOptions);
+
+      var clientAError;
+      clientA.on('error', function (err) {
+        clientAError = err;
+      });
+
+      var clientBError;
+      clientB.on('error', function (err) {
+        clientBError = err;
+      });
+
+      assert.equal(clientA, clientB);
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
+      assert.equal(socketClusterClient.clients[clientA.clientId] === clientA, true);
+
+      clientA.destroy();
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
+      assert.equal(socketClusterClient.clients[clientA.clientId], null);
+      done();
     });
   });
 });

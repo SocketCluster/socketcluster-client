@@ -6,14 +6,16 @@ module.exports.SCSocket = SCSocket;
 
 module.exports.Emitter = require('component-emitter');
 
-module.exports.connect = function (options) {
-  return SCSocketCreator.connect(options);
+module.exports.create = function (options) {
+  return SCSocketCreator.create(options);
 };
+
+module.exports.connect = module.exports.create;
 
 module.exports.destroy = function (options) {
   return SCSocketCreator.destroy(options);
 };
 
-module.exports.connections = SCSocketCreator.connections;
+module.exports.clients = SCSocketCreator.clients;
 
 module.exports.version = '9.0.4';
