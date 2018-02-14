@@ -695,24 +695,6 @@ describe('integration tests', function () {
       });
     });
 
-    it('should destroy all references of socket when socketClusterClient.destroy(socket) is called', function (done) {
-      client = socketClusterClient.create(clientOptions);
-
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
-      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
-
-      socketClusterClient.destroy(client);
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
-      assert.equal(socketClusterClient.clients[client.clientId], null);
-      done();
-    });
-
     it('should destroy all references of multiplexed socket when socket.destroy() is called', function (done) {
       clientOptions.multiplex = true;
       clientA = socketClusterClient.create(clientOptions);
@@ -737,6 +719,24 @@ describe('integration tests', function () {
 
       assert.equal(Object.keys(socketClusterClient.clients).length, 0);
       assert.equal(socketClusterClient.clients[clientA.clientId], null);
+      done();
+    });
+
+    it('should destroy all references of socket when socketClusterClient.destroy(socket) is called', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
+      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
+
+      socketClusterClient.destroy(client);
+
+      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
+      assert.equal(socketClusterClient.clients[client.clientId], null);
       done();
     });
   });
