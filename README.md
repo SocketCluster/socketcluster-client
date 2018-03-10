@@ -35,11 +35,10 @@ Once that's done, you will be able to emit events to the server and listen to in
 var options = {
   port: 8000
 };
-```
 
-```js
 // Initiate the connection to the server
-var socket = socketCluster.connect(options);
+var socket = socketCluster.create(options);
+
 socket.on('connect', function () {
   console.log('CONNECTED');
 });
@@ -62,11 +61,8 @@ var options = {
   port: 443,
   rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
 };
-```
-
-```js
 // Initiate the connection to the server
-var socket = socketCluster.connect(options);
+var socket = socketCluster.create(options);
 ```
 
 ## Connect Options
