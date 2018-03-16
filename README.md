@@ -16,16 +16,16 @@ To install, run:
 npm install socketcluster-client
 ```
 
-The socketcluster-client script is called socketcluster.js (located in the main socketcluster-client directory)
-- You should include it in your HTML page using a &lt;script&gt; tag in order to interact with SocketCluster.
 
 ## How to use
 
-Embed in your HTML page using (Note that the src attribute may be different depending on how you setup your HTTP server):
+The socketcluster-client script is called `socketcluster.js` (located in the main socketcluster-client directory).
+Embed it in your HTML page like that:
 
 ```html
 <script type="text/javascript" src="/socketcluster.js"></script>
 ```
+- Note that the src attribute may be different depending on how you setup your HTTP server
 
 Once you have embedded the client socketcluster.js into your page, you will gain access to a global socketCluster object.
 Then, to begin interacting with the SocketCluster cluster, you will need to establish a connection.
@@ -121,8 +121,6 @@ socket.on('subscribeStateChange', function(data) {
 socket.on('message', function(data) {
   console.log('message:' + data);
 });
-
-//... bla.. blaahh.. blaaahh
 ```
 
 ## Developing
