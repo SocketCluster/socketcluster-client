@@ -605,7 +605,7 @@ describe('integration tests', function () {
     });
   });
 
-  describe('emitting events', function () {
+  describe('emitting remote events', function () {
     it('should not throw error on socket if ackTimeout elapses before response to event is sent back', function (done) {
       client = socketClusterClient.create(clientOptions);
 
@@ -738,6 +738,59 @@ describe('integration tests', function () {
       assert.equal(Object.keys(socketClusterClient.clients).length, 0);
       assert.equal(socketClusterClient.clients[client.clientId], null);
       done();
+    });
+  });
+
+  describe('order of local events', function () {
+    it('Should trigger unsubscribe event on channel before disconnect event', function (done) {
+      client = socketClusterClient.create(clientOptions);
+      var hasUnsubscribed = false;
+
+      var fooChannel = client.subscribe('foo');
+      fooChannel.on('subscribe', function () {
+        setTimeout(function () {
+          client.disconnect();
+        }, 100);
+      });
+      fooChannel.on('unsubscribe', function () {
+        hasUnsubscribed = true;
+      });
+      client.on('disconnect', function () {
+        assert.equal(hasUnsubscribed, true);
+        done();
+      });
+    });
+
+    it('Should not invoke subscribeFail event if connection is aborted', function (done) {
+      client = socketClusterClient.create(clientOptions);
+      var hasSubscribeFailed = false;
+      var gotBadConnectionError = false;
+
+      client.on('connect', function () {
+        client.emit('someEvent', 123, function (err) {
+          if (err && err.name === 'BadConnectionError') {
+            gotBadConnectionError = true;
+          }
+        });
+
+        var fooChannel = client.subscribe('foo');
+
+        fooChannel.on('subscribeFail', function () {
+          hasSubscribeFailed = true;
+        });
+
+        client.on('close', function () {
+          setTimeout(function () {
+            assert.equal(gotBadConnectionError, true);
+            assert.equal(hasSubscribeFailed, false);
+            done();
+          }, 100);
+        });
+
+        setTimeout(function () {
+          client.disconnect();
+        }, 0);
+      });
     });
   });
 });
