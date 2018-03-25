@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v10.1.2
+ * SocketCluster JavaScript client v11.0.0
  */
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function(){function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s}return e})()({1:[function(_dereq_,module,exports){
 var SCSocket = _dereq_('./lib/scsocket');
@@ -22,7 +22,7 @@ module.exports.destroy = function (options) {
 
 module.exports.clients = SCSocketCreator.clients;
 
-module.exports.version = '10.1.2';
+module.exports.version = '11.0.0';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"component-emitter":12}],2:[function(_dereq_,module,exports){
 (function (global){
@@ -1218,17 +1218,28 @@ function create(options) {
 
   options = options || {};
 
+  if (options.host && !options.host.match(/[^:]+:\d{2,5}/)) {
+    throw new InvalidArgumentsError('The host option should include both' +
+      ' the hostname and the port number in the format "hostname:port"');
+  }
+
+  if (options.host && options.hostname) {
+    throw new InvalidArgumentsError('The host option should already include' +
+      ' the hostname and the port number in the format "hostname:port"' +
+      ' - Because of this, you should never use host and hostname options together');
+  }
+
   if (options.host && options.port) {
-    throw new InvalidArgumentsError('The host option should already include the' +
-      ' port number in the format hostname:port - Because of this, the host and port options' +
-      ' cannot be specified together; use the hostname option instead');
+    throw new InvalidArgumentsError('The host option should already include' +
+      ' the hostname and the port number in the format "hostname:port"' +
+      ' - Because of this, you should never use host and port options together');
   }
 
   var isSecureDefault = isUrlSecure();
 
   var opts = {
     port: getPort(options, isSecureDefault),
-    hostname: global.location && location.hostname,
+    hostname: global.location && location.hostname || 'localhost',
     path: '/socketcluster/',
     secure: isSecureDefault,
     autoConnect: true,

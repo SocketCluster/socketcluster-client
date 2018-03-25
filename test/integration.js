@@ -742,7 +742,7 @@ describe('integration tests', function () {
   });
 
   describe('order of local events', function () {
-    it('Should trigger unsubscribe event on channel before disconnect event', function (done) {
+    it('should trigger unsubscribe event on channel before disconnect event', function (done) {
       client = socketClusterClient.create(clientOptions);
       var hasUnsubscribed = false;
 
@@ -761,7 +761,7 @@ describe('integration tests', function () {
       });
     });
 
-    it('Should not invoke subscribeFail event if connection is aborted', function (done) {
+    it('should not invoke subscribeFail event if connection is aborted', function (done) {
       client = socketClusterClient.create(clientOptions);
       var hasSubscribeFailed = false;
       var gotBadConnectionError = false;
@@ -790,6 +790,40 @@ describe('integration tests', function () {
         setTimeout(function () {
           client.disconnect();
         }, 0);
+      });
+    });
+
+    it('should invoke emit callbacks with BadConnectionError before triggering the disconnect event', function (done) {
+      client = socketClusterClient.create(clientOptions);
+      var messageList = [];
+
+      client.on('connect', function () {
+        client.disconnect();
+
+        setTimeout(function () {
+          assert.equal(messageList.length, 2);
+          assert.equal(messageList[0].type, 'error');
+          assert.equal(messageList[0].error.name, 'BadConnectionError');
+          assert.equal(messageList[1].type, 'disconnect');
+          done();
+        }, 200);
+      });
+
+      client.emit('someEvent', 123, function (err) {
+        if (err) {
+          messageList.push({
+            type: 'error',
+            error: err
+          });
+        }
+      });
+
+      client.on('disconnect', function (code, reason) {
+        messageList.push({
+          type: 'disconnect',
+          code: code,
+          reason: reason
+        });
       });
     });
   });
