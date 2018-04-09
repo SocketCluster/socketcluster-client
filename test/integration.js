@@ -697,8 +697,8 @@ describe('integration tests', function () {
 
     it('should destroy all references of multiplexed socket when socket.destroy() is called', function (done) {
       clientOptions.multiplex = true;
-      clientA = socketClusterClient.create(clientOptions);
-      clientB = socketClusterClient.create(clientOptions);
+      var clientA = socketClusterClient.create(clientOptions);
+      var clientB = socketClusterClient.create(clientOptions);
 
       var clientAError;
       clientA.on('error', function (err) {
@@ -738,6 +738,62 @@ describe('integration tests', function () {
       assert.equal(Object.keys(socketClusterClient.clients).length, 0);
       assert.equal(socketClusterClient.clients[client.clientId], null);
       done();
+    });
+
+    it('should destroy all references of socket when socketClusterClient.destroy(socket) is called if the socket was created with query parameters', function () {
+      var clientOptionsB = {
+        hostname: '127.0.0.1',
+        port: PORT,
+        multiplex: true,
+        ackTimeout: 200,
+        query: {foo: 123, bar: 456}
+      };
+
+      var clientA = socketClusterClient.create(clientOptionsB);
+
+      var clientOptionsB = {
+        hostname: '127.0.0.1',
+        port: PORT,
+        multiplex: true,
+        ackTimeout: 200,
+        query: {foo: 123, bar: 789}
+      };
+
+      var clientB = socketClusterClient.create(clientOptionsB);
+
+      var clientOptionsB2 = {
+        hostname: '127.0.0.1',
+        port: PORT,
+        multiplex: true,
+        ackTimeout: 200,
+        query: {foo: 123, bar: 789}
+      };
+
+      var clientB2 = socketClusterClient.create(clientOptionsB2);
+
+      return Promise.all([
+        new Promise(function (resolve) {
+          clientA.on('connect', function () {
+            resolve();
+          });
+        }),
+        new Promise(function (resolve) {
+          clientB.on('connect', function () {
+            resolve();
+          });
+        }),
+        new Promise(function (resolve) {
+          clientB2.on('connect', function () {
+            resolve();
+          });
+        })
+      ]).then(function () {
+        assert.equal(Object.keys(socketClusterClient.clients).length, 2);
+        clientA.destroy();
+        assert.equal(Object.keys(socketClusterClient.clients).length, 1);
+        clientB.destroy();
+        assert.equal(Object.keys(socketClusterClient.clients).length, 0);
+      });
     });
   });
 
