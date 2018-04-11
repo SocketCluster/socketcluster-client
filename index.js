@@ -12,8 +12,8 @@ module.exports.create = function (options) {
 
 module.exports.connect = module.exports.create;
 
-module.exports.destroy = function (options) {
-  return SCSocketCreator.destroy(options);
+module.exports.destroy = function (socket) {
+  return SCSocketCreator.destroy(socket);
 };
 
 module.exports.clients = SCSocketCreator.clients;
