@@ -639,8 +639,47 @@ describe('integration tests', function () {
     });
   });
 
-  describe('destroying socket', function () {
+  describe('reconnecting socket', function () {
+    it('should disconnect socket with code 1000 and reconnect', function (done) {
+      client = socketClusterClient.create(clientOptions);
 
+      client.once('connect', function () {
+        var disconnectCode;
+        var disconnectReason;
+        client.once('disconnect', function (code, reason) {
+          disconnectCode = code;
+          disconnectReason = reason;
+        });
+        client.once('connect', function () {
+          assert.equal(disconnectCode, 1000);
+          assert.equal(disconnectReason, undefined);
+          done();
+        });
+        client.reconnect();
+      });
+    });
+
+    it('should disconnect socket with custom code and data when socket.reconnect() is called with arguments', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      client.once('connect', function () {
+        var disconnectCode;
+        var disconnectReason;
+        client.once('disconnect', function (code, reason) {
+          disconnectCode = code;
+          disconnectReason = reason;
+        });
+        client.once('connect', function () {
+          assert.equal(disconnectCode, 1000);
+          assert.equal(disconnectReason, 'About to reconnect');
+          done();
+        });
+        client.reconnect(1000, 'About to reconnect');
+      });
+    });
+  });
+
+  describe('destroying socket', function () {
     it('should disconnect socket when socket.destroy() is called', function (done) {
       client = socketClusterClient.create(clientOptions);
 
@@ -658,12 +697,47 @@ describe('integration tests', function () {
       });
     });
 
+    it('should disconnect socket with custom code and data when socket.destroy() is called with arguments', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      client.on('connect', function () {
+        client.destroy(4321, 'Custom disconnect reason');
+      });
+
+      client.on('disconnect', function (code, reason) {
+        assert.equal(code, 4321);
+        assert.equal(reason, 'Custom disconnect reason');
+        done();
+      });
+    });
+
     it('should destroy all references of socket when socket.destroy() is called before connect', function (done) {
       client = socketClusterClient.create(clientOptions);
 
       var clientError;
       client.on('error', function (err) {
         clientError = err;
+      });
+
+      var connectAbortTriggered = false;
+      var disconnectTriggered = false;
+      var closeTriggered = false;
+
+      client.on('connectAbort', function (n) {
+        connectAbortTriggered = true;
+      });
+
+      client.on('disconnect', function (n) {
+        disconnectTriggered = true;
+      });
+
+      client.on('close', function (n) {
+        closeTriggered = true;
       });
 
       assert.equal(Object.keys(socketClusterClient.clients).length, 1);
@@ -673,6 +747,9 @@ describe('integration tests', function () {
 
       assert.equal(Object.keys(socketClusterClient.clients).length, 0);
       assert.equal(socketClusterClient.clients[client.clientId], null);
+      assert.equal(connectAbortTriggered, true);
+      assert.equal(disconnectTriggered, false);
+      assert.equal(closeTriggered, true);
       done();
     });
 
@@ -684,6 +761,22 @@ describe('integration tests', function () {
         clientError = err;
       });
 
+      var connectAbortTriggered = false;
+      var disconnectTriggered = false;
+      var closeTriggered = false;
+
+      client.on('connectAbort', function (n) {
+        connectAbortTriggered = true;
+      });
+
+      client.on('disconnect', function (n) {
+        disconnectTriggered = true;
+      });
+
+      client.on('close', function (n) {
+        closeTriggered = true;
+      });
+
       assert.equal(Object.keys(socketClusterClient.clients).length, 1);
       assert.equal(socketClusterClient.clients[client.clientId] === client, true);
 
@@ -691,6 +784,9 @@ describe('integration tests', function () {
         client.destroy();
         assert.equal(Object.keys(socketClusterClient.clients).length, 0);
         assert.equal(socketClusterClient.clients[client.clientId], null);
+        assert.equal(connectAbortTriggered, false);
+        assert.equal(disconnectTriggered, true);
+        assert.equal(closeTriggered, true);
         done();
       });
     });
