@@ -979,4 +979,50 @@ describe('integration tests', function () {
       });
     });
   });
+
+  describe('destroying a channel', function () {
+    it('should unsubscribe from a channel if socketClusterClient.destroyChannel(channelName) is called', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      var unsubscribeTriggered = false;
+
+      var fooChannel = client.subscribe('foo');
+      fooChannel.on('unsubscribe', function () {
+        unsubscribeTriggered = true;
+      });
+      fooChannel.on('subscribe', function () {
+        fooChannel.destroy();
+      });
+
+      setTimeout(function () {
+        assert.equal(unsubscribeTriggered, true);
+        done();
+      }, 200);
+    });
+
+    it('should not throw an error if socketClusterClient.destroyChannel(channelName) is called for a non-existent channel', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      var destroyError;
+      try {
+        client.destroyChannel('fakeChannel');
+      } catch (err) {
+        destroyError = err;
+      }
+      assert.equal(clientError, null);
+      assert.equal(destroyError, null);
+
+      done();
+    });
+  });
 });
