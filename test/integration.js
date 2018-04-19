@@ -53,7 +53,7 @@ var connectionHandler = function (socket) {
 };
 
 describe('integration tests', function () {
-  before('run the server before start', function (done) {
+  beforeEach('run the server before start', function (done) {
     server = socketClusterServer.listen(PORT, serverOptions);
     server.on('connection', connectionHandler);
 
@@ -67,40 +67,41 @@ describe('integration tests', function () {
       }
     });
 
-    server.once('ready', function () {
-      done();
-    });
-  });
-
-  after('shut down server afterwards', function (done) {
-    server.close();
-    done();
-  });
-
-  beforeEach('Prepare data for test case', function (done) {
     clientOptions = {
       hostname: '127.0.0.1',
       port: PORT,
       multiplex: false,
       ackTimeout: 200
     };
-    done();
+
+    server.once('ready', function () {
+      done();
+    });
   });
 
-  afterEach('shut down client after each test', function (done) {
+  afterEach('shut down server afterwards', function () {
+    var cleanupTasks = [];
     global.localStorage.removeItem('socketCluster.authToken');
     if (client && client.state != client.CLOSED) {
-      client.once('disconnect', function () {
-        done();
-      });
-      client.once('connectAbort', function () {
-        done();
-      });
+      cleanupTasks.push(new Promise(function (resolve, reject) {
+        client.once('disconnect', function () {
+          resolve();
+        });
+        client.once('connectAbort', function () {
+          resolve();
+        });
+      }));
       client.destroy();
     } else {
       client.destroy();
-      done();
     }
+    cleanupTasks.push(new Promise(function (resolve) {
+      server.close(function () {
+        PORT++;
+        resolve();
+      });
+    }));
+    return Promise.all(cleanupTasks);
   });
 
   describe('authentication', function () {
@@ -183,7 +184,7 @@ describe('integration tests', function () {
     });
 
     it('token should be available inside login callback if token engine signing is synchronous', function (done) {
-      var port = 8009;
+      var port = 8509;
       server = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: false
@@ -207,7 +208,7 @@ describe('integration tests', function () {
     });
 
     it('if token engine signing is asynchronous, authentication can be captured using the authenticate event', function (done) {
-      var port = 8010;
+      var port = 8510;
       server = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: true
@@ -232,7 +233,7 @@ describe('integration tests', function () {
     });
 
     it('should still work if token verification is asynchronous', function (done) {
-      var port = 8011;
+      var port = 8511;
       server = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authVerifyAsync: false
@@ -977,6 +978,58 @@ describe('integration tests', function () {
           reason: reason
         });
       });
+    });
+
+    it('should reconnect if emit is called on a disconnected socket', function (done) {
+      var fooEventTriggered = false;
+      server.on('connection', function (socket) {
+        socket.on('foo', function () {
+          fooEventTriggered = true;
+        });
+      });
+
+      client = socketClusterClient.create(clientOptions);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      var eventList = [];
+
+      client.on('connecting', function () {
+        eventList.push('connecting');
+      });
+      client.on('connect', function () {
+        eventList.push('connect');
+      });
+      client.on('disconnect', function () {
+        eventList.push('disconnect');
+      });
+      client.on('close', function () {
+        eventList.push('close');
+      });
+      client.on('connectAbort', function () {
+        eventList.push('connectAbort');
+      });
+
+      client.once('connect', function () {
+        client.disconnect();
+        client.emit('foo', 123);
+      });
+
+      setTimeout(function () {
+        var expectedEventList = ['connect', 'disconnect', 'close', 'connecting', 'connect'];
+        assert.equal(JSON.stringify(eventList), JSON.stringify(expectedEventList));
+        assert.equal(fooEventTriggered, true);
+        done();
+      }, 1000);
+    });
+
+    it('TODO: should throw an error if emit is called on a destroyed socket', function (done) {
+      setTimeout(function () {
+        done();
+      }, 200);
     });
   });
 
