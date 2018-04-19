@@ -27,7 +27,7 @@
     "sc-errors": "^1.4.0",
     "sc-formatter": "^3.0.1",
     "uuid": "3.2.1",
-    "ws": "3.3.3"
+    "ws": "^5.1.1"
   },
   "browser": {
     "ws": "./lib/ws-browser.js"
@@ -48,7 +48,7 @@
     "gulp-uglify": "^2.1.2",
     "localStorage": "^1.0.3",
     "mocha": "3.0.2",
-    "socketcluster-server": "^11.0.0",
+    "socketcluster-server": "^11.1.0",
     "uglify-js": "^2.7.5",
     "vinyl-source-stream": "^1.1.0"
   }
