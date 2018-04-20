@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v11.0.2
+ * SocketCluster JavaScript client v11.1.0
  */
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(_dereq_,module,exports){
 var SCSocket = _dereq_('./lib/scsocket');
@@ -22,7 +22,7 @@ module.exports.destroy = function (socket) {
 
 module.exports.clients = SCSocketCreator.clients;
 
-module.exports.version = '11.0.2';
+module.exports.version = '11.1.0';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"component-emitter":12}],2:[function(_dereq_,module,exports){
 (function (global){
@@ -285,18 +285,16 @@ var SCSocket = function (opts) {
     this.options.query = querystring.parse(this.options.query);
   }
 
-  if (this.options.autoConnect) {
-    this.connect();
-  }
-
   this._channelEmitter = new Emitter();
 
-  if (isBrowser && this.disconnectOnUnload && global.addEventListener) {
-    this._unloadHandler = function () {
-      self.disconnect();
-    };
+  this._unloadHandler = function () {
+    self.disconnect();
+  };
 
-    global.addEventListener('beforeunload', this._unloadHandler, false);
+  if (this.options.autoConnect) {
+    this.connect();
+  } else {
+    this.activate();
   }
 };
 
@@ -403,6 +401,8 @@ SCSocket.prototype.deauthenticate = function (callback) {
 SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   var self = this;
 
+  this.activate();
+
   if (this.state == this.CLOSED) {
     this.pendingReconnect = false;
     this.pendingReconnectTimeout = null;
@@ -463,10 +463,19 @@ SCSocket.prototype.disconnect = function (code, data) {
   }
 };
 
+SCSocket.prototype.activate = function () {
+  if (isBrowser && this.disconnectOnUnload && global.addEventListener && !this.active) {
+    global.addEventListener('beforeunload', this._unloadHandler, false);
+  }
+  this._clientMap[this.clientId] = this;
+  this.active = true;
+};
+
 SCSocket.prototype.destroy = function (code, data) {
-  if (this._unloadHandler) {
+  if (isBrowser && global.removeEventListener) {
     global.removeEventListener('beforeunload', this._unloadHandler, false);
   }
+  this.active = false;
   this.disconnect(code, data);
   delete this._clientMap[this.clientId];
 };
@@ -671,7 +680,9 @@ SCSocket.prototype._onSCOpen = function (status) {
     self.processPendingSubscriptions();
   });
 
-  this._flushEmitBuffer();
+  if (this.state == this.OPEN) {
+    this._flushEmitBuffer();
+  }
 };
 
 SCSocket.prototype._onSCError = function (err) {
@@ -864,7 +875,6 @@ SCSocket.prototype._emit = function (event, data, callback) {
   }, this.ackTimeout);
 
   this._emitBuffer.append(eventNode);
-
   if (this.state == this.OPEN) {
     this._flushEmitBuffer();
   }
@@ -1319,6 +1329,8 @@ var BadConnectionError = scErrors.BadConnectionError;
 
 
 var SCTransport = function (authEngine, codecEngine, options) {
+  var self = this;
+
   this.state = this.CLOSED;
   this.auth = authEngine;
   this.codec = codecEngine;
@@ -1332,53 +1344,14 @@ var SCTransport = function (authEngine, codecEngine, options) {
   this._callbackMap = {};
   this._batchSendList = [];
 
-  this.open();
-};
-
-SCTransport.prototype = Object.create(Emitter.prototype);
-
-SCTransport.CONNECTING = SCTransport.prototype.CONNECTING = 'connecting';
-SCTransport.OPEN = SCTransport.prototype.OPEN = 'open';
-SCTransport.CLOSED = SCTransport.prototype.CLOSED = 'closed';
-
-SCTransport.prototype.uri = function () {
-  var query = this.options.query || {};
-  var schema = this.options.secure ? 'wss' : 'ws';
-
-  if (this.options.timestampRequests) {
-    query[this.options.timestampParam] = (new Date()).getTime();
-  }
-
-  query = querystring.encode(query);
-
-  if (query.length) {
-    query = '?' + query;
-  }
-
-  var host;
-  if (this.options.host) {
-    host = this.options.host;
-  } else {
-    var port = '';
-
-    if (this.options.port && ((schema == 'wss' && this.options.port != 443)
-      || (schema == 'ws' && this.options.port != 80))) {
-      port = ':' + this.options.port;
-    }
-    host = this.options.hostname + port;
-  }
-
-  return schema + '://' + host + this.options.path + query;
-};
-
-SCTransport.prototype.open = function () {
-  var self = this;
+  // Open the connection.
 
   this.state = this.CONNECTING;
   var uri = this.uri();
 
   var wsSocket = createWebSocket(uri, this.options);
   wsSocket.binaryType = this.options.binaryType;
+
   this.socket = wsSocket;
 
   wsSocket.onopen = function () {
@@ -1419,6 +1392,42 @@ SCTransport.prototype.open = function () {
     self._onClose(4007);
     self.socket.close(4007);
   }, this.connectTimeout);
+};
+
+SCTransport.prototype = Object.create(Emitter.prototype);
+
+SCTransport.CONNECTING = SCTransport.prototype.CONNECTING = 'connecting';
+SCTransport.OPEN = SCTransport.prototype.OPEN = 'open';
+SCTransport.CLOSED = SCTransport.prototype.CLOSED = 'closed';
+
+SCTransport.prototype.uri = function () {
+  var query = this.options.query || {};
+  var schema = this.options.secure ? 'wss' : 'ws';
+
+  if (this.options.timestampRequests) {
+    query[this.options.timestampParam] = (new Date()).getTime();
+  }
+
+  query = querystring.encode(query);
+
+  if (query.length) {
+    query = '?' + query;
+  }
+
+  var host;
+  if (this.options.host) {
+    host = this.options.host;
+  } else {
+    var port = '';
+
+    if (this.options.port && ((schema == 'wss' && this.options.port != 443)
+      || (schema == 'ws' && this.options.port != 80))) {
+      port = ':' + this.options.port;
+    }
+    host = this.options.hostname + port;
+  }
+
+  return schema + '://' + host + this.options.path + query;
 };
 
 SCTransport.prototype._onOpen = function () {

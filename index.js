@@ -18,4 +18,4 @@ module.exports.destroy = function (socket) {
 
 module.exports.clients = SCSocketCreator.clients;
 
-module.exports.version = '11.0.2';
+module.exports.version = '11.1.0';
