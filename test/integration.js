@@ -894,7 +894,7 @@ describe('integration tests', function () {
     });
   });
 
-  describe('order of local events', function () {
+  describe('order of events', function () {
     it('should trigger unsubscribe event on channel before disconnect event', function (done) {
       client = socketClusterClient.create(clientOptions);
       var hasUnsubscribed = false;
@@ -1026,8 +1026,124 @@ describe('integration tests', function () {
       }, 1000);
     });
 
-    it('TODO: should throw an error if emit is called on a destroyed socket', function (done) {
+    it('should reactivate and reconnect socket if emit is called on a destroyed socket', function (done) {
+      client = socketClusterClient.create(clientOptions);
+      assert.equal(client.active, true);
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      client.once('connect', function () {
+        assert.equal(client.active, true);
+        client.destroy();
+        assert.equal(client.active, false);
+
+        client.once('connect', function () {
+          assert.equal(client.active, true);
+          done();
+        });
+
+        client.emit('foo', 123);
+
+        assert.equal(client.active, true);
+        assert.equal(client.state, client.CONNECTING);
+      });
+    });
+
+    it('should correctly handle multiple successive connect and disconnect calls', function (done) {
+      client = socketClusterClient.create(clientOptions);
+
+      var eventList = [];
+
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+      client.on('connecting', function () {
+        eventList.push({
+          event: 'connecting'
+        });
+      });
+      client.on('connect', function () {
+        eventList.push({
+          event: 'connect'
+        });
+      });
+      client.on('connectAbort', function (code, reason) {
+        eventList.push({
+          event: 'connectAbort',
+          code: code,
+          reason: reason
+        });
+      });
+      client.on('disconnect', function (code, reason) {
+        eventList.push({
+          event: 'disconnect',
+          code: code,
+          reason: reason
+        });
+      });
+      client.on('close', function (code, reason) {
+        eventList.push({
+          event: 'close',
+          code: code,
+          reason: reason
+        });
+      });
+
+      client.disconnect(1000, 'One');
+      client.connect();
+      client.disconnect(4444, 'Two');
+      client.once('connect', function () {
+        client.disconnect(4455, 'Three');
+      });
+      client.connect();
+
       setTimeout(function () {
+        var expectedEventList = [
+          {
+            event: 'connectAbort',
+            code: 1000,
+            reason: 'One'
+          },
+          {
+            event: 'close',
+            code: 1000,
+            reason: 'One'
+          },
+          {
+            event: 'connecting'
+          },
+          {
+            event: 'connectAbort',
+            code: 4444,
+            reason: 'Two'
+          },
+          {
+            event: 'close',
+            code: 4444,
+            reason: 'Two'
+          },
+          {
+            event: 'connecting'
+          },
+          {
+            event: 'connect'
+          },
+          {
+            event: 'disconnect',
+            code: 4455,
+            reason: 'Three'
+          },
+          {
+            event: 'close',
+            code: 4455,
+            reason: 'Three'
+          },
+        ];
+        assert.equal(JSON.stringify(eventList), JSON.stringify(expectedEventList));
         done();
       }, 200);
     });
