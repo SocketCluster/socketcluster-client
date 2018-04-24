@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v11.1.0
+ * SocketCluster JavaScript client v11.2.0
  */
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(_dereq_,module,exports){
 var SCSocket = _dereq_('./lib/scsocket');
@@ -22,7 +22,7 @@ module.exports.destroy = function (socket) {
 
 module.exports.clients = SCSocketCreator.clients;
 
-module.exports.version = '11.1.0';
+module.exports.version = '11.2.0';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"component-emitter":12}],2:[function(_dereq_,module,exports){
 (function (global){
@@ -159,6 +159,7 @@ var clone = _dereq_('clone');
 var scErrors = _dereq_('sc-errors');
 var InvalidArgumentsError = scErrors.InvalidArgumentsError;
 var InvalidMessageError = scErrors.InvalidMessageError;
+var InvalidActionError = scErrors.InvalidActionError;
 var SocketProtocolError = scErrors.SocketProtocolError;
 var TimeoutError = scErrors.TimeoutError;
 var BadConnectionError = scErrors.BadConnectionError;
@@ -190,6 +191,8 @@ var SCSocket = function (opts) {
   // pingTimeout will be ackTimeout at the start, but it will
   // be updated with values provided by the 'connect' event
   this.pingTimeout = this.ackTimeout;
+  this.pingTimeoutDisabled = !!opts.pingTimeoutDisabled;
+  this.active = true;
 
   this._clientMap = opts.clientMap || {};
 
@@ -204,7 +207,6 @@ var SCSocket = function (opts) {
 
   verifyDuration('connectTimeout');
   verifyDuration('ackTimeout');
-  verifyDuration('pingTimeout');
 
   this._localEvents = {
     'connect': 1,
@@ -291,10 +293,13 @@ var SCSocket = function (opts) {
     self.disconnect();
   };
 
+  if (isBrowser && this.disconnectOnUnload && global.addEventListener) {
+    global.addEventListener('beforeunload', this._unloadHandler, false);
+  }
+  this._clientMap[this.clientId] = this;
+
   if (this.options.autoConnect) {
     this.connect();
-  } else {
-    this.activate();
   }
 };
 
@@ -401,7 +406,11 @@ SCSocket.prototype.deauthenticate = function (callback) {
 SCSocket.prototype.connect = SCSocket.prototype.open = function () {
   var self = this;
 
-  this.activate();
+  if (!this.active) {
+    var error = new InvalidActionError('Cannot connect a destroyed socket');
+    this._onSCError(error);
+    return;
+  }
 
   if (this.state == this.CLOSED) {
     this.pendingReconnect = false;
@@ -461,14 +470,6 @@ SCSocket.prototype.disconnect = function (code, data) {
     this.pendingReconnectTimeout = null;
     clearTimeout(this._reconnectTimeoutRef);
   }
-};
-
-SCSocket.prototype.activate = function () {
-  if (isBrowser && this.disconnectOnUnload && global.addEventListener && !this.active) {
-    global.addEventListener('beforeunload', this._unloadHandler, false);
-  }
-  this._clientMap[this.clientId] = this;
-  this.active = true;
 };
 
 SCSocket.prototype.destroy = function (code, data) {
@@ -580,7 +581,6 @@ SCSocket.prototype.authenticate = function (signedAuthToken, callback) {
   var self = this;
 
   this.emit('#authenticate', signedAuthToken, function (err, authStatus) {
-
     if (authStatus && authStatus.isAuthenticated != null) {
       // If authStatus is correctly formatted (has an isAuthenticated property),
       // then we will rehydrate the authError.
@@ -1062,7 +1062,6 @@ SCSocket.prototype._tryUnsubscribe = function (channel) {
 };
 
 SCSocket.prototype.unsubscribe = function (channelName) {
-
   var channel = this.channels[channelName];
 
   if (channel) {
@@ -1337,6 +1336,7 @@ var SCTransport = function (authEngine, codecEngine, options) {
   this.options = options;
   this.connectTimeout = options.connectTimeout;
   this.pingTimeout = options.ackTimeout;
+  this.pingTimeoutDisabled = !!options.pingTimeoutDisabled;
   this.callIdGenerator = options.callIdGenerator;
   this.authTokenName = options.authTokenName;
 
@@ -1510,6 +1510,8 @@ SCTransport.prototype._onClose = function (code, data) {
   delete this.socket.onerror;
 
   clearTimeout(this._connectTimeoutRef);
+  clearTimeout(this._pingTimeoutTicker);
+  clearTimeout(this._batchTimeout);
 
   if (this.state == this.OPEN) {
     this.state = this.CLOSED;
@@ -1572,6 +1574,9 @@ SCTransport.prototype._onError = function (err) {
 };
 
 SCTransport.prototype._resetPingTimeout = function () {
+  if (this.pingTimeoutDisabled) {
+    return;
+  }
   var self = this;
 
   var now = (new Date()).getTime();
