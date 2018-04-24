@@ -6,14 +6,10 @@ var localStorage = require('localStorage');
 // Add to the global scope like in browser.
 global.localStorage = localStorage;
 
-var PORT = 8008;
+var portNumber = 8008;
 
 var clientOptions;
-
-var serverOptions = {
-  authKey: 'testkey',
-  ackTimeout: 200
-};
+var serverOptions;
 
 var allowedUsers = {
   bob: true,
@@ -54,7 +50,12 @@ var connectionHandler = function (socket) {
 
 describe('integration tests', function () {
   beforeEach('run the server before start', function (done) {
-    server = socketClusterServer.listen(PORT, serverOptions);
+    serverOptions = {
+      authKey: 'testkey',
+      ackTimeout: 200
+    };
+
+    server = socketClusterServer.listen(portNumber, serverOptions);
     server.on('connection', connectionHandler);
 
     server.addMiddleware(server.MIDDLEWARE_AUTHENTICATE, function (req, next) {
@@ -69,7 +70,7 @@ describe('integration tests', function () {
 
     clientOptions = {
       hostname: '127.0.0.1',
-      port: PORT,
+      port: portNumber,
       multiplex: false,
       ackTimeout: 200
     };
@@ -97,7 +98,7 @@ describe('integration tests', function () {
     }
     cleanupTasks.push(new Promise(function (resolve) {
       server.close(function () {
-        PORT++;
+        portNumber++;
         resolve();
       });
     }));
@@ -840,7 +841,7 @@ describe('integration tests', function () {
     it('should destroy all references of socket when socketClusterClient.destroy(socket) is called if the socket was created with query parameters', function () {
       var clientOptionsB = {
         hostname: '127.0.0.1',
-        port: PORT,
+        port: portNumber,
         multiplex: true,
         ackTimeout: 200,
         query: {foo: 123, bar: 456}
@@ -850,7 +851,7 @@ describe('integration tests', function () {
 
       var clientOptionsB = {
         hostname: '127.0.0.1',
-        port: PORT,
+        port: portNumber,
         multiplex: true,
         ackTimeout: 200,
         query: {foo: 123, bar: 789}
@@ -860,7 +861,7 @@ describe('integration tests', function () {
 
       var clientOptionsB2 = {
         hostname: '127.0.0.1',
-        port: PORT,
+        port: portNumber,
         multiplex: true,
         ackTimeout: 200,
         query: {foo: 123, bar: 789}
@@ -1235,6 +1236,55 @@ describe('integration tests', function () {
       assert.equal(destroyError, null);
 
       done();
+    });
+  });
+
+  describe('ping/pong', function () {
+    it('should disconnect if ping is not received before timeout', function (done) {
+      clientOptions.ackTimeout = 500;
+      client = socketClusterClient.create(clientOptions);
+
+      assert.equal(client.pingTimeout, 500);
+
+      client.on('connect', function () {
+        assert.equal(client.transport.pingTimeout, server.options.pingTimeout);
+        // Hack to make the client ping independent from the server ping.
+        client.transport.pingTimeout = 500;
+      });
+
+      var disconnectCode = null;
+      var clientError = null;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+      client.on('disconnect', function (code) {
+        disconnectCode = code;
+      });
+
+      setTimeout(function () {
+        assert.equal(disconnectCode, 4000);
+        assert.notEqual(clientError, null);
+        assert.equal(clientError.name, 'SocketProtocolError');
+        done();
+      }, 1000);
+    });
+
+    it('should not disconnect if ping is not received before timeout when pingTimeoutDisabled is true', function (done) {
+      clientOptions.ackTimeout = 500;
+      clientOptions.pingTimeoutDisabled = true;
+      client = socketClusterClient.create(clientOptions);
+
+      assert.equal(client.pingTimeout, 500);
+
+      var clientError = null;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      setTimeout(function () {
+        assert.equal(clientError, null);
+        done();
+      }, 1000);
     });
   });
 });
