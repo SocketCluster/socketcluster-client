@@ -1026,7 +1026,48 @@ describe('integration tests', function () {
       }, 1000);
     });
 
-    it('should reactivate and reconnect socket if emit is called on a destroyed socket', function (done) {
+    it('should emit an error event if emit is called on a destroyed socket', function (done) {
+      client = socketClusterClient.create(clientOptions);
+      assert.equal(client.active, true);
+
+      var disconnectTriggered = false;
+      var secondConnectTriggered = false;
+      var clientError;
+      client.on('error', function (err) {
+        clientError = err;
+      });
+
+      client.once('connect', function () {
+        assert.equal(client.active, true);
+
+        client.once('disconnect', function () {
+          disconnectTriggered = true;
+          assert.equal(client.active, false);
+        });
+
+        client.destroy();
+        assert.equal(client.active, false);
+
+        client.once('connect', function () {
+          secondConnectTriggered = true;
+        });
+
+        client.emit('foo', 123);
+
+        assert.equal(client.active, false);
+        assert.equal(client.state, client.CLOSED);
+      });
+
+      setTimeout(function () {
+        assert.equal(secondConnectTriggered, false);
+        assert.equal(disconnectTriggered, true);
+        assert.notEqual(clientError, null);
+        assert.equal(clientError.name, 'InvalidActionError');
+        done();
+      }, 100);
+    });
+
+    it('should emit an error event if publish is called on a destroyed socket', function (done) {
       client = socketClusterClient.create(clientOptions);
       assert.equal(client.active, true);
 
@@ -1037,19 +1078,21 @@ describe('integration tests', function () {
 
       client.once('connect', function () {
         assert.equal(client.active, true);
+
         client.destroy();
         assert.equal(client.active, false);
 
-        client.once('connect', function () {
-          assert.equal(client.active, true);
-          done();
-        });
+        client.publish('thisIsATestChannel', 123);
 
-        client.emit('foo', 123);
-
-        assert.equal(client.active, true);
-        assert.equal(client.state, client.CONNECTING);
+        assert.equal(client.active, false);
+        assert.equal(client.state, client.CLOSED);
       });
+
+      setTimeout(function () {
+        assert.notEqual(clientError, null);
+        assert.equal(clientError.name, 'InvalidActionError');
+        done();
+      }, 100);
     });
 
     it('should correctly handle multiple successive connect and disconnect calls', function (done) {
