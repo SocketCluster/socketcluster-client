@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v11.2.2
+ * SocketCluster JavaScript client v12.0.0
  */
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(_dereq_,module,exports){
 var SCSocket = _dereq_('./lib/scsocket');
@@ -22,7 +22,7 @@ module.exports.destroy = function (socket) {
 
 module.exports.clients = SCSocketCreator.clients;
 
-module.exports.version = '11.2.2';
+module.exports.version = '12.0.0';
 
 },{"./lib/scsocket":4,"./lib/scsocketcreator":5,"component-emitter":12}],2:[function(_dereq_,module,exports){
 (function (global){
@@ -222,7 +222,6 @@ var SCSocket = function (opts) {
     'unsubscribe': 1,
     'subscribeStateChange': 1,
     'authStateChange': 1,
-    'authTokenChange': 1,
     'authenticate': 1,
     'deauthenticate': 1,
     'removeAuthToken': 1,
@@ -485,6 +484,7 @@ SCSocket.prototype.destroy = function (code, data) {
 SCSocket.prototype._changeToUnauthenticatedStateAndClearTokens = function () {
   if (this.authState != this.UNAUTHENTICATED) {
     var oldState = this.authState;
+    var oldSignedToken = this.signedAuthToken;
     this.authState = this.UNAUTHENTICATED;
     this.signedAuthToken = null;
     this.authToken = null;
@@ -494,10 +494,7 @@ SCSocket.prototype._changeToUnauthenticatedStateAndClearTokens = function () {
       newState: this.authState
     };
     Emitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
-    if (oldState == this.AUTHENTICATED) {
-      Emitter.prototype.emit.call(this, 'deauthenticate');
-    }
-    Emitter.prototype.emit.call(this, 'authTokenChange', this.signedAuthToken);
+    Emitter.prototype.emit.call(this, 'deauthenticate', oldSignedToken);
   }
 };
 
@@ -519,9 +516,8 @@ SCSocket.prototype._changeToAuthenticatedState = function (signedAuthToken) {
     }
 
     Emitter.prototype.emit.call(this, 'authStateChange', stateChangeData);
-    Emitter.prototype.emit.call(this, 'authenticate', signedAuthToken);
   }
-  Emitter.prototype.emit.call(this, 'authTokenChange', signedAuthToken);
+  Emitter.prototype.emit.call(this, 'authenticate', signedAuthToken);
 };
 
 SCSocket.prototype.decodeBase64 = function (encodedString) {
