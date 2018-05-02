@@ -99,8 +99,6 @@ var options = {
 
 ## Events
 
-See https://socketcluster.io/#!/docs/api-scsocket-client for details
-
 ```js
 socket.on('subscribe', function(channelname) {
   console.log('subscribe:' + channelname);

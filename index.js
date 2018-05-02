@@ -1,21 +1,21 @@
-var SCSocket = require('./lib/scsocket');
-var SCSocketCreator = require('./lib/scsocketcreator');
+var SCClient = require('./lib/scclient');
+var factory = require('./lib/factory');
 
-module.exports.SCSocketCreator = SCSocketCreator;
-module.exports.SCSocket = SCSocket;
+module.exports.factory = factory;
+module.exports.SCClient = SCClient;
 
 module.exports.Emitter = require('component-emitter');
 
 module.exports.create = function (options) {
-  return SCSocketCreator.create(options);
+  return factory.create(options);
 };
 
 module.exports.connect = module.exports.create;
 
 module.exports.destroy = function (socket) {
-  return SCSocketCreator.destroy(socket);
+  return factory.destroy(socket);
 };
 
-module.exports.clients = SCSocketCreator.clients;
+module.exports.clients = factory.clients;
 
 module.exports.version = '12.0.0';
