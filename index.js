@@ -18,4 +18,4 @@ module.exports.destroy = function (socket) {
 
 module.exports.clients = factory.clients;
 
-module.exports.version = '12.0.0';
+module.exports.version = '13.0.0';

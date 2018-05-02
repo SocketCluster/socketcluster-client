@@ -152,7 +152,7 @@ describe('Integration tests', function () {
       done();
     });
 
-    it('Should not automatically connect socket if multiplex is true, autoConnect is set to false the first time and socket create is called with autoConnect true the second time', function (done) {
+    it('Should automatically connect socket if multiplex is true, autoConnect is set to false the first time and socket create is called with autoConnect true the second time', function (done) {
       var clientOptionsA = {
         hostname: '127.0.0.1',
         port: portNumber,
@@ -181,7 +181,7 @@ describe('Integration tests', function () {
       done();
     });
 
-    it('Should not automatically connect socket if multiplex is true, autoConnect is set to false and socket create is called a second time', function (done) {
+    it('Should not automatically connect socket if multiplex is true, autoConnect is set to false and socket create is called a second time with autoConnect false', function (done) {
       clientOptions = {
         hostname: '127.0.0.1',
         port: portNumber,
