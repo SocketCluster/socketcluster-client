@@ -83,18 +83,20 @@ describe('Integration tests', function () {
   afterEach('Shut down server afterwards', function () {
     var cleanupTasks = [];
     global.localStorage.removeItem('socketCluster.authToken');
-    if (client && client.state != client.CLOSED) {
-      cleanupTasks.push(new Promise(function (resolve, reject) {
-        client.once('disconnect', function () {
-          resolve();
-        });
-        client.once('connectAbort', function () {
-          resolve();
-        });
-      }));
-      client.destroy();
-    } else {
-      client.destroy();
+    if (client) {
+      if (client.state != client.CLOSED) {
+        cleanupTasks.push(new Promise(function (resolve, reject) {
+          client.once('disconnect', function () {
+            resolve();
+          });
+          client.once('connectAbort', function () {
+            resolve();
+          });
+        }));
+        client.destroy();
+      } else {
+        client.destroy();
+      }
     }
     cleanupTasks.push(new Promise(function (resolve) {
       server.close(function () {
@@ -103,6 +105,103 @@ describe('Integration tests', function () {
       });
     }));
     return Promise.all(cleanupTasks);
+  });
+
+  describe('Creation', function () {
+
+    it('Should reuse socket if multiplex is true and options are the same', function (done) {
+      clientOptions = {
+        hostname: '127.0.0.1',
+        port: portNumber,
+        multiplex: true
+      };
+
+      var clientA = socketClusterClient.create(clientOptions);
+      var clientB = socketClusterClient.create(clientOptions);
+
+      assert.equal(clientA, clientB);
+      clientA.destroy();
+      clientB.destroy();
+      done();
+    });
+
+    it('Should automatically connect socket on creation by default', function (done) {
+      clientOptions = {
+        hostname: '127.0.0.1',
+        port: portNumber,
+        multiplex: false
+      };
+
+      client = socketClusterClient.create(clientOptions);
+
+      assert.equal(client.state, client.CONNECTING);
+      done();
+    });
+
+    it('Should not automatically connect socket if autoConnect is set to false', function (done) {
+      clientOptions = {
+        hostname: '127.0.0.1',
+        port: portNumber,
+        multiplex: false,
+        autoConnect: false
+      };
+
+      client = socketClusterClient.create(clientOptions);
+
+      assert.equal(client.state, client.CLOSED);
+      done();
+    });
+
+    it('Should not automatically connect socket if multiplex is true, autoConnect is set to false the first time and socket create is called with autoConnect true the second time', function (done) {
+      var clientOptionsA = {
+        hostname: '127.0.0.1',
+        port: portNumber,
+        multiplex: true,
+        autoConnect: false
+      };
+
+      var clientA = socketClusterClient.create(clientOptionsA);
+
+      assert.equal(clientA.state, clientA.CLOSED);
+
+      var clientOptionsB = {
+        hostname: '127.0.0.1',
+        port: portNumber,
+        multiplex: true,
+        autoConnect: true
+      };
+
+      var clientB = socketClusterClient.create(clientOptionsB);
+
+      assert.equal(clientB.state, clientB.CONNECTING);
+
+      clientA.destroy();
+      clientB.destroy();
+
+      done();
+    });
+
+    it('Should not automatically connect socket if multiplex is true, autoConnect is set to false and socket create is called a second time', function (done) {
+      clientOptions = {
+        hostname: '127.0.0.1',
+        port: portNumber,
+        multiplex: true,
+        autoConnect: false
+      };
+
+      var clientA = socketClusterClient.create(clientOptions);
+
+      assert.equal(clientA.state, clientA.CLOSED);
+
+      var clientB = socketClusterClient.create(clientOptions);
+
+      assert.equal(clientB.state, clientB.CLOSED);
+
+      clientA.destroy();
+      clientB.destroy();
+
+      done();
+    });
   });
 
   describe('Authentication', function () {
