@@ -1,8 +1,8 @@
-var SCClient = require('./lib/scclient');
+var SCClientSocket = require('./lib/scclientsocket');
 var factory = require('./lib/factory');
 
 module.exports.factory = factory;
-module.exports.SCClient = SCClient;
+module.exports.SCClientSocket = SCClientSocket;
 
 module.exports.Emitter = require('component-emitter');
 
