@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "13.0.0",
+  "version": "13.0.1",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -47,7 +47,7 @@
     "gulp-rename": "^1.2.2",
     "gulp-uglify": "^2.1.2",
     "localStorage": "^1.0.3",
-    "mocha": "3.0.2",
+    "mocha": "5.2.0",
     "socketcluster-server": "^11.1.0",
     "uglify-js": "^2.7.5",
     "vinyl-source-stream": "^1.1.0"
