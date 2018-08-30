@@ -18,7 +18,7 @@ var FULL_HEADER = (
   ' * SocketCluster JavaScript client v' + VERSION + '\n' +
   ' */\n');
 
-gulp.task('browserify', function() {
+gulp.task('browserify', function (done) {
   var stream = browserify({
       builtins: ['_process', 'events', 'buffer', 'querystring'],
       entries: 'index.js',
@@ -31,12 +31,12 @@ gulp.task('browserify', function() {
       newline: 'lf',
       encoding: 'utf8'
     }))
-    .pipe(derequire())
     .pipe(insert.prepend(FULL_HEADER))
+    .pipe(derequire())
     .pipe(gulp.dest(DIST));
 });
 
-gulp.task('minify', function() {
+gulp.task('minify', function () {
   return gulp.src(DIST + 'socketcluster.js')
     .pipe(babel({
       comments: false
@@ -49,5 +49,5 @@ gulp.task('minify', function() {
     .pipe(rename({
       extname: '.min.js'
     }))
-    .pipe(gulp.dest(DIST))
+    .pipe(gulp.dest(DIST));
 });
