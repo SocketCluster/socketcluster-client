@@ -1450,4 +1450,15 @@ describe('Integration tests', function () {
       }, 1000);
     });
   });
+
+  describe('Utilities', function () {
+    it('Can encode a string to base64 and then decode it back to utf8', function (done) {
+      client = socketClusterClient.create(clientOptions);
+      var encodedString = client.encodeBase64('This is a string');
+      assert.equal(encodedString, 'VGhpcyBpcyBhIHN0cmluZw==');
+      var decodedString = client.decodeBase64(encodedString);
+      assert.equal(decodedString, 'This is a string');
+      done();
+    });
+  });
 });
