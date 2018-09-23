@@ -59,7 +59,7 @@ describe('Integration tests', function () {
     server.on('connection', connectionHandler);
 
     server.addMiddleware(server.MIDDLEWARE_AUTHENTICATE, function (req, next) {
-      if (req.authToken.username == 'alice') {
+      if (req.authToken.username === 'alice') {
         var err = new Error('Blocked by MIDDLEWARE_AUTHENTICATE');
         err.name = 'AuthenticateMiddlewareError';
         next(err);
@@ -84,7 +84,7 @@ describe('Integration tests', function () {
     var cleanupTasks = [];
     global.localStorage.removeItem('socketCluster.authToken');
     if (client) {
-      if (client.state != client.CLOSED) {
+      if (client.state !== client.CLOSED) {
         cleanupTasks.push(new Promise(function (resolve, reject) {
           client.once('disconnect', function () {
             resolve();
