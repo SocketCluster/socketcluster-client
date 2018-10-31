@@ -250,7 +250,7 @@ describe('Integration tests', function () {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
       client = socketClusterClient.create(clientOptions);
 
-      client.once('connect', function (statusA) {
+      client.once('connect', (statusA) => {
         assert.notEqual(statusA, null);
         assert.equal(statusA.isAuthenticated, true);
         assert.equal(statusA.authError, null);
@@ -259,11 +259,10 @@ describe('Integration tests', function () {
         assert.notEqual(client.authToken, null);
 
         // Change the setAuthKey to invalidate the current token.
-        client.emit('setAuthKey', 'differentAuthKey', function (err) {
-          assert.equal(err, null);
-
-          client.once('disconnect', function () {
-            client.once('connect', function (statusB) {
+        client.invoke('setAuthKey', 'differentAuthKey')
+        .then(() => {
+          client.once('disconnect', () => {
+            client.once('connect', (statusB) => {
               assert.equal(statusB.isAuthenticated, false);
               assert.notEqual(statusB.authError, null);
               assert.equal(statusB.authError.name, 'AuthTokenInvalidError');
@@ -275,8 +274,8 @@ describe('Integration tests', function () {
               assert.equal(client.authToken, null);
 
               // Set authKey back to what it was.
-              client.emit('setAuthKey', serverOptions.authKey, function (err) {
-                assert.equal(err == null, true);
+              client.invoke('setAuthKey', serverOptions.authKey)
+              .then(() => {
                 done();
               });
             });
@@ -298,7 +297,7 @@ describe('Integration tests', function () {
         assert.notEqual(client.authToken, null);
         assert.equal(client.authToken.username, 'bob');
 
-        client.emit('login', {username: 'alice'});
+        client.invoke('login', {username: 'alice'});
 
         client.once('authenticate', function (signedToken) {
           authenticateTriggered = true;
@@ -319,7 +318,7 @@ describe('Integration tests', function () {
       });
     });
 
-    it('Token should be available inside login callback if token engine signing is synchronous', function (done) {
+    it('Token should be available by the time the login Promise resolves if token engine signing is synchronous', function (done) {
       var port = 8509;
       server = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
@@ -333,7 +332,8 @@ describe('Integration tests', function () {
           multiplex: false
         });
         client.once('connect', function (statusA) {
-          client.emit('login', {username: 'bob'}, function (err) {
+          client.invoke('login', {username: 'bob'})
+          .then(function () {
             assert.equal(client.authState, 'authenticated');
             assert.notEqual(client.authToken, null);
             assert.equal(client.authToken.username, 'bob');
@@ -357,7 +357,7 @@ describe('Integration tests', function () {
           multiplex: false
         });
         client.once('connect', function (statusA) {
-          client.emit('login', {username: 'bob'});
+          client.invoke('login', {username: 'bob'});
           client.once('authenticate', function (newSignedToken) {
             assert.equal(client.authState, 'authenticated');
             assert.notEqual(client.authToken, null);
@@ -382,7 +382,7 @@ describe('Integration tests', function () {
           multiplex: false
         });
         client.once('connect', function (statusA) {
-          client.emit('login', {username: 'bob'});
+          client.invoke('login', {username: 'bob'});
           client.once('authenticate', function (newSignedToken) {
             client.once('disconnect', function () {
               client.once('connect', function (statusB) {
@@ -426,10 +426,10 @@ describe('Integration tests', function () {
 
       client.once('connect', function () {
         var oldSaveTokenFunction = client.auth.saveToken;
-        client.auth.saveToken = function (tokenName, tokenValue, options, callback) {
+        client.auth.saveToken = function (tokenName, tokenValue, options) {
           var err = new Error('Failed to save token');
           err.name = 'FailedToSaveTokenError';
-          callback(err);
+          return Promise.reject(err);
         };
         assert.notEqual(client.authToken, null);
         assert.equal(client.authToken.username, 'bob');
@@ -505,7 +505,7 @@ describe('Integration tests', function () {
           assert.equal(client.authState, 'authenticated');
         });
         assert.equal(client.authState, 'unauthenticated');
-        client.emit('login', {username: 'bob'});
+        client.invoke('login', {username: 'bob'});
         assert.equal(client.authState, 'unauthenticated');
       });
     });
@@ -635,7 +635,7 @@ describe('Integration tests', function () {
           });
           client.disconnect();
         });
-        client.emit('login', {username: 'bob'});
+        client.invoke('login', {username: 'bob'});
       });
     });
 
@@ -756,17 +756,18 @@ describe('Integration tests', function () {
       var caughtError;
 
       var clientError;
-      client.on('error', function (err) {
+      client.on('error', (err) => {
         clientError = err;
       });
 
       var responseError;
 
-      client.on('connect', function () {
-        client.emit('performTask', 123, function (err) {
+      client.on('connect', () => {
+        client.invoke('performTask', 123)
+        .catch((err) => {
           responseError = err;
         });
-        setTimeout(function () {
+        setTimeout(() => {
           try {
             client.disconnect();
           } catch (e) {
@@ -775,7 +776,7 @@ describe('Integration tests', function () {
         }, 250);
       });
 
-      setTimeout(function () {
+      setTimeout(() => {
         assert.notEqual(responseError, null);
         assert.equal(caughtError, null);
         done();
@@ -1062,8 +1063,9 @@ describe('Integration tests', function () {
       var hasSubscribeFailed = false;
       var gotBadConnectionError = false;
 
-      client.on('connect', function () {
-        client.emit('someEvent', 123, function (err) {
+      client.on('connect', () => {
+        client.invoke('someEvent', 123)
+        .catch((err) => {
           if (err && err.name === 'BadConnectionError') {
             gotBadConnectionError = true;
           }
@@ -1071,32 +1073,32 @@ describe('Integration tests', function () {
 
         var fooChannel = client.subscribe('foo');
 
-        fooChannel.on('subscribeFail', function () {
+        fooChannel.on('subscribeFail', () => {
           hasSubscribeFailed = true;
         });
 
-        client.on('close', function () {
-          setTimeout(function () {
+        client.on('close', () => {
+          setTimeout(() => {
             assert.equal(gotBadConnectionError, true);
             assert.equal(hasSubscribeFailed, false);
             done();
           }, 100);
         });
 
-        setTimeout(function () {
+        setTimeout(() => {
           client.disconnect();
         }, 0);
       });
     });
 
-    it('Should invoke emit callbacks with BadConnectionError before triggering the disconnect event', function (done) {
+    it('Should resolve invoke Promise with BadConnectionError before triggering the disconnect event', function (done) {
       client = socketClusterClient.create(clientOptions);
       var messageList = [];
 
-      client.on('connect', function () {
+      client.on('connect', () => {
         client.disconnect();
 
-        setTimeout(function () {
+        setTimeout(() => {
           assert.equal(messageList.length, 2);
           assert.equal(messageList[0].type, 'error');
           assert.equal(messageList[0].error.name, 'BadConnectionError');
@@ -1105,7 +1107,8 @@ describe('Integration tests', function () {
         }, 200);
       });
 
-      client.emit('someEvent', 123, function (err) {
+      client.invoke('someEvent', 123)
+      .catch((err) => {
         if (err) {
           messageList.push({
             type: 'error',
@@ -1114,7 +1117,7 @@ describe('Integration tests', function () {
         }
       });
 
-      client.on('disconnect', function (code, reason) {
+      client.on('disconnect', (code, reason) => {
         messageList.push({
           type: 'disconnect',
           code: code,
@@ -1123,7 +1126,7 @@ describe('Integration tests', function () {
       });
     });
 
-    it('Should reconnect if emit is called on a disconnected socket', function (done) {
+    it('Should reconnect if transmit is called on a disconnected socket', function (done) {
       var fooEventTriggered = false;
       server.on('connection', function (socket) {
         socket.on('foo', function () {
@@ -1158,7 +1161,7 @@ describe('Integration tests', function () {
 
       client.once('connect', function () {
         client.disconnect();
-        client.emit('foo', 123);
+        client.transmit('foo', 123);
       });
 
       setTimeout(function () {
@@ -1169,7 +1172,7 @@ describe('Integration tests', function () {
       }, 1000);
     });
 
-    it('Should emit an error event if emit is called on a destroyed socket', function (done) {
+    it('Should emit an error event if transmit is called on a destroyed socket', function (done) {
       client = socketClusterClient.create(clientOptions);
       assert.equal(client.active, true);
 
@@ -1195,7 +1198,7 @@ describe('Integration tests', function () {
           secondConnectTriggered = true;
         });
 
-        client.emit('foo', 123);
+        client.transmit('foo', 123);
 
         assert.equal(client.active, false);
         assert.equal(client.state, client.CLOSED);
