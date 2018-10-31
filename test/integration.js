@@ -108,7 +108,6 @@ describe('Integration tests', function () {
   });
 
   describe('Creation', function () {
-
     it('Should reuse socket if multiplex is true and options are the same', function (done) {
       clientOptions = {
         hostname: '127.0.0.1',
@@ -205,25 +204,6 @@ describe('Integration tests', function () {
   });
 
   describe('Errors', function () {
-    it('Should not be able to emit reserved events on the socket', function (done) {
-      client = socketClusterClient.create(clientOptions);
-      var error = null;
-
-      client.on('error', function (err) {
-        error = err;
-      });
-
-      client.on('connect', function () {
-        client.emit('message', 123);
-      });
-
-      setTimeout(function () {
-        assert.notEqual(error, null);
-        assert.equal(error.name, 'InvalidActionError');
-        done();
-      }, 100);
-    });
-
     it('Should be able to emit the error event locally on the socket', function (done) {
       client = socketClusterClient.create(clientOptions);
       var error = null;
@@ -247,7 +227,6 @@ describe('Integration tests', function () {
   });
 
   describe('Authentication', function () {
-
     it('Should not send back error if JWT is not provided in handshake', function (done) {
       client = socketClusterClient.create(clientOptions);
       client.once('connect', function (status) {
