@@ -382,7 +382,6 @@ describe('Integration tests', function () {
           multiplex: false
         });
         client.once('connect', function (statusA) {
-          client.invoke('login', {username: 'bob'});
           client.once('authenticate', function (newSignedToken) {
             client.once('disconnect', function () {
               client.once('connect', function (statusB) {
@@ -393,6 +392,9 @@ describe('Integration tests', function () {
               });
               client.connect();
             });
+          });
+          client.invoke('login', {username: 'bob'})
+          .then(() => {
             client.disconnect();
           });
         });
