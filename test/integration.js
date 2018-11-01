@@ -436,9 +436,10 @@ describe('Integration tests', function () {
         assert.notEqual(client.authToken, null);
         assert.equal(client.authToken.username, 'bob');
 
-        client.authenticate(validSignedAuthTokenKate, function (err, authStatus) {
+        client.authenticate(validSignedAuthTokenKate)
+        .then(function (authStatus) {
           assert.notEqual(authStatus, null);
-          // The error here comes from the auth engine and does not prevent the
+          // The error here comes from the client auth engine and does not prevent the
           // authentication from taking place, it only prevents the token from being
           // stored correctly on the client.
           assert.equal(authStatus.isAuthenticated, true);
@@ -462,14 +463,11 @@ describe('Integration tests', function () {
       client = socketClusterClient.create(clientOptions);
 
       client.once('connect', function (statusA) {
-        client.authenticate(validSignedAuthTokenBob, function (err, authStatus) {
+        client.authenticate(validSignedAuthTokenBob)
+        .catch(function (err) {
           assert.notEqual(err, null);
           assert.equal(err.name, 'BadConnectionError');
-          assert.notEqual(authStatus, null);
-          assert.notEqual(authStatus.isAuthenticated, null);
-          // authError should be null because the error which occurred is not related
-          // specifically to authentication.
-          assert.equal(authStatus.authError, null);
+          assert.equal(client.authState, 'unauthenticated');
           done();
         });
         client.disconnect();
@@ -483,17 +481,18 @@ describe('Integration tests', function () {
         'unauthenticated->authenticated'
       ];
       var authStateChanges = [];
-      client.on('authStateChange', function (status) {
+      client.on('authStateChange', (status) => {
         authStateChanges.push(status.oldState + '->' + status.newState);
       });
 
       assert.equal(client.authState, 'unauthenticated');
 
-      client.once('connect', function (statusA) {
-        client.once('authenticate', function (newSignedToken) {
-          client.once('disconnect', function () {
+      client.once('connect', (statusA) => {
+        client.once('authenticate', (newSignedToken) => {
+          client.once('disconnect', () => {
             assert.equal(client.authState, 'authenticated');
-            client.authenticate(newSignedToken, function (newSignedToken) {
+            client.authenticate(newSignedToken)
+            .then((newSignedToken) => {
               assert.equal(client.authState, 'authenticated');
               assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
               client.off('authStateChange');
@@ -502,12 +501,14 @@ describe('Integration tests', function () {
             assert.equal(client.authState, 'authenticated');
           });
           assert.equal(client.authState, 'authenticated');
-          client.disconnect();
           // In case of disconnection, the socket maintains the last known auth state.
           assert.equal(client.authState, 'authenticated');
         });
         assert.equal(client.authState, 'unauthenticated');
-        client.invoke('login', {username: 'bob'});
+        client.invoke('login', {username: 'bob'})
+        .then(() => {
+          client.disconnect();
+        });
         assert.equal(client.authState, 'unauthenticated');
       });
     });
@@ -523,20 +524,20 @@ describe('Integration tests', function () {
         'authenticated->unauthenticated'
       ];
       var authStateChanges = [];
-      client.on('authStateChange', function (status) {
+      client.on('authStateChange', (status) => {
         authStateChanges.push(status.oldState + '->' + status.newState);
       });
 
       assert.equal(client.authState, 'unauthenticated');
 
-      client.once('connect', function (statusA) {
+      client.once('connect', (statusA) => {
         assert.equal(client.authState, 'authenticated');
         client.deauthenticate();
         assert.equal(client.authState, 'unauthenticated');
-        client.authenticate(validSignedAuthTokenBob, function (err) {
-          assert.equal(err, null);
+        client.authenticate(validSignedAuthTokenBob)
+        .then(() => {
           assert.equal(client.authState, 'authenticated');
-          client.once('disconnect', function () {
+          client.once('disconnect', () => {
             assert.equal(client.authState, 'authenticated');
             client.deauthenticate();
             assert.equal(client.authState, 'unauthenticated');
@@ -558,15 +559,16 @@ describe('Integration tests', function () {
         'authenticated->unauthenticated'
       ];
       var authStateChanges = [];
-      client.on('authStateChange', function (status) {
+      client.on('authStateChange', (status) => {
         authStateChanges.push(status.oldState + '->' + status.newState);
       });
 
       assert.equal(client.authState, 'unauthenticated');
 
-      client.once('connect', function (statusA) {
+      client.once('connect', (statusA) => {
         assert.equal(client.authState, 'authenticated');
-        client.authenticate(invalidSignedAuthToken, function (err) {
+        client.authenticate(invalidSignedAuthToken)
+        .catch((err) => {
           assert.notEqual(err, null);
           assert.equal(err.name, 'AuthTokenInvalidError');
           assert.equal(client.authState, 'unauthenticated');
@@ -606,8 +608,8 @@ describe('Integration tests', function () {
       client.once('connect', function (statusA) {
         assert.equal(client.authState, 'authenticated');
         assert.equal(client.authToken.username, 'bob');
-        client.authenticate(validSignedAuthTokenKate, function (err) {
-          assert.equal(err, null);
+        client.authenticate(validSignedAuthTokenKate)
+        .then(function () {
           assert.equal(client.authState, 'authenticated');
           assert.equal(client.authToken.username, 'kate');
           assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
@@ -651,32 +653,40 @@ describe('Integration tests', function () {
       ];
       var initialSignedAuthToken;
       var authStateChanges = [];
-      client.on('authStateChange', function (status) {
+      client.on('authStateChange', (status) => {
         authStateChanges.push(status.oldState + '->' + status.newState);
       });
 
-      client.authenticate(invalidSignedAuthToken, function (err) {
+      client.authenticate(invalidSignedAuthToken)
+      .then(() => {
+        return null;
+      })
+      .catch((err) => {
+        return err;
+      })
+      .then((err) => {
+        assert.notEqual(err, null);
         assert.equal(err.name, 'AuthTokenInvalidError');
       });
 
       var privateChannel = client.subscribe('priv', {waitForAuth: true});
       assert.equal(privateChannel.state, 'pending');
 
-      client.once('connect', function (statusA) {
+      client.once('connect', (statusA) => {
         initialSignedAuthToken = client.signedAuthToken;
         assert.equal(statusA.isAuthenticated, true);
         assert.equal(privateChannel.state, 'pending');
-        privateChannel.once('subscribeFail', function (err) {
+        privateChannel.once('subscribeFail', (err) => {
           // This shouldn't happen because the subscription should be
           // processed before the authenticate() call with the invalid token fails.
           throw new Error('Failed to subscribe to channel: ' + err.message);
         });
-        privateChannel.once('subscribe', function (err) {
+        privateChannel.once('subscribe', (err) => {
           assert.equal(privateChannel.state, 'subscribed');
         });
       });
 
-      client.once('deauthenticate', function (oldSignedToken) {
+      client.once('deauthenticate', (oldSignedToken) => {
         // The subscription already went through so it should still be subscribed.
         assert.equal(privateChannel.state, 'subscribed');
         assert.equal(client.authState, 'unauthenticated');
@@ -684,12 +694,12 @@ describe('Integration tests', function () {
         assert.equal(oldSignedToken, initialSignedAuthToken);
 
         var privateChannel2 = client.subscribe('priv2', {waitForAuth: true});
-        privateChannel2.once('subscribe', function () {
+        privateChannel2.once('subscribe', () => {
           throw new Error('Should not subscribe because the socket is not authenticated');
         });
       });
 
-      setTimeout(function () {
+      setTimeout(() => {
         client.off('authStateChange');
         assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
         done();
@@ -1093,7 +1103,7 @@ describe('Integration tests', function () {
       });
     });
 
-    it('Should resolve invoke Promise with BadConnectionError before triggering the disconnect event', function (done) {
+    it('Should resolve invoke Promise with BadConnectionError after triggering the disconnect event', function (done) {
       client = socketClusterClient.create(clientOptions);
       var messageList = [];
 
@@ -1102,9 +1112,9 @@ describe('Integration tests', function () {
 
         setTimeout(() => {
           assert.equal(messageList.length, 2);
-          assert.equal(messageList[0].type, 'error');
-          assert.equal(messageList[0].error.name, 'BadConnectionError');
-          assert.equal(messageList[1].type, 'disconnect');
+          assert.equal(messageList[0].type, 'disconnect');
+          assert.equal(messageList[1].type, 'error');
+          assert.equal(messageList[1].error.name, 'BadConnectionError');
           done();
         }, 200);
       });
@@ -1200,7 +1210,17 @@ describe('Integration tests', function () {
           secondConnectTriggered = true;
         });
 
-        client.transmit('foo', 123);
+        client.transmit('foo', 123)
+        .then(() => {
+          return null;
+        })
+        .catch((err) => {
+          return err;
+        })
+        .then((err) => {
+          assert.notEqual(err, null);
+          assert.equal(err.name, 'InvalidActionError');
+        });
 
         assert.equal(client.active, false);
         assert.equal(client.state, client.CLOSED);
@@ -1220,23 +1240,33 @@ describe('Integration tests', function () {
       assert.equal(client.active, true);
 
       var clientError;
-      client.on('error', function (err) {
+      client.on('error', (err) => {
         clientError = err;
       });
 
-      client.once('connect', function () {
+      client.once('connect', () => {
         assert.equal(client.active, true);
 
         client.destroy();
         assert.equal(client.active, false);
 
-        client.publish('thisIsATestChannel', 123);
+        client.publish('thisIsATestChannel', 123)
+        .then(() => {
+          return null;
+        })
+        .catch((err) => {
+          return err;
+        })
+        .then((err) => {
+          assert.notEqual(err, null);
+          assert.equal(err.name, 'InvalidActionError');
+        });
 
         assert.equal(client.active, false);
         assert.equal(client.state, client.CLOSED);
       });
 
-      setTimeout(function () {
+      setTimeout(() => {
         assert.notEqual(clientError, null);
         assert.equal(clientError.name, 'InvalidActionError');
         done();
