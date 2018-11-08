@@ -36,20 +36,18 @@
   "license": "MIT",
   "devDependencies": {
     "babel-plugin-minify-dead-code-elimination": "0.4.3",
-    "babel-runtime": "^6.26.0",
     "browserify": "^16.2.2",
     "gulp": "^4.0.0",
     "gulp-babel": "^6.1.2",
     "gulp-cli": "^2.0.1",
     "gulp-convert-newline": "^0.0.3",
-    "gulp-derequire": "^2.1.0",
     "gulp-insert": "^0.5.0",
     "gulp-rename": "^1.4.0",
     "gulp-uglify": "^3.0.1",
     "localStorage": "^1.0.3",
     "mocha": "5.2.0",
     "socketcluster-server": "^14.2.2",
-    "uglify-js": "^3.4.8",
+    "uglify-es": "^3.3.9",
     "vinyl-source-stream": "^2.0.0"
   }
 }
