@@ -1,1476 +1,1193 @@
-var assert = require('assert');
-var socketClusterServer = require('socketcluster-server');
-var socketClusterClient = require('../');
-var localStorage = require('localStorage');
+const assert = require('assert');
+const socketClusterServer = require('socketcluster-server');
+const socketClusterClient = require('../');
+const localStorage = require('localStorage');
 
 // Add to the global scope like in browser.
 global.localStorage = localStorage;
 
-var portNumber = 8008;
+let portNumber = 8008;
 
-var clientOptions;
-var serverOptions;
+let clientOptions;
+let serverOptions;
 
-var allowedUsers = {
+let allowedUsers = {
   bob: true,
   kate: true,
   alice: true
 };
 
-var server, client;
-var validSignedAuthTokenBob = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImJvYiIsImV4cCI6MzE2Mzc1ODk3ODIxNTQ4NywiaWF0IjoxNTAyNzQ3NzQ2fQ.GLf_jqi_qUSCRahxe2D2I9kD8iVIs0d4xTbiZMRiQq4';
-var validSignedAuthTokenKate = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImthdGUiLCJleHAiOjMxNjM3NTg5NzgyMTU0ODcsImlhdCI6MTUwMjc0Nzc5NX0.Yfb63XvDt9Wk0wHSDJ3t7Qb1F0oUVUaM5_JKxIE2kyw';
-var invalidSignedAuthToken = 'fakebGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.fakec2VybmFtZSI6ImJvYiIsImlhdCI6MTUwMjYyNTIxMywiZXhwIjoxNTAyNzExNjEzfQ.fakemYcOOjM9bzmS4UYRvlWSk_lm3WGHvclmFjLbyOk';
+let server, client;
+let validSignedAuthTokenBob = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImJvYiIsImV4cCI6MzE2Mzc1ODk3ODIxNTQ4NywiaWF0IjoxNTAyNzQ3NzQ2fQ.GLf_jqi_qUSCRahxe2D2I9kD8iVIs0d4xTbiZMRiQq4';
+let validSignedAuthTokenKate = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImthdGUiLCJleHAiOjMxNjM3NTg5NzgyMTU0ODcsImlhdCI6MTUwMjc0Nzc5NX0.Yfb63XvDt9Wk0wHSDJ3t7Qb1F0oUVUaM5_JKxIE2kyw';
+let invalidSignedAuthToken = 'fakebGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.fakec2VybmFtZSI6ImJvYiIsImlhdCI6MTUwMjYyNTIxMywiZXhwIjoxNTAyNzExNjEzfQ.fakemYcOOjM9bzmS4UYRvlWSk_lm3WGHvclmFjLbyOk';
 
-var TOKEN_EXPIRY_IN_SECONDS = 60 * 60 * 24 * 366 * 5000;
+const TOKEN_EXPIRY_IN_SECONDS = 60 * 60 * 24 * 366 * 5000;
 
-var connectionHandler = function (socket) {
-  socket.once('login', function (userDetails, respond) {
-    if (allowedUsers[userDetails.username]) {
-      userDetails.exp = Math.round(Date.now() / 1000) + TOKEN_EXPIRY_IN_SECONDS;
-      socket.setAuthToken(userDetails);
-      respond();
-    } else {
-      var err = new Error('Failed to login');
-      err.name = 'FailedLoginError';
-      respond(err);
-    }
-  });
-  socket.once('setAuthKey', function (newAuthKey, respond) {
-    server.signatureKey = newAuthKey;
-    server.verificationKey = newAuthKey;
-    respond();
-  });
-  socket.on('performTask', function (action, respond) {
-    setTimeout(function () {
-      respond();
-    }, 1000);
+function wait(duration) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve();
+    }, duration);
   });
 };
 
+function connectionHandler(socket) {
+  async function handleLogin() {
+    let rpc = await socket.procedure('login').once();
+    if (allowedUsers[rpc.data.username]) {
+      rpc.data.exp = Math.round(Date.now() / 1000) + TOKEN_EXPIRY_IN_SECONDS;
+      socket.setAuthToken(rpc.data);
+      rpc.end();
+    } else {
+      let err = new Error('Failed to login');
+      err.name = 'FailedLoginError';
+      rpc.error(err);
+    }
+  }
+  handleLogin();
+
+  async function handleSetAuthKey() {
+    let rpc = await socket.procedure('setAuthKey').once();
+    server.signatureKey = rpc.data;
+    server.verificationKey = rpc.data;
+    rpc.end();
+  }
+  handleSetAuthKey();
+
+  async function handlePerformTask() {
+    for await (let rpc of socket.procedure('performTask')) {
+      setTimeout(function () {
+        rpc.end();
+      }, 1000);
+    }
+  }
+  handlePerformTask();
+};
+
 describe('Integration tests', function () {
-  beforeEach('Run the server before start', function (done) {
+  beforeEach('Run the server before start', async function () {
     serverOptions = {
       authKey: 'testkey',
       ackTimeout: 200
     };
 
     server = socketClusterServer.listen(portNumber, serverOptions);
-    server.on('connection', connectionHandler);
+    async function handleServerConnection() {
+      for await (let {socket} of server.listener('connection')) {
+        connectionHandler(socket);
+      }
+    }
+    handleServerConnection();
 
-    server.addMiddleware(server.MIDDLEWARE_AUTHENTICATE, function (req, next) {
+    server.addMiddleware(server.MIDDLEWARE_AUTHENTICATE, async function (req) {
       if (req.authToken.username === 'alice') {
-        var err = new Error('Blocked by MIDDLEWARE_AUTHENTICATE');
+        let err = new Error('Blocked by MIDDLEWARE_AUTHENTICATE');
         err.name = 'AuthenticateMiddlewareError';
-        next(err);
-      } else {
-        next();
+        throw err;
       }
     });
 
     clientOptions = {
       hostname: '127.0.0.1',
       port: portNumber,
-      multiplex: false,
       ackTimeout: 200
     };
 
-    server.once('ready', function () {
-      done();
-    });
+    await server.listener('ready').once();
   });
 
-  afterEach('Shut down server afterwards', function () {
-    var cleanupTasks = [];
+  afterEach('Shut down server afterwards', async function () {
+    let cleanupTasks = [];
     global.localStorage.removeItem('socketCluster.authToken');
     if (client) {
       if (client.state !== client.CLOSED) {
-        cleanupTasks.push(new Promise(function (resolve, reject) {
-          client.once('disconnect', function () {
-            resolve();
-          });
-          client.once('connectAbort', function () {
-            resolve();
-          });
-        }));
-        client.destroy();
+        cleanupTasks.push(
+          Promise.race([
+            client.listener('disconnect').once(),
+            client.listener('connectAbort').once()
+          ])
+        );
+        client.disconnect();
       } else {
-        client.destroy();
+        client.disconnect();
       }
     }
-    cleanupTasks.push(new Promise(function (resolve) {
-      server.close(function () {
+    cleanupTasks.push(
+      server
+      .close()
+      .then(() => {
         portNumber++;
-        resolve();
-      });
-    }));
-    return Promise.all(cleanupTasks);
+      })
+    );
+    await Promise.all(cleanupTasks);
   });
 
   describe('Creation', function () {
-    it('Should reuse socket if multiplex is true and options are the same', function (done) {
+
+    it('Should automatically connect socket on creation by default', async function () {
       clientOptions = {
         hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: true
-      };
-
-      var clientA = socketClusterClient.create(clientOptions);
-      var clientB = socketClusterClient.create(clientOptions);
-
-      assert.equal(clientA, clientB);
-      clientA.destroy();
-      clientB.destroy();
-      done();
-    });
-
-    it('Should automatically connect socket on creation by default', function (done) {
-      clientOptions = {
-        hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: false
+        port: portNumber
       };
 
       client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.state, client.CONNECTING);
-      done();
     });
 
-    it('Should not automatically connect socket if autoConnect is set to false', function (done) {
+    it('Should not automatically connect socket if autoConnect is set to false', async function () {
       clientOptions = {
         hostname: '127.0.0.1',
         port: portNumber,
-        multiplex: false,
         autoConnect: false
       };
 
       client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.state, client.CLOSED);
-      done();
-    });
-
-    it('Should automatically connect socket if multiplex is true, autoConnect is set to false the first time and socket create is called with autoConnect true the second time', function (done) {
-      var clientOptionsA = {
-        hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: true,
-        autoConnect: false
-      };
-
-      var clientA = socketClusterClient.create(clientOptionsA);
-
-      assert.equal(clientA.state, clientA.CLOSED);
-
-      var clientOptionsB = {
-        hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: true,
-        autoConnect: true
-      };
-
-      var clientB = socketClusterClient.create(clientOptionsB);
-
-      assert.equal(clientB.state, clientB.CONNECTING);
-
-      clientA.destroy();
-      clientB.destroy();
-
-      done();
-    });
-
-    it('Should not automatically connect socket if multiplex is true, autoConnect is set to false and socket create is called a second time with autoConnect false', function (done) {
-      clientOptions = {
-        hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: true,
-        autoConnect: false
-      };
-
-      var clientA = socketClusterClient.create(clientOptions);
-
-      assert.equal(clientA.state, clientA.CLOSED);
-
-      var clientB = socketClusterClient.create(clientOptions);
-
-      assert.equal(clientB.state, clientB.CLOSED);
-
-      clientA.destroy();
-      clientB.destroy();
-
-      done();
     });
   });
 
   describe('Errors', function () {
-    it('Should be able to emit the error event locally on the socket', function (done) {
+    it('Should be able to emit the error event locally on the socket', async function () {
       client = socketClusterClient.create(clientOptions);
-      var error = null;
+      let err = null;
 
-      client.on('error', function (err) {
-        error = err;
-      });
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          err = error;
+        }
+      })();
 
-      client.on('connect', function () {
-        var error = new Error('Custom error');
-        error.name = 'CustomError';
-        client.emit('error', error);
-      });
+      (async () => {
+        for await (let status of client.listener('connect')) {
+          let error = new Error('Custom error');
+          error.name = 'CustomError';
+          client.emit('error', {error});
+        }
+      })();
 
-      setTimeout(function () {
-        assert.notEqual(error, null);
-        assert.equal(error.name, 'CustomError');
-        done();
-      }, 100);
+      await wait(100);
+
+      assert.notEqual(err, null);
+      assert.equal(err.name, 'CustomError');
     });
   });
 
   describe('Authentication', function () {
-    it('Should not send back error if JWT is not provided in handshake', function (done) {
+    it('Should not send back error if JWT is not provided in handshake', async function () {
       client = socketClusterClient.create(clientOptions);
-      client.once('connect', function (status) {
-        assert.equal(status.authError === undefined, true);
-        done()
-      });
+      let event = await client.listener('connect').once();
+      assert.equal(event.authError === undefined, true);
     });
 
-    it('Should be authenticated on connect if previous JWT token is present', function (done) {
+    it('Should be authenticated on connect if previous JWT token is present', async function () {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
       client = socketClusterClient.create(clientOptions);
-      client.once('connect', function (statusA) {
+
+      let event = await client.listener('connect').once();
+      assert.equal(client.authState, 'authenticated');
+      assert.equal(event.isAuthenticated, true);
+      assert.equal(event.authError === undefined, true);
+    });
+
+    it('Should send back error if JWT is invalid during handshake', async function () {
+      global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
+
+      let event = await client.listener('connect').once();
+      assert.notEqual(event, null);
+      assert.equal(event.isAuthenticated, true);
+      assert.equal(event.authError, null);
+
+      assert.notEqual(client.signedAuthToken, null);
+      assert.notEqual(client.authToken, null);
+
+      // Change the setAuthKey to invalidate the current token.
+      await client.invoke('setAuthKey', 'differentAuthKey');
+
+      client.disconnect();
+      client.connect();
+
+      event = await client.listener('connect').once();
+
+      assert.equal(event.isAuthenticated, false);
+      assert.notEqual(event.authError, null);
+      assert.equal(event.authError.name, 'AuthTokenInvalidError');
+
+      // When authentication fails, the auth token properties on the client
+      // socket should be set to null; that way it's not going to keep
+      // throwing the same error every time the socket tries to connect.
+      assert.equal(client.signedAuthToken, null);
+      assert.equal(client.authToken, null);
+
+      // Set authKey back to what it was.
+      await client.invoke('setAuthKey', serverOptions.authKey);
+    });
+
+    it('Should allow switching between users', async function () {
+      global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
+      let authenticateTriggered = false;
+      let authStateChangeTriggered = false;
+
+      await client.listener('connect').once();
+
+      assert.notEqual(client.authToken, null);
+      assert.equal(client.authToken.username, 'bob');
+
+      client.invoke('login', {username: 'alice'});
+
+      (async () => {
+        await client.listener('authenticate').once();
+        authenticateTriggered = true;
         assert.equal(client.authState, 'authenticated');
-        assert.equal(statusA.isAuthenticated, true);
-        assert.equal(statusA.authError === undefined, true);
-        done();
-      });
-    });
-
-    it('Should send back error if JWT is invalid during handshake', function (done) {
-      global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.create(clientOptions);
-
-      client.once('connect', (statusA) => {
-        assert.notEqual(statusA, null);
-        assert.equal(statusA.isAuthenticated, true);
-        assert.equal(statusA.authError, null);
-
-        assert.notEqual(client.signedAuthToken, null);
         assert.notEqual(client.authToken, null);
+        assert.equal(client.authToken.username, 'alice');
+      })();
 
-        // Change the setAuthKey to invalidate the current token.
-        client.invoke('setAuthKey', 'differentAuthKey')
-        .then(() => {
-          client.once('disconnect', () => {
-            client.once('connect', (statusB) => {
-              assert.equal(statusB.isAuthenticated, false);
-              assert.notEqual(statusB.authError, null);
-              assert.equal(statusB.authError.name, 'AuthTokenInvalidError');
+      (async () => {
+        await client.listener('authStateChange').once();
+        authStateChangeTriggered = true;
+      })();
 
-              // When authentication fails, the auth token properties on the client
-              // socket should be set to null; that way it's not going to keep
-              // throwing the same error every time the socket tries to connect.
-              assert.equal(client.signedAuthToken, null);
-              assert.equal(client.authToken, null);
+      await wait(100);
 
-              // Set authKey back to what it was.
-              client.invoke('setAuthKey', serverOptions.authKey)
-              .then(() => {
-                done();
-              });
-            });
-
-            client.connect();
-          });
-
-          client.disconnect();
-        });
-      });
+      assert.equal(authenticateTriggered, true);
+      assert.equal(authStateChangeTriggered, false);
     });
 
-    it('Should allow switching between users', function (done) {
-      global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
-      client = socketClusterClient.create(clientOptions);
-      var authenticateTriggered = false;
-      var authStateChangeTriggered = false;
-      client.once('connect', function (statusA) {
-        assert.notEqual(client.authToken, null);
-        assert.equal(client.authToken.username, 'bob');
-
-        client.invoke('login', {username: 'alice'});
-
-        client.once('authenticate', function (signedToken) {
-          authenticateTriggered = true;
-          assert.equal(client.authState, 'authenticated');
-          assert.notEqual(client.authToken, null);
-          assert.equal(client.authToken.username, 'alice');
-        });
-
-        client.once('authStateChange', function (signedToken) {
-          authStateChangeTriggered = true;
-        });
-
-        setTimeout(function () {
-          assert.equal(authenticateTriggered, true);
-          assert.equal(authStateChangeTriggered, false);
-          done();
-        }, 100);
-      });
-    });
-
-    it('Token should be available by the time the login Promise resolves if token engine signing is synchronous', function (done) {
-      var port = 8509;
+    it('If token engine signing is synchronous, authentication can be captured using the authenticate event', async function () {
+      let port = 8509;
       server = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: false
       });
-      server.once('connection', connectionHandler);
-      server.once('ready', function () {
-        client = socketClusterClient.create({
-          hostname: clientOptions.hostname,
-          port: port,
-          multiplex: false
-        });
-        client.once('connect', function (statusA) {
-          client.invoke('login', {username: 'bob'})
-          .then(function () {
-            assert.equal(client.authState, 'authenticated');
-            assert.notEqual(client.authToken, null);
-            assert.equal(client.authToken.username, 'bob');
-            done();
-          });
-        });
+
+      (async () => {
+        let {socket} = await server.listener('connection').once();
+        connectionHandler(socket);
+      })();
+
+      await server.listener('ready').once();
+
+      client = socketClusterClient.create({
+        hostname: clientOptions.hostname,
+        port: port
       });
+
+      await client.listener('connect').once();
+
+      await client.invoke('login', {username: 'bob'});
+      await client.listener('authenticate').once();
+
+      assert.equal(client.authState, 'authenticated');
+      assert.notEqual(client.authToken, null);
+      assert.equal(client.authToken.username, 'bob');
     });
 
-    it('If token engine signing is asynchronous, authentication can be captured using the authenticate event', function (done) {
-      var port = 8510;
+    it('If token engine signing is asynchronous, authentication can be captured using the authenticate event', async function () {
+      let port = 8510;
       server = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: true
       });
-      server.once('connection', connectionHandler);
-      server.once('ready', function () {
-        client = socketClusterClient.create({
-          hostname: clientOptions.hostname,
-          port: port,
-          multiplex: false
-        });
-        client.once('connect', function (statusA) {
-          client.invoke('login', {username: 'bob'});
-          client.once('authenticate', function (newSignedToken) {
-            assert.equal(client.authState, 'authenticated');
-            assert.notEqual(client.authToken, null);
-            assert.equal(client.authToken.username, 'bob');
-            done();
-          });
-        });
+
+      (async () => {
+        let {socket} = await server.listener('connection').once();
+        connectionHandler(socket);
+      })();
+
+      await server.listener('ready').once();
+
+      client = socketClusterClient.create({
+        hostname: clientOptions.hostname,
+        port: port
       });
+
+      await client.listener('connect').once();
+
+      client.invoke('login', {username: 'bob'});
+
+      await client.listener('authenticate').once();
+
+      assert.equal(client.authState, 'authenticated');
+      assert.notEqual(client.authToken, null);
+      assert.equal(client.authToken.username, 'bob');
     });
 
-    it('Should still work if token verification is asynchronous', function (done) {
-      var port = 8511;
+    it('If token verification is synchronous, authentication can be captured using the authenticate event', async function () {
+      let port = 8511;
       server = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authVerifyAsync: false
       });
-      server.once('connection', connectionHandler);
-      server.once('ready', function () {
-        client = socketClusterClient.create({
-          hostname: clientOptions.hostname,
-          port: port,
-          multiplex: false
-        });
-        client.once('connect', function (statusA) {
-          client.once('authenticate', function (newSignedToken) {
-            client.once('disconnect', function () {
-              client.once('connect', function (statusB) {
-                assert.equal(statusB.isAuthenticated, true);
-                assert.notEqual(client.authToken, null);
-                assert.equal(client.authToken.username, 'bob');
-                done();
-              });
-              client.connect();
-            });
-          });
-          client.invoke('login', {username: 'bob'})
-          .then(() => {
-            client.disconnect();
-          });
-        });
+
+      (async () => {
+        let {socket} = await server.listener('connection').once();
+        connectionHandler(socket);
+      })();
+
+      await server.listener('ready').once();
+
+      client = socketClusterClient.create({
+        hostname: clientOptions.hostname,
+        port: port
       });
+
+      await client.listener('connect').once();
+
+      await Promise.all([
+        (async () => {
+          await client.invoke('login', {username: 'bob'});
+          await client.listener('authenticate').once();
+          client.disconnect();
+        })(),
+        (async () => {
+          await client.listener('authenticate').once();
+          await client.listener('disconnect').once();
+          client.connect();
+          let event = await client.listener('connect').once();
+
+          assert.equal(event.isAuthenticated, true);
+          assert.notEqual(client.authToken, null);
+          assert.equal(client.authToken.username, 'bob');
+        })()
+      ]);
     });
 
-    it('Should start out in pending authState and switch to unauthenticated if no token exists', function (done) {
+    it('Should start out in pending authState and switch to unauthenticated if no token exists', async function () {
       client = socketClusterClient.create(clientOptions);
       assert.equal(client.authState, 'unauthenticated');
 
-      var handler = function (status) {
+      (async () => {
+        let status = await client.listener('authStateChange').once();
         throw new Error('authState should not change after connecting without a token');
-      };
+      })();
 
-      client.once('authStateChange', handler);
-
-      setTimeout(function () {
-        client.off('authStateChange', handler);
-        done();
-      }, 1000);
+      await wait(1000);
     });
 
-    it('Should deal with auth engine errors related to saveToken function', function (done) {
+    it('Should deal with auth engine errors related to saveToken function', async function () {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
       client = socketClusterClient.create(clientOptions);
 
-      var caughtError;
-      client.on('error', function (err) {
-        caughtError = err;
-      });
+      let caughtError;
 
-      client.once('connect', function () {
-        var oldSaveTokenFunction = client.auth.saveToken;
-        client.auth.saveToken = function (tokenName, tokenValue, options) {
-          var err = new Error('Failed to save token');
-          err.name = 'FailedToSaveTokenError';
-          return Promise.reject(err);
-        };
-        assert.notEqual(client.authToken, null);
-        assert.equal(client.authToken.username, 'bob');
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          caughtError = error;
+        }
+      })();
 
-        client.authenticate(validSignedAuthTokenKate)
-        .then(function (authStatus) {
-          assert.notEqual(authStatus, null);
-          // The error here comes from the client auth engine and does not prevent the
-          // authentication from taking place, it only prevents the token from being
-          // stored correctly on the client.
-          assert.equal(authStatus.isAuthenticated, true);
-          // authError should be null because the error comes from the client-side auth engine
-          // whereas authError is for server-side errors (e.g. JWT errors).
-          assert.equal(authStatus.authError, null);
+      await client.listener('connect').once();
 
-          assert.notEqual(client.authToken, null);
-          assert.equal(client.authToken.username, 'kate');
-          setTimeout(function () {
-            assert.notEqual(caughtError, null);
-            assert.equal(caughtError.name, 'FailedToSaveTokenError');
-            client.auth.saveToken = oldSaveTokenFunction;
-            done();
-          }, 10);
-        });
-      });
+      let oldSaveTokenFunction = client.auth.saveToken;
+      client.auth.saveToken = function (tokenName, tokenValue, options) {
+        let err = new Error('Failed to save token');
+        err.name = 'FailedToSaveTokenError';
+        return Promise.reject(err);
+      };
+      assert.notEqual(client.authToken, null);
+      assert.equal(client.authToken.username, 'bob');
+
+      let authStatus = await client.authenticate(validSignedAuthTokenKate);
+
+      assert.notEqual(authStatus, null);
+      // The error here comes from the client auth engine and does not prevent the
+      // authentication from taking place, it only prevents the token from being
+      // stored correctly on the client.
+      assert.equal(authStatus.isAuthenticated, true);
+      // authError should be null because the error comes from the client-side auth engine
+      // whereas authError is for server-side errors (e.g. JWT errors).
+      assert.equal(authStatus.authError, null);
+
+      assert.notEqual(client.authToken, null);
+      assert.equal(client.authToken.username, 'kate');
+
+      await wait(10);
+
+      assert.notEqual(caughtError, null);
+      assert.equal(caughtError.name, 'FailedToSaveTokenError');
+      client.auth.saveToken = oldSaveTokenFunction;
     });
 
-    it('Should gracefully handle authenticate abortion due to disconnection', function (done) {
+    it('Should gracefully handle authenticate abortion due to disconnection', async function () {
       client = socketClusterClient.create(clientOptions);
 
-      client.once('connect', function (statusA) {
-        client.authenticate(validSignedAuthTokenBob)
-        .catch(function (err) {
-          assert.notEqual(err, null);
-          assert.equal(err.name, 'BadConnectionError');
-          assert.equal(client.authState, 'unauthenticated');
-          done();
-        });
-        client.disconnect();
-      });
+      await client.listener('connect').once();
+
+      let authenticatePromise = await client.authenticate(validSignedAuthTokenBob);
+      client.disconnect();
+
+      try {
+        await authenticatePromise;
+      } catch (err) {
+        assert.notEqual(err, null);
+        assert.equal(err.name, 'BadConnectionError');
+        assert.equal(client.authState, 'unauthenticated');
+      }
     });
 
-    it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 1', function (done) {
+    it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 1', async function () {
       client = socketClusterClient.create(clientOptions);
 
-      var expectedAuthStateChanges = [
+      let expectedAuthStateChanges = [
         'unauthenticated->authenticated'
       ];
-      var authStateChanges = [];
-      client.on('authStateChange', (status) => {
-        authStateChanges.push(status.oldState + '->' + status.newState);
-      });
+      let authStateChanges = [];
+
+      (async () => {
+        for await (status of client.listener('authStateChange')) {
+          authStateChanges.push(status.oldAuthState + '->' + status.newAuthState);
+        }
+      })();
 
       assert.equal(client.authState, 'unauthenticated');
 
-      client.once('connect', (statusA) => {
-        client.once('authenticate', (newSignedToken) => {
-          client.once('disconnect', () => {
-            assert.equal(client.authState, 'authenticated');
-            client.authenticate(newSignedToken)
-            .then((newSignedToken) => {
-              assert.equal(client.authState, 'authenticated');
-              assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
-              client.off('authStateChange');
-              done();
-            });
-            assert.equal(client.authState, 'authenticated');
-          });
-          assert.equal(client.authState, 'authenticated');
-          // In case of disconnection, the socket maintains the last known auth state.
-          assert.equal(client.authState, 'authenticated');
-        });
-        assert.equal(client.authState, 'unauthenticated');
-        client.invoke('login', {username: 'bob'})
-        .then(() => {
-          client.disconnect();
-        });
-        assert.equal(client.authState, 'unauthenticated');
-      });
+      await client.listener('connect').once();
+      assert.equal(client.authState, 'unauthenticated');
+
+      (async () => {
+        await client.invoke('login', {username: 'bob'});
+        await client.listener('authenticate').once();
+        client.disconnect();
+      })();
+
+      assert.equal(client.authState, 'unauthenticated');
+
+      let {signedAuthToken, authToken} = await client.listener('authenticate').once();
+
+      assert.notEqual(signedAuthToken, null);
+      assert.notEqual(authToken, null);
+
+      assert.equal(client.authState, 'authenticated');
+
+      await client.listener('disconnect').once();
+
+      // In case of disconnection, the socket maintains the last known auth state.
+      assert.equal(client.authState, 'authenticated');
+
+      await client.authenticate(signedAuthToken);
+
+      assert.equal(client.authState, 'authenticated');
+      assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
+      client.closeListener('authStateChange');
     });
 
-    it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 2', function (done) {
+    it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 2', async function () {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
       client = socketClusterClient.create(clientOptions);
 
-      var expectedAuthStateChanges = [
+      let expectedAuthStateChanges = [
         'unauthenticated->authenticated',
         'authenticated->unauthenticated',
         'unauthenticated->authenticated',
         'authenticated->unauthenticated'
       ];
-      var authStateChanges = [];
-      client.on('authStateChange', (status) => {
-        authStateChanges.push(status.oldState + '->' + status.newState);
-      });
+      let authStateChanges = [];
+
+      (async () => {
+        for await (status of client.listener('authStateChange')) {
+          authStateChanges.push(status.oldAuthState + '->' + status.newAuthState);
+        }
+      })();
 
       assert.equal(client.authState, 'unauthenticated');
 
-      client.once('connect', (statusA) => {
-        assert.equal(client.authState, 'authenticated');
-        client.deauthenticate();
-        assert.equal(client.authState, 'unauthenticated');
-        client.authenticate(validSignedAuthTokenBob)
-        .then(() => {
-          assert.equal(client.authState, 'authenticated');
-          client.once('disconnect', () => {
-            assert.equal(client.authState, 'authenticated');
-            client.deauthenticate();
-            assert.equal(client.authState, 'unauthenticated');
-            assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
-            done();
-          });
-          client.disconnect();
-        });
-        assert.equal(client.authState, 'unauthenticated');
-      });
+      await client.listener('connect').once();
+
+      assert.equal(client.authState, 'authenticated');
+      client.deauthenticate();
+      assert.equal(client.authState, 'unauthenticated');
+      let authenticatePromise = client.authenticate(validSignedAuthTokenBob);
+      assert.equal(client.authState, 'unauthenticated');
+
+      await authenticatePromise;
+
+      assert.equal(client.authState, 'authenticated');
+
+      client.disconnect();
+
+      assert.equal(client.authState, 'authenticated');
+      await client.deauthenticate();
+      assert.equal(client.authState, 'unauthenticated');
+
+      assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
     });
 
-    it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 3', function (done) {
+    it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 3', async function () {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
       client = socketClusterClient.create(clientOptions);
 
-      var expectedAuthStateChanges = [
+      let expectedAuthStateChanges = [
         'unauthenticated->authenticated',
         'authenticated->unauthenticated'
       ];
-      var authStateChanges = [];
-      client.on('authStateChange', (status) => {
-        authStateChanges.push(status.oldState + '->' + status.newState);
-      });
+      let authStateChanges = [];
+
+      (async () => {
+        for await (let status of client.listener('authStateChange')) {
+          authStateChanges.push(status.oldAuthState + '->' + status.newAuthState);
+        }
+      })();
 
       assert.equal(client.authState, 'unauthenticated');
 
-      client.once('connect', (statusA) => {
-        assert.equal(client.authState, 'authenticated');
-        client.authenticate(invalidSignedAuthToken)
-        .catch((err) => {
-          assert.notEqual(err, null);
-          assert.equal(err.name, 'AuthTokenInvalidError');
-          assert.equal(client.authState, 'unauthenticated');
-          assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
-          done();
-        });
-        assert.equal(client.authState, 'authenticated');
-      });
+      await client.listener('connect').once();
+
+      assert.equal(client.authState, 'authenticated');
+      let authenticatePromise = client.authenticate(invalidSignedAuthToken);
+      assert.equal(client.authState, 'authenticated');
+
+      try {
+        await authenticatePromise;
+      } catch (err) {
+        assert.notEqual(err, null);
+        assert.equal(err.name, 'AuthTokenInvalidError');
+        assert.equal(client.authState, 'unauthenticated');
+        assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
+      }
     });
 
-    it('Should go through the correct sequence of authentication state changes when authenticating as a user while already authenticated as another user', function (done) {
+    it('Should go through the correct sequence of authentication state changes when authenticating as a user while already authenticated as another user', async function () {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
       client = socketClusterClient.create(clientOptions);
 
-      var expectedAuthStateChanges = [
+      let expectedAuthStateChanges = [
         'unauthenticated->authenticated'
       ];
-      var authStateChanges = [];
-      client.on('authStateChange', function (status) {
-        authStateChanges.push(status.oldState + '->' + status.newState);
-      });
+      let authStateChanges = [];
 
-      var expectedAuthTokenChanges = [
+      (async () => {
+        for await (let status of client.listener('authStateChange')) {
+          authStateChanges.push(status.oldAuthState + '->' + status.newAuthState);
+        }
+      })();
+
+      let expectedAuthTokenChanges = [
         validSignedAuthTokenBob,
         validSignedAuthTokenKate
       ];
-      var authTokenChanges = [];
-      client.on('authenticate', function () {
-        authTokenChanges.push(client.signedAuthToken);
-      });
-      client.on('deauthenticate', function () {
-        authTokenChanges.push(client.signedAuthToken);
-      });
+      let authTokenChanges = [];
+
+      (async () => {
+        for await (let event of client.listener('authenticate')) {
+          authTokenChanges.push(client.signedAuthToken);
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('deauthenticate')) {
+          authTokenChanges.push(client.signedAuthToken);
+        }
+      })();
 
       assert.equal(client.authState, 'unauthenticated');
 
-      client.once('connect', function (statusA) {
-        assert.equal(client.authState, 'authenticated');
-        assert.equal(client.authToken.username, 'bob');
-        client.authenticate(validSignedAuthTokenKate)
-        .then(function () {
-          assert.equal(client.authState, 'authenticated');
-          assert.equal(client.authToken.username, 'kate');
-          assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
-          assert.equal(JSON.stringify(authTokenChanges), JSON.stringify(expectedAuthTokenChanges));
-          done();
-        });
-        assert.equal(client.authState, 'authenticated');
-      });
+      await client.listener('connect').once();
+
+      assert.equal(client.authState, 'authenticated');
+      assert.equal(client.authToken.username, 'bob');
+      let authenticatePromise = client.authenticate(validSignedAuthTokenKate);
+
+      assert.equal(client.authState, 'authenticated');
+
+      await authenticatePromise;
+
+      assert.equal(client.authState, 'authenticated');
+      assert.equal(client.authToken.username, 'kate');
+      assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
+      assert.equal(JSON.stringify(authTokenChanges), JSON.stringify(expectedAuthTokenChanges));
     });
 
-    it('Should wait for socket to be authenticated before subscribing to waitForAuth channel', function (done) {
+    it('Should wait for socket to be authenticated before subscribing to waitForAuth channel', async function () {
       client = socketClusterClient.create(clientOptions);
-      var privateChannel = client.subscribe('priv', {waitForAuth: true});
+
+      let privateChannel = client.subscribe('priv', {waitForAuth: true});
       assert.equal(privateChannel.state, 'pending');
 
-      client.once('connect', function (statusA) {
-        assert.equal(privateChannel.state, 'pending');
-        privateChannel.once('subscribe', function () {
-          assert.equal(privateChannel.state, 'subscribed');
-          client.once('disconnect', function () {
-            assert.equal(privateChannel.state, 'pending');
-            privateChannel.once('subscribe', function () {
-              assert.equal(privateChannel.state, 'subscribed');
-              done();
-            });
-            client.authenticate(validSignedAuthTokenBob);
-          });
-          client.disconnect();
-        });
-        client.invoke('login', {username: 'bob'});
-      });
+      await client.listener('connect').once();
+      assert.equal(privateChannel.state, 'pending');
+
+      client.invoke('login', {username: 'bob'});
+      await client.listener('subscribe').once();
+      assert.equal(privateChannel.state, 'subscribed');
+
+      client.disconnect();
+      assert.equal(privateChannel.state, 'pending');
+
+      client.authenticate(validSignedAuthTokenBob);
+      await client.listener('subscribe').once();
+      assert.equal(privateChannel.state, 'subscribed');
     });
 
-    it('Subscriptions (including those with waitForAuth option) should have priority over the authenticate action', function (done) {
+    it('Subscriptions (including those with waitForAuth option) should have priority over the authenticate action', async function () {
       global.localStorage.setItem('socketCluster.authToken', validSignedAuthTokenBob);
       client = socketClusterClient.create(clientOptions);
 
-      var expectedAuthStateChanges = [
+      let expectedAuthStateChanges = [
         'unauthenticated->authenticated',
         'authenticated->unauthenticated'
       ];
-      var initialSignedAuthToken;
-      var authStateChanges = [];
-      client.on('authStateChange', (status) => {
-        authStateChanges.push(status.oldState + '->' + status.newState);
-      });
+      let initialSignedAuthToken;
+      let authStateChanges = [];
 
-      client.authenticate(invalidSignedAuthToken)
-      .then(() => {
-        return null;
-      })
-      .catch((err) => {
-        return err;
-      })
-      .then((err) => {
-        assert.notEqual(err, null);
-        assert.equal(err.name, 'AuthTokenInvalidError');
-      });
+      (async () => {
+        for await (let status of client.listener('authStateChange')) {
+          authStateChanges.push(status.oldAuthState + '->' + status.newAuthState);
+        }
+      })();
 
-      var privateChannel = client.subscribe('priv', {waitForAuth: true});
+      (async () => {
+        let error = null;
+        try {
+          await client.authenticate(invalidSignedAuthToken);
+        } catch (err) {
+          error = err;
+        }
+        assert.notEqual(error, null);
+        assert.equal(error.name, 'AuthTokenInvalidError');
+      })();
+
+      let privateChannel = client.subscribe('priv', {waitForAuth: true});
       assert.equal(privateChannel.state, 'pending');
 
-      client.once('connect', (statusA) => {
+      (async () => {
+        let event = await client.listener('connect').once();
         initialSignedAuthToken = client.signedAuthToken;
-        assert.equal(statusA.isAuthenticated, true);
+        assert.equal(event.isAuthenticated, true);
         assert.equal(privateChannel.state, 'pending');
-        privateChannel.once('subscribeFail', (err) => {
-          // This shouldn't happen because the subscription should be
-          // processed before the authenticate() call with the invalid token fails.
-          throw new Error('Failed to subscribe to channel: ' + err.message);
-        });
-        privateChannel.once('subscribe', (err) => {
-          assert.equal(privateChannel.state, 'subscribed');
-        });
-      });
 
-      client.once('deauthenticate', (oldSignedToken) => {
+        await Promise.race([
+          (async () => {
+            let err = await privateChannel.listener('subscribeFail').once();
+            // This shouldn't happen because the subscription should be
+            // processed before the authenticate() call with the invalid token fails.
+            throw new Error('Failed to subscribe to channel: ' + err.message);
+          })(),
+          (async () => {
+            await privateChannel.listener('subscribe').once();
+            assert.equal(privateChannel.state, 'subscribed');
+          })()
+        ]);
+      })();
+
+      (async () => {
+        // The subscription already went through so it should still be subscribed.
+        let {oldSignedAuthToken, oldAuthToken} = await client.listener('deauthenticate').once();
         // The subscription already went through so it should still be subscribed.
         assert.equal(privateChannel.state, 'subscribed');
         assert.equal(client.authState, 'unauthenticated');
         assert.equal(client.authToken, null);
-        assert.equal(oldSignedToken, initialSignedAuthToken);
 
-        var privateChannel2 = client.subscribe('priv2', {waitForAuth: true});
-        privateChannel2.once('subscribe', () => {
-          throw new Error('Should not subscribe because the socket is not authenticated');
-        });
-      });
+        assert.notEqual(oldAuthToken, null);
+        assert.equal(oldAuthToken.username, 'bob');
+        assert.equal(oldSignedAuthToken, initialSignedAuthToken);
 
-      setTimeout(() => {
-        client.off('authStateChange');
-        assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
-        done();
-      }, 1000);
+        let privateChannel2 = client.subscribe('priv2', {waitForAuth: true});
+
+        await privateChannel2.listener('subscribe').once();
+
+        // This line should not execute.
+        throw new Error('Should not subscribe because the socket is not authenticated');
+      })();
+
+      await wait(1000);
+      client.closeListener('authStateChange');
+      assert.equal(JSON.stringify(authStateChanges), JSON.stringify(expectedAuthStateChanges));
     });
 
-    it('Should trigger the close event if the socket disconnects in the middle of the handshake phase', function (done) {
+    it('Should trigger the close event if the socket disconnects in the middle of the handshake phase', async function () {
       client = socketClusterClient.create(clientOptions);
-      var aborted = false;
-      var diconnected = false;
-      var closed = false;
+      let aborted = false;
+      let diconnected = false;
+      let closed = false;
 
-      client.on('connectAbort', function () {
+      (async () => {
+        await client.listener('connectAbort').once();
         aborted = true;
-      });
-      client.on('disconnect', function () {
+      })();
+
+      (async () => {
+        await client.listener('disconnect').once();
         diconnected = true;
-      });
-      client.on('close', function () {
+      })();
+
+      (async () => {
+        await client.listener('close').once();
         closed = true;
-      });
+      })();
 
       client.disconnect();
 
-      setTimeout(function () {
-        assert.equal(aborted, true);
-        assert.equal(diconnected, false);
-        assert.equal(closed, true);
-        done();
-      }, 300);
+      await wait(300);
+
+      assert.equal(aborted, true);
+      assert.equal(diconnected, false);
+      assert.equal(closed, true);
     });
 
-    it('Should trigger the close event if the socket disconnects after the handshake phase', function (done) {
+    it('Should trigger the close event if the socket disconnects after the handshake phase', async function () {
       client = socketClusterClient.create(clientOptions);
-      var aborted = false;
-      var diconnected = false;
-      var closed = false;
+      let aborted = false;
+      let diconnected = false;
+      let closed = false;
 
-      client.on('connectAbort', function () {
+      (async () => {
+        await client.listener('connectAbort').once();
         aborted = true;
-      });
-      client.on('disconnect', function () {
+      })();
+
+      (async () => {
+        await client.listener('disconnect').once();
         diconnected = true;
-      });
-      client.on('close', function () {
+      })();
+
+      (async () => {
+        await client.listener('close').once();
         closed = true;
-      });
+      })();
 
-      client.on('connect', function () {
-        client.disconnect();
-      });
+      (async () => {
+        for await (let event of client.listener('connect')) {
+          client.disconnect();
+        }
+      })();
 
-      setTimeout(function () {
-        assert.equal(aborted, false);
-        assert.equal(diconnected, true);
-        assert.equal(closed, true);
-        done();
-      }, 300);
+      await wait(300);
+
+      assert.equal(aborted, false);
+      assert.equal(diconnected, true);
+      assert.equal(closed, true);
     });
   });
 
   describe('Emitting remote events', function () {
-    it('Should not throw error on socket if ackTimeout elapses before response to event is sent back', function (done) {
+    it('Should not throw error on socket if ackTimeout elapses before response to event is sent back', async function () {
       client = socketClusterClient.create(clientOptions);
 
-      var caughtError;
+      let caughtError;
+      let clientError;
 
-      var clientError;
-      client.on('error', (err) => {
-        clientError = err;
-      });
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          clientError = error;
+        }
+      })();
 
-      var responseError;
+      let responseError;
 
-      client.on('connect', () => {
-        client.invoke('performTask', 123)
-        .catch((err) => {
+      for await (let event of client.listener('connect')) {
+        try {
+          await client.invoke('performTask', 123);
+        } catch (err) {
           responseError = err;
-        });
-        setTimeout(() => {
-          try {
-            client.disconnect();
-          } catch (e) {
-            caughtError = e;
-          }
-        }, 250);
-      });
+        }
+        await wait(250);
+        try {
+          client.disconnect();
+        } catch (err) {
+          caughtError = err;
+        }
+        break;
+      }
 
-      setTimeout(() => {
-        assert.notEqual(responseError, null);
-        assert.equal(caughtError, null);
-        done();
-      }, 300);
+      assert.notEqual(responseError, null);
+      assert.equal(caughtError, null);
     });
   });
 
   describe('Reconnecting socket', function () {
-    it('Should disconnect socket with code 1000 and reconnect', function (done) {
+    it('Should disconnect socket with code 1000 and reconnect', async function () {
       client = socketClusterClient.create(clientOptions);
 
-      client.once('connect', function () {
-        var disconnectCode;
-        var disconnectReason;
-        client.once('disconnect', function (code, reason) {
-          disconnectCode = code;
-          disconnectReason = reason;
-        });
-        client.once('connect', function () {
-          assert.equal(disconnectCode, 1000);
-          assert.equal(disconnectReason, undefined);
-          done();
-        });
-        client.reconnect();
-      });
+      await client.listener('connect').once();
+
+      let disconnectCode;
+      let disconnectReason;
+
+      (async () => {
+        for await (let event of client.listener('disconnect')) {
+          disconnectCode = event.code;
+          disconnectReason = event.reason;
+        }
+      })();
+
+      client.reconnect();
+      await client.listener('connect').once();
+
+      assert.equal(disconnectCode, 1000);
+      assert.equal(disconnectReason, undefined);
     });
 
-    it('Should disconnect socket with custom code and data when socket.reconnect() is called with arguments', function (done) {
+    it('Should disconnect socket with custom code and data when socket.reconnect() is called with arguments', async function () {
       client = socketClusterClient.create(clientOptions);
 
-      client.once('connect', function () {
-        var disconnectCode;
-        var disconnectReason;
-        client.once('disconnect', function (code, reason) {
-          disconnectCode = code;
-          disconnectReason = reason;
-        });
-        client.once('connect', function () {
-          assert.equal(disconnectCode, 1000);
-          assert.equal(disconnectReason, 'About to reconnect');
-          done();
-        });
-        client.reconnect(1000, 'About to reconnect');
-      });
-    });
-  });
+      await client.listener('connect').once();
 
-  describe('Destroying socket', function () {
-    it('Should disconnect socket when socket.destroy() is called', function (done) {
-      client = socketClusterClient.create(clientOptions);
+      let disconnectCode;
+      let disconnectReason;
 
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
+      (async () => {
+        let event = await client.listener('disconnect').once();
+        disconnectCode = event.code;
+        disconnectReason = event.reason;
+      })();
 
-      client.on('connect', function () {
-        client.destroy();
-      });
+      client.reconnect(1000, 'About to reconnect');
+      await client.listener('connect').once();
 
-      client.on('disconnect', function () {
-        done();
-      });
-    });
-
-    it('Should disconnect socket with custom code and data when socket.destroy() is called with arguments', function (done) {
-      client = socketClusterClient.create(clientOptions);
-
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      client.on('connect', function () {
-        client.destroy(4321, 'Custom disconnect reason');
-      });
-
-      client.on('disconnect', function (code, reason) {
-        assert.equal(code, 4321);
-        assert.equal(reason, 'Custom disconnect reason');
-        done();
-      });
-    });
-
-    it('Should destroy all references of socket when socket.destroy() is called before connect', function (done) {
-      client = socketClusterClient.create(clientOptions);
-
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      var connectAbortTriggered = false;
-      var disconnectTriggered = false;
-      var closeTriggered = false;
-
-      client.on('connectAbort', function (n) {
-        connectAbortTriggered = true;
-      });
-
-      client.on('disconnect', function (n) {
-        disconnectTriggered = true;
-      });
-
-      client.on('close', function (n) {
-        closeTriggered = true;
-      });
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
-      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
-
-      client.destroy();
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
-      assert.equal(socketClusterClient.clients[client.clientId], null);
-      assert.equal(connectAbortTriggered, true);
-      assert.equal(disconnectTriggered, false);
-      assert.equal(closeTriggered, true);
-      done();
-    });
-
-    it('Should destroy all references of socket when socket.destroy() is called after connect', function (done) {
-      client = socketClusterClient.create(clientOptions);
-
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      var connectAbortTriggered = false;
-      var disconnectTriggered = false;
-      var closeTriggered = false;
-
-      client.on('connectAbort', function (n) {
-        connectAbortTriggered = true;
-      });
-
-      client.on('disconnect', function (n) {
-        disconnectTriggered = true;
-      });
-
-      client.on('close', function (n) {
-        closeTriggered = true;
-      });
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
-      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
-
-      client.on('connect', function () {
-        client.destroy();
-        assert.equal(Object.keys(socketClusterClient.clients).length, 0);
-        assert.equal(socketClusterClient.clients[client.clientId], null);
-        assert.equal(connectAbortTriggered, false);
-        assert.equal(disconnectTriggered, true);
-        assert.equal(closeTriggered, true);
-        done();
-      });
-    });
-
-    it('Should destroy all references of multiplexed socket when socket.destroy() is called', function (done) {
-      clientOptions.multiplex = true;
-      var clientA = socketClusterClient.create(clientOptions);
-      var clientB = socketClusterClient.create(clientOptions);
-
-      var clientAError;
-      clientA.on('error', function (err) {
-        clientAError = err;
-      });
-
-      var clientBError;
-      clientB.on('error', function (err) {
-        clientBError = err;
-      });
-
-      assert.equal(clientA, clientB);
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
-      assert.equal(socketClusterClient.clients[clientA.clientId] === clientA, true);
-
-      clientA.destroy();
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
-      assert.equal(socketClusterClient.clients[clientA.clientId], null);
-      done();
-    });
-
-    it('Should destroy all references of socket when socketClusterClient.destroy(socket) is called', function (done) {
-      client = socketClusterClient.create(clientOptions);
-
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 1);
-      assert.equal(socketClusterClient.clients[client.clientId] === client, true);
-
-      socketClusterClient.destroy(client);
-
-      assert.equal(Object.keys(socketClusterClient.clients).length, 0);
-      assert.equal(socketClusterClient.clients[client.clientId], null);
-      done();
-    });
-
-    it('Should destroy all references of socket when socketClusterClient.destroy(socket) is called if the socket was created with query parameters', function () {
-      var clientOptionsB = {
-        hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: true,
-        ackTimeout: 200,
-        query: {foo: 123, bar: 456}
-      };
-
-      var clientA = socketClusterClient.create(clientOptionsB);
-
-      var clientOptionsB = {
-        hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: true,
-        ackTimeout: 200,
-        query: {foo: 123, bar: 789}
-      };
-
-      var clientB = socketClusterClient.create(clientOptionsB);
-
-      var clientOptionsB2 = {
-        hostname: '127.0.0.1',
-        port: portNumber,
-        multiplex: true,
-        ackTimeout: 200,
-        query: {foo: 123, bar: 789}
-      };
-
-      var clientB2 = socketClusterClient.create(clientOptionsB2);
-
-      return Promise.all([
-        new Promise(function (resolve) {
-          clientA.on('connect', function () {
-            resolve();
-          });
-        }),
-        new Promise(function (resolve) {
-          clientB.on('connect', function () {
-            resolve();
-          });
-        }),
-        new Promise(function (resolve) {
-          clientB2.on('connect', function () {
-            resolve();
-          });
-        })
-      ]).then(function () {
-        assert.equal(Object.keys(socketClusterClient.clients).length, 2);
-        clientA.destroy();
-        assert.equal(Object.keys(socketClusterClient.clients).length, 1);
-        clientB.destroy();
-        assert.equal(Object.keys(socketClusterClient.clients).length, 0);
-      });
+      assert.equal(disconnectCode, 1000);
+      assert.equal(disconnectReason, 'About to reconnect');
     });
   });
 
   describe('Order of events', function () {
-    it('Should trigger unsubscribe event on channel before disconnect event', function (done) {
+    it('Should trigger unsubscribe event on channel before disconnect event', async function () {
       client = socketClusterClient.create(clientOptions);
-      var hasUnsubscribed = false;
+      let hasUnsubscribed = false;
 
-      var fooChannel = client.subscribe('foo');
-      fooChannel.on('subscribe', function () {
-        setTimeout(function () {
+      let fooChannel = client.subscribe('foo');
+
+      (async () => {
+        for await (let event of fooChannel.listener('subscribe')) {
+          await wait(100);
           client.disconnect();
-        }, 100);
-      });
-      fooChannel.on('unsubscribe', function () {
-        hasUnsubscribed = true;
-      });
-      client.on('disconnect', function () {
-        assert.equal(hasUnsubscribed, true);
-        done();
-      });
+        }
+      })();
+
+      (async () => {
+        for await (let event of fooChannel.listener('unsubscribe')) {
+          hasUnsubscribed = true;
+        }
+      })();
+
+      await client.listener('disconnect').once();
+      assert.equal(hasUnsubscribed, true);
     });
 
-    it('Should not invoke subscribeFail event if connection is aborted', function (done) {
+    it('Should not invoke subscribeFail event if connection is aborted', async function () {
       client = socketClusterClient.create(clientOptions);
-      var hasSubscribeFailed = false;
-      var gotBadConnectionError = false;
+      let hasSubscribeFailed = false;
+      let gotBadConnectionError = false;
+      let wasConnected = false;
 
-      client.on('connect', () => {
-        client.invoke('someEvent', 123)
-        .catch((err) => {
-          if (err && err.name === 'BadConnectionError') {
-            gotBadConnectionError = true;
-          }
-        });
+      (async () => {
+        for await (let event of client.listener('connect')) {
+          wasConnected = true;
+          (async () => {
+            try {
+              await client.invoke('someEvent', 123);
+            } catch (err) {
+              if (err.name === 'BadConnectionError') {
+                gotBadConnectionError = true;
+              }
+            }
+          })();
 
-        var fooChannel = client.subscribe('foo');
+          let fooChannel = client.subscribe('foo');
+          (async () => {
+            for await (let event of fooChannel.listener('subscribeFail')) {
+              hasSubscribeFailed = true;
+            }
+          })();
 
-        fooChannel.on('subscribeFail', () => {
-          hasSubscribeFailed = true;
-        });
+          (async () => {
+            await wait(0);
+            client.disconnect();
+          })();
+        }
+      })();
 
-        client.on('close', () => {
-          setTimeout(() => {
-            assert.equal(gotBadConnectionError, true);
-            assert.equal(hasSubscribeFailed, false);
-            done();
-          }, 100);
-        });
-
-        setTimeout(() => {
-          client.disconnect();
-        }, 0);
-      });
+      await client.listener('close').once();
+      await wait(100);
+      assert.equal(wasConnected, true);
+      assert.equal(gotBadConnectionError, true);
+      assert.equal(hasSubscribeFailed, false);
     });
 
-    it('Should resolve invoke Promise with BadConnectionError after triggering the disconnect event', function (done) {
+    it('Should resolve invoke Promise with BadConnectionError after triggering the disconnect event', async function () {
       client = socketClusterClient.create(clientOptions);
-      var messageList = [];
+      let messageList = [];
 
-      client.on('connect', () => {
-        client.disconnect();
-
-        setTimeout(() => {
-          assert.equal(messageList.length, 2);
-          assert.equal(messageList[0].type, 'disconnect');
-          assert.equal(messageList[1].type, 'error');
-          assert.equal(messageList[1].error.name, 'BadConnectionError');
-          done();
-        }, 200);
-      });
-
-      client.invoke('someEvent', 123)
-      .catch((err) => {
-        if (err) {
+      (async () => {
+        try {
+          await client.invoke('someEvent', 123);
+        } catch (err) {
           messageList.push({
             type: 'error',
             error: err
           });
         }
-      });
+      })();
 
-      client.on('disconnect', (code, reason) => {
-        messageList.push({
-          type: 'disconnect',
-          code: code,
-          reason: reason
-        });
-      });
+      (async () => {
+        for await (let event of client.listener('disconnect')) {
+          messageList.push({
+            type: 'disconnect',
+            code: event.code,
+            reason: event.reason
+          });
+        }
+      })();
+
+      await client.listener('connect').once();
+      client.disconnect();
+      await wait(200);
+      assert.equal(messageList.length, 2);
+      assert.equal(messageList[0].type, 'disconnect');
+      assert.equal(messageList[1].type, 'error');
+      assert.equal(messageList[1].error.name, 'BadConnectionError');
     });
 
-    it('Should reconnect if transmit is called on a disconnected socket', function (done) {
-      var fooEventTriggered = false;
-      server.on('connection', function (socket) {
-        socket.on('foo', function () {
-          fooEventTriggered = true;
-        });
-      });
+    it('Should reconnect if transmit is called on a disconnected socket', async function () {
+      let fooReceiverTriggered = false;
+
+      (async () => {
+        for await (let {socket} of server.listener('connection')) {
+          (async () => {
+            for await (let data of socket.receiver('foo')) {
+              fooReceiverTriggered = true;
+            }
+          })();
+        }
+      })();
 
       client = socketClusterClient.create(clientOptions);
 
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
+      let clientError;
 
-      var eventList = [];
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          clientError = error;
+        }
+      })();
 
-      client.on('connecting', function () {
-        eventList.push('connecting');
-      });
-      client.on('connect', function () {
-        eventList.push('connect');
-      });
-      client.on('disconnect', function () {
-        eventList.push('disconnect');
-      });
-      client.on('close', function () {
-        eventList.push('close');
-      });
-      client.on('connectAbort', function () {
-        eventList.push('connectAbort');
-      });
+      let eventList = [];
 
-      client.once('connect', function () {
+      (async () => {
+        for await (let event of client.listener('connecting')) {
+          eventList.push('connecting');
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('connect')) {
+          eventList.push('connect');
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('disconnect')) {
+          eventList.push('disconnect');
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('close')) {
+          eventList.push('close');
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('connectAbort')) {
+          eventList.push('connectAbort');
+        }
+      })();
+
+      (async () => {
+        await client.listener('connect').once();
         client.disconnect();
         client.transmit('foo', 123);
-      });
+      })();
 
-      setTimeout(function () {
-        var expectedEventList = ['connect', 'disconnect', 'close', 'connecting', 'connect'];
-        assert.equal(JSON.stringify(eventList), JSON.stringify(expectedEventList));
-        assert.equal(fooEventTriggered, true);
-        done();
-      }, 1000);
+      await wait(1000);
+
+      let expectedEventList = ['connect', 'disconnect', 'close', 'connecting', 'connect'];
+      assert.equal(JSON.stringify(eventList), JSON.stringify(expectedEventList));
+      assert.equal(fooReceiverTriggered, true);
     });
 
-    it('Should emit an error event if transmit is called on a destroyed socket', function (done) {
-      client = socketClusterClient.create(clientOptions);
-      assert.equal(client.active, true);
-
-      var disconnectTriggered = false;
-      var secondConnectTriggered = false;
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      client.once('connect', function () {
-        assert.equal(client.active, true);
-
-        client.once('disconnect', function () {
-          disconnectTriggered = true;
-          assert.equal(client.active, false);
-        });
-
-        client.destroy();
-        assert.equal(client.active, false);
-
-        client.once('connect', function () {
-          secondConnectTriggered = true;
-        });
-
-        client.transmit('foo', 123)
-        .then(() => {
-          return null;
-        })
-        .catch((err) => {
-          return err;
-        })
-        .then((err) => {
-          assert.notEqual(err, null);
-          assert.equal(err.name, 'InvalidActionError');
-        });
-
-        assert.equal(client.active, false);
-        assert.equal(client.state, client.CLOSED);
-      });
-
-      setTimeout(function () {
-        assert.equal(secondConnectTriggered, false);
-        assert.equal(disconnectTriggered, true);
-        assert.notEqual(clientError, null);
-        assert.equal(clientError.name, 'InvalidActionError');
-        done();
-      }, 100);
-    });
-
-    it('Should emit an error event if publish is called on a destroyed socket', function (done) {
-      client = socketClusterClient.create(clientOptions);
-      assert.equal(client.active, true);
-
-      var clientError;
-      client.on('error', (err) => {
-        clientError = err;
-      });
-
-      client.once('connect', () => {
-        assert.equal(client.active, true);
-
-        client.destroy();
-        assert.equal(client.active, false);
-
-        client.publish('thisIsATestChannel', 123)
-        .then(() => {
-          return null;
-        })
-        .catch((err) => {
-          return err;
-        })
-        .then((err) => {
-          assert.notEqual(err, null);
-          assert.equal(err.name, 'InvalidActionError');
-        });
-
-        assert.equal(client.active, false);
-        assert.equal(client.state, client.CLOSED);
-      });
-
-      setTimeout(() => {
-        assert.notEqual(clientError, null);
-        assert.equal(clientError.name, 'InvalidActionError');
-        done();
-      }, 100);
-    });
-
-    it('Should correctly handle multiple successive connect and disconnect calls', function (done) {
+    it('Should correctly handle multiple successive connect and disconnect calls', async function () {
       client = socketClusterClient.create(clientOptions);
 
-      var eventList = [];
+      let eventList = [];
 
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-      client.on('connecting', function () {
-        eventList.push({
-          event: 'connecting'
-        });
-      });
-      client.on('connect', function () {
-        eventList.push({
-          event: 'connect'
-        });
-      });
-      client.on('connectAbort', function (code, reason) {
-        eventList.push({
-          event: 'connectAbort',
-          code: code,
-          reason: reason
-        });
-      });
-      client.on('disconnect', function (code, reason) {
-        eventList.push({
-          event: 'disconnect',
-          code: code,
-          reason: reason
-        });
-      });
-      client.on('close', function (code, reason) {
-        eventList.push({
-          event: 'close',
-          code: code,
-          reason: reason
-        });
-      });
+      let clientError;
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          clientError = error;
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('connecting')) {
+          eventList.push({
+            event: 'connecting'
+          });
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('connect')) {
+          eventList.push({
+            event: 'connect'
+          });
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('connectAbort')) {
+          eventList.push({
+            event: 'connectAbort',
+            code: event.code,
+            reason: event.reason
+          });
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('disconnect')) {
+          eventList.push({
+            event: 'disconnect',
+            code: event.code,
+            reason: event.reason
+          });
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('close')) {
+          eventList.push({
+            event: 'close',
+            code: event.code,
+            reason: event.reason
+          });
+        }
+      })();
 
       client.disconnect(1000, 'One');
       client.connect();
       client.disconnect(4444, 'Two');
-      client.once('connect', function () {
+
+      (async () => {
+        await client.listener('connect').once();
         client.disconnect(4455, 'Three');
-      });
+      })();
+
       client.connect();
 
-      setTimeout(function () {
-        var expectedEventList = [
-          {
-            event: 'connectAbort',
-            code: 1000,
-            reason: 'One'
-          },
-          {
-            event: 'close',
-            code: 1000,
-            reason: 'One'
-          },
-          {
-            event: 'connecting'
-          },
-          {
-            event: 'connectAbort',
-            code: 4444,
-            reason: 'Two'
-          },
-          {
-            event: 'close',
-            code: 4444,
-            reason: 'Two'
-          },
-          {
-            event: 'connecting'
-          },
-          {
-            event: 'connect'
-          },
-          {
-            event: 'disconnect',
-            code: 4455,
-            reason: 'Three'
-          },
-          {
-            event: 'close',
-            code: 4455,
-            reason: 'Three'
-          },
-        ];
-        assert.equal(JSON.stringify(eventList), JSON.stringify(expectedEventList));
-        done();
-      }, 200);
-    });
-  });
+      await wait(200);
 
-  describe('Destroying channels', function () {
-    it('Should unsubscribe from a channel if socketClusterClient.destroyChannel(channelName) is called', function (done) {
-      client = socketClusterClient.create(clientOptions);
-
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      var unsubscribeTriggered = false;
-
-      var fooChannel = client.subscribe('foo');
-      fooChannel.on('unsubscribe', function () {
-        unsubscribeTriggered = true;
-      });
-      fooChannel.on('subscribe', function () {
-        fooChannel.destroy();
-      });
-
-      setTimeout(function () {
-        assert.equal(unsubscribeTriggered, true);
-        done();
-      }, 200);
-    });
-
-    it('Should not throw an error if socketClusterClient.destroyChannel(channelName) is called for a non-existent channel', function (done) {
-      client = socketClusterClient.create(clientOptions);
-
-      var clientError;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-
-      var destroyError;
-      try {
-        client.destroyChannel('fakeChannel');
-      } catch (err) {
-        destroyError = err;
-      }
-      assert.equal(clientError, null);
-      assert.equal(destroyError, null);
-
-      done();
+      let expectedEventList = [
+        {
+          event: 'connectAbort',
+          code: 1000,
+          reason: 'One'
+        },
+        {
+          event: 'close',
+          code: 1000,
+          reason: 'One'
+        },
+        {
+          event: 'connecting'
+        },
+        {
+          event: 'connectAbort',
+          code: 4444,
+          reason: 'Two'
+        },
+        {
+          event: 'close',
+          code: 4444,
+          reason: 'Two'
+        },
+        {
+          event: 'connecting'
+        },
+        {
+          event: 'connect'
+        },
+        {
+          event: 'disconnect',
+          code: 4455,
+          reason: 'Three'
+        },
+        {
+          event: 'close',
+          code: 4455,
+          reason: 'Three'
+        },
+      ];
+      assert.equal(JSON.stringify(eventList), JSON.stringify(expectedEventList));
     });
   });
 
   describe('Ping/pong', function () {
-    it('Should disconnect if ping is not received before timeout', function (done) {
-      clientOptions.ackTimeout = 500;
+    it('Should disconnect if ping is not received before timeout', async function () {
+      clientOptions.connectTimeout = 500;
       client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.pingTimeout, 500);
 
-      client.on('connect', function () {
-        assert.equal(client.transport.pingTimeout, server.options.pingTimeout);
-        // Hack to make the client ping independent from the server ping.
-        client.transport.pingTimeout = 500;
-      });
+      (async () => {
+        for await (let event of client.listener('connect')) {
+          assert.equal(client.transport.pingTimeout, server.options.pingTimeout);
+          // Hack to make the client ping independent from the server ping.
+          client.transport.pingTimeout = 500;
+        }
+      })();
 
-      var disconnectCode = null;
-      var clientError = null;
-      client.on('error', function (err) {
-        clientError = err;
-      });
-      client.on('disconnect', function (code) {
-        disconnectCode = code;
-      });
+      let disconnectCode = null;
+      let clientError = null;
 
-      setTimeout(function () {
-        assert.equal(disconnectCode, 4000);
-        assert.notEqual(clientError, null);
-        assert.equal(clientError.name, 'SocketProtocolError');
-        done();
-      }, 1000);
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          clientError = error;
+        }
+      })();
+
+      (async () => {
+        for await (let event of client.listener('disconnect')) {
+          disconnectCode = event.code;
+        }
+      })();
+
+      await wait(1000);
+
+      assert.equal(disconnectCode, 4000);
+      assert.notEqual(clientError, null);
+      assert.equal(clientError.name, 'SocketProtocolError');
     });
 
-    it('Should not disconnect if ping is not received before timeout when pingTimeoutDisabled is true', function (done) {
-      clientOptions.ackTimeout = 500;
+    it('Should not disconnect if ping is not received before timeout when pingTimeoutDisabled is true', async function () {
+      clientOptions.connectTimeout = 500;
       clientOptions.pingTimeoutDisabled = true;
       client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.pingTimeout, 500);
 
-      var clientError = null;
-      client.on('error', function (err) {
-        clientError = err;
-      });
+      let clientError = null;
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          clientError = error;
+        }
+      })();
 
-      setTimeout(function () {
-        assert.equal(clientError, null);
-        done();
-      }, 1000);
+      await wait(1000);
+      assert.equal(clientError, null);
     });
   });
 
   describe('Utilities', function () {
     it('Can encode a string to base64 and then decode it back to utf8', function (done) {
       client = socketClusterClient.create(clientOptions);
-      var encodedString = client.encodeBase64('This is a string');
+      let encodedString = client.encodeBase64('This is a string');
       assert.equal(encodedString, 'VGhpcyBpcyBhIHN0cmluZw==');
-      var decodedString = client.decodeBase64(encodedString);
+      let decodedString = client.decodeBase64(encodedString);
       assert.equal(decodedString, 'This is a string');
       done();
     });
