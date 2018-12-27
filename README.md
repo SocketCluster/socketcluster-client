@@ -1,7 +1,7 @@
-SocketCluster JavaScript Client
+Asyngular JavaScript Client
 ======
 
-SocketCluster Client is the client-side component of SocketCluster.
+Asyngular Client is the client-side component of Asyngular.
 
 ## Usage Overview
 
@@ -28,7 +28,7 @@ Embed it in your HTML page like that:
 - Note that the src attribute may be different depending on how you setup your HTTP server
 
 Once you have embedded the client asyngular-client.js into your page, you will gain access to a global asyngular object.
-Then, to begin interacting with the SocketCluster cluster, you will need to establish a connection.
+Then, to begin interacting with the Asyngular cluster, you will need to establish a connection.
 Once that's done, you will be able to emit events to the server and listen to incoming events (example code):
 
 ```js
@@ -137,7 +137,7 @@ npm install
 
 #### Via Browserify
 
-To build SocketCluster Client with browserify, use:
+To build Asyngular Client with browserify, use:
 
 ```bash
 ./browserify-build.sh
@@ -151,7 +151,7 @@ browserify -s socketCluster index.js > asyngular-client.js && uglifyjs asyngular
 
 #### Via Gulp
 
-To build SocketCluster Client with Gulp, use:
+To build the client with Gulp, use:
 
 ```bash
 ./gulp-build.sh
