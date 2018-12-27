@@ -2,4 +2,4 @@
 
 SDK_VERSION=$(cat package.json | sed -n -e '/version/ s/.*: *"\([^"]*\).*/\1/p')
 echo "Building JavaScript SDK v$SDK_VERSION...\n"
-browserify -s socketCluster index.js > socketcluster.js && uglifyjs socketcluster.js -o socketcluster.min.js
+browserify -s asyngular index.js > asyngular-client.js && uglifyjs asyngular-client.js -o asyngular-client.min.js

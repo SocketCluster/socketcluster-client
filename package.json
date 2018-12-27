@@ -1,7 +1,7 @@
 {
-  "name": "socketcluster-client",
+  "name": "asyngular-client",
   "description": "SocketCluster JavaScript client",
-  "version": "14.2.1",
+  "version": "1.0.1",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -11,7 +11,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/SocketCluster/socketcluster-client.git"
+    "url": "git://github.com/SocketCluster/asyngular-client.git"
   },
   "scripts": {
     "build": "gulp browserify; gulp minify",
@@ -49,7 +49,7 @@
     "gulp-uglify": "^3.0.1",
     "localStorage": "^1.0.3",
     "mocha": "5.2.0",
-    "socketcluster-server": "^14.2.2",
+    "asyngular-server": "^1.0.0",
     "uglify-es": "^3.3.9",
     "vinyl-source-stream": "^2.0.0"
   }

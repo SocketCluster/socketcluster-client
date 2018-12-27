@@ -18,7 +18,7 @@ var VERSION = require('./package.json').version;
 // declaration added by browserify.
 var FULL_HEADER = (
   '/**\n' +
-  ' * SocketCluster JavaScript client v' + VERSION + '\n' +
+  ' * Asyngular JavaScript client v' + VERSION + '\n' +
   ' */\n '
 );
 
@@ -26,12 +26,12 @@ gulp.task('browserify', function (done) {
   var stream = browserify({
       builtins: ['_process', 'events', 'buffer', 'querystring'],
       entries: 'index.js',
-      standalone: 'socketCluster'
+      standalone: 'asyngular'
     })
     .ignore('_process')
-    .require('./index.js', {expose: 'socketcluster-client'})
+    .require('./index.js', {expose: 'asyngular-client'})
     .bundle();
-  return stream.pipe(source('socketcluster.js'))
+  return stream.pipe(source('asyngular-client.js'))
     .pipe(insert.prepend(FULL_HEADER))
     .pipe(convertNewline({
       newline: 'lf',
@@ -41,7 +41,7 @@ gulp.task('browserify', function (done) {
 });
 
 gulp.task('minify', function () {
-  return gulp.src(DIST + 'socketcluster.js')
+  return gulp.src(DIST + 'asyngular-client.js')
     .pipe(babel({
       comments: false
     }))

@@ -1,5 +1,5 @@
 const assert = require('assert');
-const socketClusterServer = require('socketcluster-server');
+const socketClusterServer = require('asyngular-server');
 const socketClusterClient = require('../');
 const localStorage = require('localStorage');
 
