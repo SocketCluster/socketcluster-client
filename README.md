@@ -28,42 +28,6 @@ Embed it in your HTML page like that:
 - Note that the src attribute may be different depending on how you setup your HTTP server
 
 Once you have embedded the client asyngular-client.js into your page, you will gain access to a global asyngular object.
-Then, to begin interacting with the Asyngular cluster, you will need to establish a connection.
-Once that's done, you will be able to emit events to the server and listen to incoming events (example code):
-
-```js
-var options = {
-  port: 8000
-};
-
-// Initiate the connection to the server
-var socket = socketCluster.create(options);
-
-socket.on('connect', function () {
-  console.log('CONNECTED');
-});
-
-// Listen to an event called 'rand' from the server
-socket.on('rand', function (num) {
-  console.log('RANDOM: ' + num);
-  var curHTML = document.body.innerHTML;
-  curHTML += 'RANDOM: ' + num + '<br />';
-  document.body.innerHTML = curHTML;
-});
-```
-
-Example with HTTPS:
-
-```js
-var options = {
-  hostname: 'securedomain.com',
-  secure: true,
-  port: 443,
-  rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
-};
-// Initiate the connection to the server
-var socket = socketCluster.create(options);
-```
 
 ## Connect Options
 
@@ -97,30 +61,6 @@ var options = {
 };
 ```
 
-## Events
-
-```js
-socket.on('subscribe', function(channelname) {
-  console.log('subscribe:' + channelname);
-});
-
-socket.on('subscribeFail', function(channelname) {
-  console.log('subscribeFail:' + channelname);
-});
-
-socket.on('unsubscribe', function(channelname) {
-  console.log('unsubscribe:' + channelname);
-});
-
-socket.on('subscribeStateChange', function(data) {
-  console.log('subscribeStateChange:' + JSON.stringify(data));
-});
-
-socket.on('message', function(data) {
-  console.log('message:' + data);
-});
-```
-
 ## Developing
 
 #### Install all dependencies
@@ -146,7 +86,7 @@ To build Asyngular Client with browserify, use:
 Or use
 
 ```bash
-browserify -s socketCluster index.js > asyngular-client.js && uglifyjs asyngular-client.js -o asyngular-client.min.js
+browserify -s asyngular index.js > asyngular-client.js && uglifyjs asyngular-client.js -o asyngular-client.min.js
 ```
 
 #### Via Gulp
