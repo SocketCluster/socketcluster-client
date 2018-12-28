@@ -1,7 +1,7 @@
 Asyngular JavaScript Client
 ======
 
-Asyngular Client is the client-side component of Asyngular.
+Client module for Asyngular.
 
 ## Setting up
 
