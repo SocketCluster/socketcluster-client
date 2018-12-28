@@ -1,4 +1,4 @@
-Asyngular JavaScript Client
+Asyngular JavaScript client
 ======
 
 Client module for Asyngular.
@@ -152,7 +152,7 @@ npm install
 
 #### Via Browserify
 
-To build Asyngular Client:
+To build Asyngular client:
 
 ```bash
 npm run build
