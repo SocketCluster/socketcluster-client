@@ -55,6 +55,7 @@ socket.transmit('foo', 123);
   // - for await (let req of socket.procedure('myProc')) {}
   // - let req = await socket.procedure('myProc').once()
   let result = await socket.invoke('myProc', 123);
+
 })();
 ```
 
