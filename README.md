@@ -38,7 +38,7 @@ let socket = asyngular.create({
 ```js
 // Transmit some data to the server.
 // It does not expect a response from the server.
-// From the server, it can be handled using either:
+// From the server socket, it can be handled using either:
 // - for await (let data of socket.receiver('foo')) {}
 // - let data = await socket.receiver('foo').once()
 socket.transmit('foo', 123);
@@ -51,7 +51,7 @@ socket.transmit('foo', 123);
 
   // Invoke an RPC on the server.
   // It expects a response from the server.
-  // From the server, it can be handled using either:
+  // From the server socket, it can be handled using either:
   // - for await (let req of socket.procedure('myProc')) {}
   // - let req = await socket.procedure('myProc').once()
   let result = await socket.invoke('myProc', 123);
