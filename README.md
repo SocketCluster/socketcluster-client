@@ -177,7 +177,7 @@ npm install
 
 ### Building
 
-To build Asyngular client:
+To build the Asyngular client:
 
 ```bash
 npm run build
