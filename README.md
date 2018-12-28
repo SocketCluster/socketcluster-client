@@ -66,7 +66,7 @@ socket.transmit('foo', 123);
 
   // Subscribe to a channel.
   let myChannel = socket.subscribe('myChannel');
-  await myChannel.listener('subscribe');
+  await myChannel.listener('subscribe').once();
   // myChannel.state is now 'subscribed'.
 
 })();
@@ -81,7 +81,7 @@ socket.transmit('foo', 123);
 
   // Can subscribe to the channel later as a separate step.
   myChannel.subscribe();
-  await myChannel.listener('subscribe');
+  await myChannel.listener('subscribe').once();
   // myChannel.state is now 'subscribed'.
 
 })();
