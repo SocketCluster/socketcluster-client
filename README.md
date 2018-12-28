@@ -72,11 +72,29 @@ socket.transmit('foo', 123);
 })();
 ```
 
+### Get channel without subscribing
+
+```js
+(async () => {
+
+  let myChannel = socket.channel('myChannel');
+
+  // Can subscribe to the channel later as a separate step.
+  myChannel.subscribe();
+  await myChannel.listener('subscribe');
+  // myChannel.state is now 'subscribed'.
+
+})();
+```
+
 ### Publish data to a channel
 
 ```js
-// Publish data to the channel from the socket.
+// Publish data to the channel.
 myChannel.publish('This is a message');
+
+// Publish data to the channel from the socket.
+socket.publish('myChannel', 'This is a message');
 ```
 
 ### Consume data from a channel
