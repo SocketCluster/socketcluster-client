@@ -5,8 +5,9 @@ Asyngular Client is the client-side component of Asyngular.
 
 ## Setting up
 
-To install, run:
+You will need to install both ```asyngular-client``` and ```asyngular-server``` (https://github.com/SocketCluster/asyngular-server).
 
+To install this module:
 ```bash
 npm install asyngular-client
 ```
@@ -15,20 +16,100 @@ npm install asyngular-client
 
 The asyngular-client script is called `asyngular-client.js` (located in the main asyngular-client directory).
 Embed it in your HTML page like that:
-
 ```html
 <script type="text/javascript" src="/asyngular-client.js"></script>
 ```
-- Note that the src attribute may be different depending on how you setup your HTTP server
+\* Note that the src attribute may be different depending on how you setup your HTTP server.
 
-Once you have embedded the client asyngular-client.js into your page, you will gain access to a global asyngular object.
+Once you have embedded the client asyngular-client.js into your page, you will gain access to a global `asyngular` object.
 
-## Connect Options
-
-See all available options : https://socketcluster.io/#!/docs/api-socketcluster-client
+### Connect to a server
 
 ```js
-var options = {
+let socket = asyngular.create({
+  hostname: 'localhost',
+  port: 8000
+});
+```
+
+### Transmit data
+
+```js
+// Transmit some data to the server.
+// It does not expect a response from the server.
+// From the server, it can be handled using either:
+// - for await (let data of socket.receiver('foo')) {}
+// - await socket.receiver('foo').once()
+socket.transmit('foo', 123);
+```
+
+### Invoke an RPC
+
+```js
+(async () => {
+
+  // Invoke an RPC on the server.
+  // It expects a response from the server.
+  // From the server, it can be handled using either:
+  // - for await (let req of socket.procedure('myProc')) {}
+  // - await socket.procedure('myProc').once()
+  let result = await socket.invoke('myProc', 123);
+})();
+```
+
+### Subscribe to a channel
+
+```js
+(async () => {
+
+  // Subscribe to a channel.
+  let myChannel = socket.subscribe('myChannel');
+  await myChannel.listener('subscribe');
+  // myChannel.state is now 'subscribed'.
+
+})();
+```
+
+### Publish data to a channel
+
+```js
+// Publish data to the channel from the socket.
+myChannel.publish('This is a message');
+```
+
+### Consume data from a channel
+
+```js
+(async () => {
+
+  for await (let data of myChannel) {
+    // ...
+  }
+
+})();
+```
+
+### Connect over HTTPS:
+
+```js
+let options = {
+  hostname: 'securedomain.com',
+  secure: true,
+  port: 443,
+  rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
+};
+// Initiate the connection to the server
+let socket = asyngular.create(options);
+```
+
+For more detailed examples of how to use Asyngular, see `test/integration.js`.
+Also, see tests from the `asyngular-server` module.
+
+### Connect Options
+
+See all available options : https://socketcluster.io/#!/docs/api-socketcluster-client
+```js
+let options = {
   path: '/socketcluster/',
   port: 8000,
   hostname: '127.0.0.1',
@@ -57,7 +138,7 @@ var options = {
 
 ## Developing
 
-#### Install all dependencies
+### Install all dependencies
 
 ```bash
 cd asyngular-client
@@ -67,28 +148,14 @@ npm install -g gulp gulp-cli browserify uglify-js
 npm install
 ```
 
-#### Building
+### Building
 
 #### Via Browserify
 
-To build Asyngular Client with browserify, use:
+To build Asyngular Client:
 
 ```bash
-./browserify-build.sh
-```
-
-Or use
-
-```bash
-browserify -s asyngular index.js > asyngular-client.js && uglifyjs asyngular-client.js -o asyngular-client.min.js
-```
-
-#### Via Gulp
-
-To build the client with Gulp, use:
-
-```bash
-./gulp-build.sh
+npm run build
 ```
 
 ## Change log
