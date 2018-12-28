@@ -177,8 +177,6 @@ npm install
 
 ### Building
 
-#### Via Browserify
-
 To build Asyngular client:
 
 ```bash
