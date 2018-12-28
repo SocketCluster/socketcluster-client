@@ -15,13 +15,14 @@ npm install asyngular-client
 ## How to use
 
 The asyngular-client script is called `asyngular-client.js` (located in the main asyngular-client directory).
-Embed it in your HTML page like that:
+Embed it in your HTML page like this:
 ```html
 <script type="text/javascript" src="/asyngular-client.js"></script>
 ```
 \* Note that the src attribute may be different depending on how you setup your HTTP server.
 
-Once you have embedded the client asyngular-client.js into your page, you will gain access to a global `asyngular` object.
+Once you have embedded the client `asyngular-client.js` into your page, you will gain access to a global `asyngular` object.
+You may also use CommonJS `require` or ES6 module imports.
 
 ### Connect to a server
 
@@ -39,7 +40,7 @@ let socket = asyngular.create({
 // It does not expect a response from the server.
 // From the server, it can be handled using either:
 // - for await (let data of socket.receiver('foo')) {}
-// - await socket.receiver('foo').once()
+// - let data = await socket.receiver('foo').once()
 socket.transmit('foo', 123);
 ```
 
@@ -52,7 +53,7 @@ socket.transmit('foo', 123);
   // It expects a response from the server.
   // From the server, it can be handled using either:
   // - for await (let req of socket.procedure('myProc')) {}
-  // - await socket.procedure('myProc').once()
+  // - let req = await socket.procedure('myProc').once()
   let result = await socket.invoke('myProc', 123);
 })();
 ```
