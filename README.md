@@ -156,6 +156,13 @@ let options = {
 };
 ```
 
+## Running the tests
+
+- Clone this repo: `git clone git@github.com:SocketCluster/asyngular-client.git`
+- Navigate to project directory: `cd asyngular-client`
+- Install all dependencies: `npm install`
+- Run the tests: `npm test`
+
 ## Developing
 
 ### Install all dependencies
