@@ -170,7 +170,7 @@ let options = {
 ```bash
 cd asyngular-client
 
-npm install -g gulp gulp-cli browserify uglify-js
+npm install -g gulp gulp-cli browserify uglify-es
 
 npm install
 ```
