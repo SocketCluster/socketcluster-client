@@ -3,19 +3,13 @@ Asyngular JavaScript Client
 
 Asyngular Client is the client-side component of Asyngular.
 
-## Usage Overview
-
-* [How to use](https://github.com/SocketCluster/asyngular-client#how-to-use)
-* [Connect Options](https://github.com/SocketCluster/asyngular-client#connect-options)
-* [Events](https://github.com/SocketCluster/asyngular-client#events)
-* [Developing](https://github.com/SocketCluster/asyngular-client#developing)
+## Setting up
 
 To install, run:
 
 ```bash
 npm install asyngular-client
 ```
-
 
 ## How to use
 
@@ -105,7 +99,7 @@ See the 'releases' section for changes: https://github.com/SocketCluster/asyngul
 
 (The MIT License)
 
-Copyright (c) 2013-2017 SocketCluster.io
+Copyright (c) 2013-2019 SocketCluster.io
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
