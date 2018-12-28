@@ -72,7 +72,7 @@ socket.transmit('foo', 123);
 })();
 ```
 
-### Get channel without subscribing
+### Get a channel without subscribing
 
 ```js
 (async () => {
