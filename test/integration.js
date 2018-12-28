@@ -6,7 +6,7 @@ const localStorage = require('localStorage');
 // Add to the global scope like in browser.
 global.localStorage = localStorage;
 
-let portNumber = 8008;
+const PORT_NUMBER = 8009;
 
 let clientOptions;
 let serverOptions;
@@ -72,7 +72,7 @@ describe('Integration tests', function () {
       ackTimeout: 200
     };
 
-    server = asyngularServer.listen(portNumber, serverOptions);
+    server = asyngularServer.listen(PORT_NUMBER, serverOptions);
     async function handleServerConnection() {
       for await (let {socket} of server.listener('connection')) {
         connectionHandler(socket);
@@ -90,14 +90,14 @@ describe('Integration tests', function () {
 
     clientOptions = {
       hostname: '127.0.0.1',
-      port: portNumber,
+      port: PORT_NUMBER,
       ackTimeout: 200
     };
 
     await server.listener('ready').once();
   });
 
-  afterEach('Shut down server afterwards', async function () {
+  afterEach('Shut down server and clients afterwards', async function () {
     let cleanupTasks = [];
     global.localStorage.removeItem('asyngular.authToken');
     if (client) {
@@ -114,11 +114,10 @@ describe('Integration tests', function () {
       }
     }
     cleanupTasks.push(
-      server
-      .close()
-      .then(() => {
-        portNumber++;
-      })
+      (async () => {
+        server.httpServer.close();
+        await server.close();
+      })()
     );
     await Promise.all(cleanupTasks);
   });
@@ -128,7 +127,7 @@ describe('Integration tests', function () {
     it('Should automatically connect socket on creation by default', async function () {
       clientOptions = {
         hostname: '127.0.0.1',
-        port: portNumber
+        port: PORT_NUMBER
       };
 
       client = asyngularClient.create(clientOptions);
@@ -139,7 +138,7 @@ describe('Integration tests', function () {
     it('Should not automatically connect socket if autoConnect is set to false', async function () {
       clientOptions = {
         hostname: '127.0.0.1',
-        port: portNumber,
+        port: PORT_NUMBER,
         autoConnect: false
       };
 
@@ -260,17 +259,17 @@ describe('Integration tests', function () {
 
     it('If token engine signing is synchronous, authentication can be captured using the authenticate event', async function () {
       let port = 8509;
-      server = asyngularServer.listen(port, {
+      let customServer = asyngularServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: false
       });
 
       (async () => {
-        let {socket} = await server.listener('connection').once();
+        let {socket} = await customServer.listener('connection').once();
         connectionHandler(socket);
       })();
 
-      await server.listener('ready').once();
+      await customServer.listener('ready').once();
 
       client = asyngularClient.create({
         hostname: clientOptions.hostname,
@@ -285,21 +284,24 @@ describe('Integration tests', function () {
       assert.equal(client.authState, 'authenticated');
       assert.notEqual(client.authToken, null);
       assert.equal(client.authToken.username, 'bob');
+
+      customServer.httpServer.close();
+      await customServer.close();
     });
 
     it('If token engine signing is asynchronous, authentication can be captured using the authenticate event', async function () {
       let port = 8510;
-      server = asyngularServer.listen(port, {
+      let customServer = asyngularServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: true
       });
 
       (async () => {
-        let {socket} = await server.listener('connection').once();
+        let {socket} = await customServer.listener('connection').once();
         connectionHandler(socket);
       })();
 
-      await server.listener('ready').once();
+      await customServer.listener('ready').once();
 
       client = asyngularClient.create({
         hostname: clientOptions.hostname,
@@ -315,21 +317,24 @@ describe('Integration tests', function () {
       assert.equal(client.authState, 'authenticated');
       assert.notEqual(client.authToken, null);
       assert.equal(client.authToken.username, 'bob');
+
+      customServer.httpServer.close();
+      await customServer.close();
     });
 
     it('If token verification is synchronous, authentication can be captured using the authenticate event', async function () {
       let port = 8511;
-      server = asyngularServer.listen(port, {
+      customServer = asyngularServer.listen(port, {
         authKey: serverOptions.authKey,
         authVerifyAsync: false
       });
 
       (async () => {
-        let {socket} = await server.listener('connection').once();
+        let {socket} = await customServer.listener('connection').once();
         connectionHandler(socket);
       })();
 
-      await server.listener('ready').once();
+      await customServer.listener('ready').once();
 
       client = asyngularClient.create({
         hostname: clientOptions.hostname,
@@ -355,6 +360,9 @@ describe('Integration tests', function () {
           assert.equal(client.authToken.username, 'bob');
         })()
       ]);
+
+      customServer.httpServer.close();
+      await customServer.close();
     });
 
     it('Should start out in pending authState and switch to unauthenticated if no token exists', async function () {
