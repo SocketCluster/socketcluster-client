@@ -66,6 +66,7 @@ socket.transmit('foo', 123);
 
   // Subscribe to a channel.
   let myChannel = socket.subscribe('myChannel');
+
   await myChannel.listener('subscribe').once();
   // myChannel.state is now 'subscribed'.
 
