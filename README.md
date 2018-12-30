@@ -21,13 +21,13 @@ Embed it in your HTML page like this:
 ```
 \* Note that the src attribute may be different depending on how you setup your HTTP server.
 
-Once you have embedded the client `asyngular-client.js` into your page, you will gain access to a global `asyngular` object.
+Once you have embedded the client `asyngular-client.js` into your page, you will gain access to a global `asyngularClient` object.
 You may also use CommonJS `require` or ES6 module imports.
 
 ### Connect to a server
 
 ```js
-let socket = asyngular.create({
+let socket = asyngularClient.create({
   hostname: 'localhost',
   port: 8000
 });
@@ -120,7 +120,7 @@ let options = {
   rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
 };
 // Initiate the connection to the server
-let socket = asyngular.create(options);
+let socket = asyngularClient.create(options);
 ```
 
 For more detailed examples of how to use Asyngular, see `test/integration.js`.

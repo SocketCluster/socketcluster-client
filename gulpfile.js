@@ -26,7 +26,7 @@ gulp.task('browserify', function (done) {
   var stream = browserify({
       builtins: ['_process', 'events', 'buffer', 'querystring'],
       entries: 'index.js',
-      standalone: 'asyngular'
+      standalone: 'asyngularClient'
     })
     .ignore('_process')
     .require('./index.js', {expose: 'asyngular-client'})
