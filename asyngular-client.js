@@ -1,5 +1,5 @@
 /**
- * Asyngular JavaScript client v1.0.4
+ * Asyngular JavaScript client v1.1.1
  */
  (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.asyngularClient = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 (function (global,Buffer){
@@ -141,10 +141,11 @@ function AGClientSocket(socketOptions) {
   }
 
   if (this.options.protocol) {
-    let protocolOptionError = new InvalidArgumentsError('The "protocol" option' +
-      ' does not affect asyngular-client. If you want to utilize SSL/TLS' +
-      ' - use "secure" option instead');
-    this._onSCError(protocolOptionError);
+    let protocolOptionError = new InvalidArgumentsError(
+      'The "protocol" option does not affect asyngular-client - ' +
+      'If you want to utilize SSL/TLS, use "secure" option instead'
+    );
+    this._onError(protocolOptionError);
   }
 
   this.options.path = this.options.path.replace(/\/$/, '') + '/';
@@ -179,8 +180,6 @@ AGClientSocket.UNSUBSCRIBED = AGClientSocket.prototype.UNSUBSCRIBED = SCChannel.
 AGClientSocket.ignoreStatuses = scErrors.socketProtocolIgnoreStatuses;
 AGClientSocket.errorStatuses = scErrors.socketProtocolErrorStatuses;
 
-// TODO 2: Test this in the browser
-// TODO 2: Check that there are no memory leaks
 AGClientSocket.prototype._handleBrowserUnload = async function () {
   let unloadHandler = () => {
     this.disconnect();
@@ -252,7 +251,7 @@ AGClientSocket.prototype._privateRPCHandlerMap = {
         try {
           await this.auth.saveToken(this.authTokenName, data.token, {});
         } catch (err) {
-          this._onSCError(err);
+          this._onError(err);
         }
       })();
 
@@ -268,7 +267,7 @@ AGClientSocket.prototype._privateRPCHandlerMap = {
         oldAuthToken = await this.auth.removeToken(this.authTokenName);
       } catch (err) {
         // Non-fatal error - Do not close the connection
-        this._onSCError(err);
+        this._onError(err);
         return;
       }
       this.emit('removeAuthToken', {oldAuthToken});
@@ -293,7 +292,7 @@ AGClientSocket.prototype.deauthenticate = async function () {
     try {
       oldAuthToken = await this.auth.removeToken(this.authTokenName);
     } catch (err) {
-      this._onSCError(err);
+      this._onError(err);
       return;
     }
     this.emit('removeAuthToken', {oldAuthToken});
@@ -328,7 +327,7 @@ AGClientSocket.prototype.connect = function () {
         let packet = await asyncIterator.next();
         if (packet.done) break;
         this.state = this.OPEN;
-        this._onSCOpen(packet.value);
+        this._onOpen(packet.value);
       }
     })();
 
@@ -337,7 +336,7 @@ AGClientSocket.prototype.connect = function () {
       while (true) {
         let packet = await asyncIterator.next();
         if (packet.done) break;
-        this._onSCError(packet.value.error);
+        this._onError(packet.value.error);
       }
     })();
 
@@ -347,7 +346,7 @@ AGClientSocket.prototype.connect = function () {
         let packet = await asyncIterator.next();
         if (packet.done) break;
         this.state = this.CLOSED;
-        this._onSCClose(packet.value.code, packet.value.data);
+        this._onClose(packet.value.code, packet.value.data);
       }
     })();
 
@@ -357,7 +356,7 @@ AGClientSocket.prototype.connect = function () {
         let packet = await asyncIterator.next();
         if (packet.done) break;
         this.state = this.CLOSED;
-        this._onSCClose(packet.value.code, packet.value.data, true);
+        this._onClose(packet.value.code, packet.value.data, true);
       }
     })();
 
@@ -375,7 +374,7 @@ AGClientSocket.prototype.connect = function () {
       while (true) {
         let packet = await asyncIterator.next();
         if (packet.done) break;
-        this._onSCInboundTransmit(packet.value.event, packet.value.data);
+        this._onInboundTransmit(packet.value.event, packet.value.data);
       }
     })();
 
@@ -384,7 +383,7 @@ AGClientSocket.prototype.connect = function () {
       while (true) {
         let packet = await asyncIterator.next();
         if (packet.done) break;
-        this._onSCInboundInvoke(packet.value.event, packet.value.data, packet.value.response);
+        this._onInboundInvoke(packet.value.event, packet.value.data, packet.value.response);
       }
     })();
   }
@@ -405,7 +404,7 @@ AGClientSocket.prototype.disconnect = function (code, data) {
   let isConnecting = this.state === this.CONNECTING;
   if (isConnecting || this.state === this.OPEN) {
     this.state = this.CLOSED;
-    this._onSCClose(code, data, isConnecting);
+    this._onClose(code, data, isConnecting);
     this.transport.close(code, data);
   } else {
     this.pendingReconnect = false;
@@ -548,7 +547,7 @@ AGClientSocket.prototype.authenticate = async function (signedAuthToken) {
     try {
       await this.auth.saveToken(this.authTokenName, signedAuthToken, {});
     } catch (err) {
-      this._onSCError(err);
+      this._onError(err);
     }
   })();
 
@@ -582,7 +581,7 @@ AGClientSocket.prototype._tryReconnect = function (initialDelay) {
   }, timeout);
 };
 
-AGClientSocket.prototype._onSCOpen = function (status) {
+AGClientSocket.prototype._onOpen = function (status) {
   this.preparingPendingSubscriptions = true;
 
   if (status) {
@@ -621,8 +620,7 @@ AGClientSocket.prototype._onSCOpen = function (status) {
   }
 };
 
-// TODO 2: Maybe add option to throw globally.
-AGClientSocket.prototype._onSCError = function (error) {
+AGClientSocket.prototype._onError = function (error) {
   this.emit('error', {error});
 };
 
@@ -663,7 +661,7 @@ AGClientSocket.prototype._abortAllPendingEventsDueToBadConnection = function (fa
   }
 };
 
-AGClientSocket.prototype._onSCClose = function (code, reason, openAbort) {
+AGClientSocket.prototype._onClose = function (code, reason, openAbort) {
   this.id = null;
   if (this.transport) {
     this.transport.closeAllListeners();
@@ -715,11 +713,11 @@ AGClientSocket.prototype._onSCClose = function (code, reason, openAbort) {
       closeMessage = 'Socket connection closed with status code ' + code;
     }
     let err = new SocketProtocolError(AGClientSocket.errorStatuses[code] || closeMessage, code);
-    this._onSCError(err);
+    this._onError(err);
   }
 };
 
-AGClientSocket.prototype._onSCInboundTransmit = function (event, data) {
+AGClientSocket.prototype._onInboundTransmit = function (event, data) {
   let handler = this._privateDataHandlerMap[event];
   if (handler) {
     handler.call(this, data);
@@ -728,7 +726,7 @@ AGClientSocket.prototype._onSCInboundTransmit = function (event, data) {
   }
 };
 
-AGClientSocket.prototype._onSCInboundInvoke = function (event, data, response) {
+AGClientSocket.prototype._onInboundInvoke = function (event, data, response) {
   let handler = this._privateRPCHandlerMap[event];
   if (handler) {
     handler.call(this, data, response);
@@ -1732,7 +1730,7 @@ function Response(socket, id) {
 
 Response.prototype._respond = function (responseData) {
   if (this.sent) {
-    throw new InvalidActionError('Response ' + this.id + ' has already been sent');
+    throw new InvalidActionError(`Response ${this.id} has already been sent`);
   } else {
     this.sent = true;
     this.socket.send(this.socket.encode(responseData));
@@ -1766,7 +1764,7 @@ Response.prototype.error = function (error) {
 
 Response.prototype.callback = function (error, data) {
   if (error) {
-    this.error(error); // TODO 2: cannot have both error and data anymore; check this is not used in the code
+    this.error(error);
   } else {
     this.end(data);
   }
