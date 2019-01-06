@@ -1146,6 +1146,7 @@ describe('Integration tests', function () {
           assert.equal(client.transport.pingTimeout, server.options.pingTimeout);
           // Hack to make the client ping independent from the server ping.
           client.transport.pingTimeout = 500;
+          client.transport._resetPingTimeout();
         }
       })();
 
