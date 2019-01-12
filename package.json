@@ -18,12 +18,12 @@
     "test": "mocha --reporter spec --timeout 3000 --slow 3000"
   },
   "dependencies": {
+    "ag-channel": "^1.0.0",
     "async-stream-emitter": "^1.1.0",
     "base-64": "0.1.0",
     "clone": "2.1.1",
     "linked-list": "0.1.0",
     "querystring": "0.2.0",
-    "sc-channel": "^2.0.0",
     "sc-errors": "^2.0.0",
     "sc-formatter": "^3.0.2",
     "stream-demux": "^4.0.4",
