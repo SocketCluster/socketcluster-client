@@ -80,11 +80,18 @@ describe('Integration tests', function () {
     }
     handleServerConnection();
 
-    server.addMiddleware(server.MIDDLEWARE_AUTHENTICATE, async function (req) {
-      if (req.authToken.username === 'alice') {
-        let err = new Error('Blocked by MIDDLEWARE_AUTHENTICATE');
-        err.name = 'AuthenticateMiddlewareError';
-        throw err;
+    server.setMiddleware(server.MIDDLEWARE_INBOUND, async function (middlewareStream) {
+      for await (let action of middlewareStream) {
+        if (
+          action.type === server.ACTION_AUTHENTICATE &&
+          (!action.authToken || action.authToken.username === 'alice')
+        ) {
+          let err = new Error('Blocked by MIDDLEWARE_AUTHENTICATE');
+          err.name = 'AuthenticateMiddlewareError';
+          action.block(err);
+          continue;
+        }
+        action.allow();
       }
     });
 
