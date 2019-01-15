@@ -1,15 +1,14 @@
 /**
- * Asyngular JavaScript client v1.1.3
+ * Asyngular JavaScript client v3.0.2
  */
  (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.asyngularClient = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 (function (global,Buffer){
 const StreamDemux = require('stream-demux');
 const AsyncStreamEmitter = require('async-stream-emitter');
-const SCChannel = require('sc-channel');
-const Response = require('./response').Response;
-const AuthEngine = require('./auth').AuthEngine;
+const AGChannel = require('ag-channel');
+const AuthEngine = require('./auth');
 const formatter = require('sc-formatter');
-const AGTransport = require('./agtransport').AGTransport;
+const AGTransport = require('./agtransport');
 const querystring = require('querystring');
 const LinkedList = require('linked-list');
 const base64 = require('base-64');
@@ -84,7 +83,7 @@ function AGClientSocket(socketOptions) {
 
   this.connectAttempts = 0;
 
-  this._transmitBuffer = new LinkedList();
+  this._outboundBuffer = new LinkedList();
   this._channelMap = {};
 
   this._channelEventDemux = new StreamDemux();
@@ -173,9 +172,9 @@ AGClientSocket.CLOSED = AGClientSocket.prototype.CLOSED = AGTransport.prototype.
 AGClientSocket.AUTHENTICATED = AGClientSocket.prototype.AUTHENTICATED = 'authenticated';
 AGClientSocket.UNAUTHENTICATED = AGClientSocket.prototype.UNAUTHENTICATED = 'unauthenticated';
 
-AGClientSocket.SUBSCRIBED = AGClientSocket.prototype.SUBSCRIBED = SCChannel.SUBSCRIBED;
-AGClientSocket.PENDING = AGClientSocket.prototype.PENDING = SCChannel.PENDING;
-AGClientSocket.UNSUBSCRIBED = AGClientSocket.prototype.UNSUBSCRIBED = SCChannel.UNSUBSCRIBED;
+AGClientSocket.SUBSCRIBED = AGClientSocket.prototype.SUBSCRIBED = AGChannel.SUBSCRIBED;
+AGClientSocket.PENDING = AGClientSocket.prototype.PENDING = AGChannel.PENDING;
+AGClientSocket.UNSUBSCRIBED = AGClientSocket.prototype.UNSUBSCRIBED = AGChannel.UNSUBSCRIBED;
 
 AGClientSocket.ignoreStatuses = scErrors.socketProtocolIgnoreStatuses;
 AGClientSocket.errorStatuses = scErrors.socketProtocolErrorStatuses;
@@ -243,7 +242,7 @@ AGClientSocket.prototype._privateDataHandlerMap = {
 };
 
 AGClientSocket.prototype._privateRPCHandlerMap = {
-  '#setAuthToken': function (data, response) {
+  '#setAuthToken': function (data, request) {
     if (data) {
       this._changeToAuthenticatedState(data.token);
 
@@ -255,12 +254,12 @@ AGClientSocket.prototype._privateRPCHandlerMap = {
         }
       })();
 
-      response.end();
+      request.end();
     } else {
-      response.error(new InvalidMessageError('No token data provided by #setAuthToken event'));
+      request.error(new InvalidMessageError('No token data provided by #setAuthToken event'));
     }
   },
-  '#removeAuthToken': function (data, response) {
+  '#removeAuthToken': function (data, request) {
     (async () => {
       let oldAuthToken;
       try {
@@ -274,7 +273,7 @@ AGClientSocket.prototype._privateRPCHandlerMap = {
     })();
 
     this._changeToUnauthenticatedStateAndClearTokens();
-    response.end();
+    request.end();
   }
 };
 
@@ -383,7 +382,7 @@ AGClientSocket.prototype.connect = function () {
       while (true) {
         let packet = await asyncIterator.next();
         if (packet.done) break;
-        this._onInboundInvoke(packet.value.event, packet.value.data, packet.value.response);
+        this._onInboundInvoke(packet.value);
       }
     })();
   }
@@ -615,7 +614,7 @@ AGClientSocket.prototype._onOpen = function (status) {
   });
 
   if (this.state === this.OPEN) {
-    this._flushTransmitBuffer();
+    this._flushOutboundBuffer();
   }
 };
 
@@ -631,7 +630,7 @@ AGClientSocket.prototype._suspendSubscriptions = function () {
 };
 
 AGClientSocket.prototype._abortAllPendingEventsDueToBadConnection = function (failureType, donePromise) {
-  let currentNode = this._transmitBuffer.head;
+  let currentNode = this._outboundBuffer.head;
   let nextNode;
 
   while (currentNode) {
@@ -725,20 +724,13 @@ AGClientSocket.prototype._onInboundTransmit = function (event, data) {
   }
 };
 
-AGClientSocket.prototype._onInboundInvoke = function (event, data, response) {
-  let handler = this._privateRPCHandlerMap[event];
+AGClientSocket.prototype._onInboundInvoke = function (request) {
+  let {procedure, data} = request;
+  let handler = this._privateRPCHandlerMap[procedure];
   if (handler) {
-    handler.call(this, data, response);
+    handler.call(this, data, request);
   } else {
-    this._procedureDemux.write(event, {
-      data,
-      end: (data) => {
-        response.end(data);
-      },
-      error: (err) => {
-        response.error(err);
-      }
-    });
+    this._procedureDemux.write(procedure, request);
   }
 };
 
@@ -750,8 +742,8 @@ AGClientSocket.prototype.encode = function (object) {
   return this.transport.encode(object);
 };
 
-AGClientSocket.prototype._flushTransmitBuffer = function () {
-  let currentNode = this._transmitBuffer.head;
+AGClientSocket.prototype._flushOutboundBuffer = function () {
+  let currentNode = this._outboundBuffer.head;
   let nextNode;
 
   while (currentNode) {
@@ -786,7 +778,7 @@ AGClientSocket.prototype._processOutboundEvent = function (event, data, expectRe
     this.connect();
   }
   let eventObject = {
-    event: event
+    event
   };
 
   let promise;
@@ -818,9 +810,9 @@ AGClientSocket.prototype._processOutboundEvent = function (event, data, expectRe
     this._handleEventAckTimeout(eventObject, eventNode);
   }, this.ackTimeout);
 
-  this._transmitBuffer.append(eventNode);
+  this._outboundBuffer.append(eventNode);
   if (this.state === this.OPEN) {
-    this._flushTransmitBuffer();
+    this._flushOutboundBuffer();
   }
   return promise;
 };
@@ -837,10 +829,18 @@ AGClientSocket.prototype.invoke = function (event, data) {
   return this._processOutboundEvent(event, data, true);
 };
 
-AGClientSocket.prototype.publish = function (channelName, data) {
+AGClientSocket.prototype.transmitPublish = function (channelName, data) {
   let pubData = {
     channel: this._decorateChannelName(channelName),
-    data: data
+    data
+  };
+  return this.transmit('#publish', pubData);
+};
+
+AGClientSocket.prototype.invokePublish = function (channelName, data) {
+  let pubData = {
+    channel: this._decorateChannelName(channelName),
+    data
   };
   return this.invoke('#publish', pubData);
 };
@@ -848,9 +848,9 @@ AGClientSocket.prototype.publish = function (channelName, data) {
 AGClientSocket.prototype._triggerChannelSubscribe = function (channel, subscriptionOptions) {
   let channelName = channel.name;
 
-  if (channel.state !== SCChannel.SUBSCRIBED) {
+  if (channel.state !== AGChannel.SUBSCRIBED) {
     let oldChannelState = channel.state;
-    channel.state = SCChannel.SUBSCRIBED;
+    channel.state = AGChannel.SUBSCRIBED;
 
     let stateChangeData = {
       oldChannelState,
@@ -990,7 +990,7 @@ AGClientSocket.prototype.subscribe = function (channelName, options) {
   if (!channel) {
     channel = {
       name: channelName,
-      state: SCChannel.PENDING,
+      state: AGChannel.PENDING,
       options: sanitizedOptions
     };
     this._channelMap[channelName] = channel;
@@ -1000,7 +1000,7 @@ AGClientSocket.prototype.subscribe = function (channelName, options) {
   }
 
   let channelDataStream = this._channelDataDemux.stream(channelName);
-  let channelIterable = new SCChannel(
+  let channelIterable = new AGChannel(
     channelName,
     this,
     this._channelEventDemux,
@@ -1015,10 +1015,10 @@ AGClientSocket.prototype._triggerChannelUnsubscribe = function (channel, setAsPe
 
   this._cancelPendingSubscribeCallback(channel);
 
-  if (channel.state === SCChannel.SUBSCRIBED) {
+  if (channel.state === AGChannel.SUBSCRIBED) {
     let stateChangeData = {
       oldChannelState: channel.state,
-      newChannelState: setAsPending ? SCChannel.PENDING : SCChannel.UNSUBSCRIBED
+      newChannelState: setAsPending ? AGChannel.PENDING : AGChannel.UNSUBSCRIBED
     };
     this._channelEventDemux.write(`${channelName}/subscribeStateChange`, stateChangeData);
     this._channelEventDemux.write(`${channelName}/unsubscribe`, {});
@@ -1030,7 +1030,7 @@ AGClientSocket.prototype._triggerChannelUnsubscribe = function (channel, setAsPe
   }
 
   if (setAsPending) {
-    channel.state = SCChannel.PENDING;
+    channel.state = AGChannel.PENDING;
   } else {
     delete this._channelMap[channelName];
   }
@@ -1069,7 +1069,7 @@ AGClientSocket.prototype.channel = function (channelName) {
   let currentChannel = this._channelMap[channelName];
 
   let channelDataStream = this._channelDataDemux.stream(channelName);
-  let channelIterable = new SCChannel(
+  let channelIterable = new AGChannel(
     channelName,
     this,
     this._channelEventDemux,
@@ -1084,7 +1084,7 @@ AGClientSocket.prototype.getChannelState = function (channelName) {
   if (channel) {
     return channel.state;
   }
-  return SCChannel.UNSUBSCRIBED;
+  return AGChannel.UNSUBSCRIBED;
 };
 
 AGClientSocket.prototype.getChannelOptions = function (channelName) {
@@ -1118,7 +1118,7 @@ AGClientSocket.prototype.closeChannel = function (channelName) {
 AGClientSocket.prototype.subscriptions = function (includePending) {
   let subs = [];
   Object.keys(this._channelMap).forEach((channelName) => {
-    if (includePending || this._channelMap[channelName].state === SCChannel.SUBSCRIBED) {
+    if (includePending || this._channelMap[channelName].state === AGChannel.SUBSCRIBED) {
       subs.push(channelName);
     }
   });
@@ -1130,7 +1130,7 @@ AGClientSocket.prototype.isSubscribed = function (channelName, includePending) {
   if (includePending) {
     return !!channel;
   }
-  return !!channel && channel.state === SCChannel.SUBSCRIBED;
+  return !!channel && channel.state === AGChannel.SUBSCRIBED;
 };
 
 AGClientSocket.prototype.processPendingSubscriptions = function () {
@@ -1139,7 +1139,7 @@ AGClientSocket.prototype.processPendingSubscriptions = function () {
 
   Object.keys(this._channelMap).forEach((channelName) => {
     let channel = this._channelMap[channelName];
-    if (channel.state === SCChannel.PENDING) {
+    if (channel.state === AGChannel.PENDING) {
       pendingChannels.push(channel);
     }
   });
@@ -1164,9 +1164,9 @@ AGClientSocket.prototype.processPendingSubscriptions = function () {
 module.exports = AGClientSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./agtransport":2,"./auth":3,"./response":5,"./wait":6,"async-stream-emitter":9,"base-64":10,"buffer":12,"clone":13,"linked-list":16,"querystring":19,"sc-channel":20,"sc-errors":22,"sc-formatter":23,"stream-demux":25}],2:[function(require,module,exports){
+},{"./agtransport":2,"./auth":3,"./wait":6,"ag-channel":8,"async-stream-emitter":10,"base-64":11,"buffer":13,"clone":14,"linked-list":17,"querystring":20,"sc-errors":22,"sc-formatter":23,"stream-demux":25}],2:[function(require,module,exports){
 (function (global){
-const Response = require('./response').Response;
+const Request = require('./request');
 const querystring = require('querystring');
 const AsyncStreamEmitter = require('async-stream-emitter');
 
@@ -1336,7 +1336,9 @@ AGTransport.prototype._handshake = async function () {
   return status;
 };
 
-AGTransport.prototype._abortAllPendingEventsDueToBadConnection = function (failureType, donePromise) {
+AGTransport.prototype._abortAllPendingEventsDueToBadConnection = async function (failureType, donePromise) {
+  await donePromise;
+
   Object.keys(this._callbackMap || {}).forEach((i) => {
     let eventObject = this._callbackMap[i];
     delete this._callbackMap[i];
@@ -1350,10 +1352,7 @@ AGTransport.prototype._abortAllPendingEventsDueToBadConnection = function (failu
     let callback = eventObject.callback;
     delete eventObject.callback;
 
-    (async () => {
-      await donePromise;
-      callback.call(eventObject, badConnectionError, eventObject);
-    })();
+    callback.call(eventObject, badConnectionError, eventObject);
   });
 };
 
@@ -1377,27 +1376,29 @@ AGTransport.prototype._onClose = function (code, data) {
     let donePromise = this.listener('openAbort').once();
     this._abortAllPendingEventsDueToBadConnection('connectAbort', donePromise);
     this.emit('openAbort', {code, data});
+  } else if (this.state === this.CLOSED) {
+    this._abortAllPendingEventsDueToBadConnection('connectAbort', Promise.resolve());
   }
 };
 
-AGTransport.prototype._handleTransmittedEventObject = function (obj, message) {
-  if (obj && obj.event != null) {
-    if (obj.cid == null) {
-      this.emit('inboundTransmit', {...obj});
+AGTransport.prototype._processInboundPacket = function (packet, message) {
+  if (packet && packet.event != null) {
+    if (packet.cid == null) {
+      this.emit('inboundTransmit', {...packet});
     } else {
-      let response = new Response(this, obj.cid);
-      this.emit('inboundInvoke', {...obj, response});
+      let request = new Request(this, packet.cid, packet.event, packet.data);
+      this.emit('inboundInvoke', request);
     }
-  } else if (obj && obj.rid != null) {
-    let eventObject = this._callbackMap[obj.rid];
+  } else if (packet && packet.rid != null) {
+    let eventObject = this._callbackMap[packet.rid];
     if (eventObject) {
       clearTimeout(eventObject.timeout);
       delete eventObject.timeout;
-      delete this._callbackMap[obj.rid];
+      delete this._callbackMap[packet.rid];
 
       if (eventObject.callback) {
-        let rehydratedError = scErrors.hydrateError(obj.error);
-        eventObject.callback(rehydratedError, obj.data);
+        let rehydratedError = scErrors.hydrateError(packet.error);
+        eventObject.callback(rehydratedError, packet.data);
       }
     }
   } else {
@@ -1408,22 +1409,22 @@ AGTransport.prototype._handleTransmittedEventObject = function (obj, message) {
 AGTransport.prototype._onMessage = function (message) {
   this.emit('event', {event: 'message', data: {message}});
 
-  let obj = this.decode(message);
+  let packet = this.decode(message);
 
   // If ping
-  if (obj === '#1') {
+  if (packet === '#1') {
     this._resetPingTimeout();
     if (this.socket.readyState === this.socket.OPEN) {
       this.sendObject('#2');
     }
   } else {
-    if (Array.isArray(obj)) {
-      let len = obj.length;
+    if (Array.isArray(packet)) {
+      let len = packet.length;
       for (let i = 0; i < len; i++) {
-        this._handleTransmittedEventObject(obj[i], message);
+        this._processInboundPacket(packet[i], message);
       }
     } else {
-      this._handleTransmittedEventObject(obj, message);
+      this._processInboundPacket(packet, message);
     }
   }
 };
@@ -1489,8 +1490,8 @@ AGTransport.prototype._handleEventAckTimeout = function (eventObject) {
 
 AGTransport.prototype.transmit = function (event, data, options) {
   let eventObject = {
-    event: event,
-    data: data
+    event,
+    data
   };
 
   if (this.state === this.OPEN || options.force) {
@@ -1501,9 +1502,9 @@ AGTransport.prototype.transmit = function (event, data, options) {
 
 AGTransport.prototype.invokeRaw = function (event, data, options, callback) {
   let eventObject = {
-    event: event,
-    data: data,
-    callback: callback
+    event,
+    data,
+    callback
   };
 
   if (!options.noTimeout) {
@@ -1597,10 +1598,10 @@ AGTransport.prototype.sendObject = function (object, options) {
   }
 };
 
-module.exports.AGTransport = AGTransport;
+module.exports = AGTransport;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./response":5,"async-stream-emitter":9,"querystring":19,"sc-errors":22,"ws":7}],3:[function(require,module,exports){
+},{"./request":5,"async-stream-emitter":10,"querystring":20,"sc-errors":22,"ws":7}],3:[function(require,module,exports){
 (function (global){
 function AuthEngine() {
   this._internalStorage = {};
@@ -1656,7 +1657,7 @@ AuthEngine.prototype.loadToken = function (name) {
   return Promise.resolve(token);
 };
 
-module.exports.AuthEngine = AuthEngine;
+module.exports = AuthEngine;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],4:[function(require,module,exports){
@@ -1724,55 +1725,41 @@ module.exports = {
 const scErrors = require('sc-errors');
 const InvalidActionError = scErrors.InvalidActionError;
 
-function Response(socket, id) {
+function Request(socket, id, procedureName, data) {
   this.socket = socket;
   this.id = id;
+  this.procedure = procedureName;
+  this.data = data;
   this.sent = false;
-}
 
-Response.prototype._respond = function (responseData) {
-  if (this.sent) {
-    throw new InvalidActionError(`Response ${this.id} has already been sent`);
-  } else {
+  this._respond = (responseData, options) => {
+    if (this.sent) {
+      throw new InvalidActionError(`Response to request ${this.id} has already been sent`);
+    }
     this.sent = true;
-    this.socket.send(this.socket.encode(responseData));
-  }
-};
+    this.socket.sendObject(responseData, options);
+  };
 
-Response.prototype.end = function (data) {
-  if (this.id) {
+  this.end = (data, options) => {
     let responseData = {
       rid: this.id
     };
     if (data !== undefined) {
       responseData.data = data;
     }
-    this._respond(responseData);
-  }
-};
+    this._respond(responseData, options);
+  };
 
-Response.prototype.error = function (error) {
-  if (this.id) {
-    let err = scErrors.dehydrateError(error);
-
+  this.error = (error, options) => {
     let responseData = {
       rid: this.id,
-      error: err
+      error: scErrors.dehydrateError(error)
     };
+    this._respond(responseData, options);
+  };
+}
 
-    this._respond(responseData);
-  }
-};
-
-Response.prototype.callback = function (error, data) {
-  if (error) {
-    this.error(error);
-  } else {
-    this.end(data);
-  }
-};
-
-module.exports.Response = Response;
+module.exports = Request;
 
 },{"sc-errors":22}],6:[function(require,module,exports){
 function wait(duration) {
@@ -1823,6 +1810,86 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports = WebSocket ? ws : null;
 
 },{}],8:[function(require,module,exports){
+const AsyncIterableStream = require('async-iterable-stream');
+
+class AGChannel extends AsyncIterableStream {
+  constructor(name, client, eventDemux, dataStream) {
+    super();
+    this.PENDING = AGChannel.PENDING;
+    this.SUBSCRIBED = AGChannel.SUBSCRIBED;
+    this.UNSUBSCRIBED = AGChannel.UNSUBSCRIBED;
+
+    this.name = name;
+    this.client = client;
+
+    this._eventDemux = eventDemux;
+    this._dataStream = dataStream;
+  }
+
+  createAsyncIterator(timeout) {
+    return this._dataStream.createAsyncIterator(timeout);
+  }
+
+  listener(eventName) {
+    return this._eventDemux.stream(`${this.name}/${eventName}`);
+  }
+
+  closeListener(eventName) {
+    this._eventDemux.close(`${this.name}/${eventName}`);
+  }
+
+  closeAllListeners() {
+    this._eventDemux.closeAll();
+  }
+
+  close() {
+    this.client.closeChannel(this.name);
+  }
+
+  get state() {
+    return this.client.getChannelState(this.name);
+  }
+
+  set state(value) {
+    throw new Error('Cannot directly set channel state');
+  }
+
+  get options() {
+    return this.client.getChannelOptions(this.name);
+  }
+
+  set options(value) {
+    throw new Error('Cannot directly set channel options');
+  }
+
+  subscribe(options) {
+    this.client.subscribe(this.name, options);
+  }
+
+  unsubscribe() {
+    this.client.unsubscribe(this.name);
+  }
+
+  isSubscribed(includePending) {
+    return this.client.isSubscribed(this.name, includePending);
+  }
+
+  transmitPublish(data) {
+    return this.client.transmitPublish(this.name, data);
+  }
+
+  invokePublish(data) {
+    return this.client.invokePublish(this.name, data);
+  }
+}
+
+AGChannel.PENDING = 'pending';
+AGChannel.SUBSCRIBED = 'subscribed';
+AGChannel.UNSUBSCRIBED = 'unsubscribed';
+
+module.exports = AGChannel;
+
+},{"async-iterable-stream":9}],9:[function(require,module,exports){
 class AsyncIterableStream {
   next(timeout) {
     return this.createAsyncIterator(timeout).next();
@@ -1856,7 +1923,7 @@ class AsyncIterableStream {
 
 module.exports = AsyncIterableStream;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 const StreamDemux = require('stream-demux');
 
 function AsyncStreamEmitter() {
@@ -1881,7 +1948,7 @@ AsyncStreamEmitter.prototype.closeAllListeners = function () {
 
 module.exports = AsyncStreamEmitter;
 
-},{"stream-demux":25}],10:[function(require,module,exports){
+},{"stream-demux":25}],11:[function(require,module,exports){
 (function (global){
 /*! http://mths.be/base64 v0.1.0 by @mathias | MIT license */
 ;(function(root) {
@@ -2050,7 +2117,7 @@ module.exports = AsyncStreamEmitter;
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -2203,7 +2270,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -3982,7 +4049,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":11,"ieee754":14}],13:[function(require,module,exports){
+},{"base64-js":12,"ieee754":15}],14:[function(require,module,exports){
 (function (Buffer){
 var clone = (function() {
 'use strict';
@@ -4237,7 +4304,7 @@ if (typeof module === 'object' && module.exports) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":12}],14:[function(require,module,exports){
+},{"buffer":13}],15:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -4323,7 +4390,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 'use strict';
 
 /**
@@ -4711,12 +4778,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":15}],17:[function(require,module,exports){
+},{"./_source/linked-list.js":16}],18:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4802,7 +4869,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4889,89 +4956,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":17,"./encode":18}],20:[function(require,module,exports){
-const AsyncIterableStream = require('async-iterable-stream');
-
-class SCChannel extends AsyncIterableStream {
-  constructor(name, client, eventDemux, dataStream) {
-    super();
-    this.PENDING = SCChannel.PENDING;
-    this.SUBSCRIBED = SCChannel.SUBSCRIBED;
-    this.UNSUBSCRIBED = SCChannel.UNSUBSCRIBED;
-
-    this.name = name;
-    this.client = client;
-
-    this._eventDemux = eventDemux;
-    this._dataStream = dataStream;
-  }
-
-  createAsyncIterator(timeout) {
-    return this._dataStream.createAsyncIterator(timeout);
-  }
-
-  listener(eventName) {
-    return this._eventDemux.stream(`${this.name}/${eventName}`);
-  }
-
-  closeListener(eventName) {
-    this._eventDemux.close(`${this.name}/${eventName}`);
-  }
-
-  closeAllListeners() {
-    this._eventDemux.closeAll();
-  }
-
-  close() {
-    this.client.closeChannel(this.name);
-  }
-
-  get state() {
-    return this.client.getChannelState(this.name);
-  }
-
-  set state(value) {
-    throw new Error('Cannot directly set channel state');
-  }
-
-  get options() {
-    return this.client.getChannelOptions(this.name);
-  }
-
-  set options(value) {
-    throw new Error('Cannot directly set channel options');
-  }
-
-  subscribe(options) {
-    this.client.subscribe(this.name, options);
-  }
-
-  unsubscribe() {
-    this.client.unsubscribe(this.name);
-  }
-
-  isSubscribed(includePending) {
-    return this.client.isSubscribed(this.name, includePending);
-  }
-
-  publish(data) {
-    return this.client.publish(this.name, data);
-  }
-}
-
-SCChannel.PENDING = 'pending';
-SCChannel.SUBSCRIBED = 'subscribed';
-SCChannel.UNSUBSCRIBED = 'unsubscribed';
-
-module.exports = SCChannel;
-
-},{"async-iterable-stream":8}],21:[function(require,module,exports){
+},{"./decode":18,"./encode":19}],21:[function(require,module,exports){
 // Based on https://github.com/dscape/cycle/blob/master/cycle.js
 
 module.exports = function decycle(object) {
@@ -5508,7 +5499,7 @@ class DemuxedAsyncIterableStream extends AsyncIterableStream {
 
 module.exports = DemuxedAsyncIterableStream;
 
-},{"async-iterable-stream":8}],25:[function(require,module,exports){
+},{"async-iterable-stream":9}],25:[function(require,module,exports){
 const WritableAsyncIterableStream = require('writable-async-iterable-stream');
 const DemuxedAsyncIterableStream = require('./demuxed-async-iterable-stream');
 
@@ -5855,7 +5846,7 @@ function wait(timeout) {
 
 module.exports = WritableAsyncIterableStream;
 
-},{"async-iterable-stream":8}],"asyngular-client":[function(require,module,exports){
+},{"async-iterable-stream":9}],"asyngular-client":[function(require,module,exports){
 const AGClientSocket = require('./lib/agclientsocket');
 const factory = require('./lib/factory');
 const version = '1.0.1';
