@@ -1,5 +1,6 @@
 const assert = require('assert');
 const asyngularServer = require('asyngular-server');
+const Action = require('asyngular-server/action');
 const asyngularClient = require('../');
 const localStorage = require('localStorage');
 
@@ -779,7 +780,7 @@ describe('Integration tests', function () {
     });
   });
 
-  describe('Emitting remote events', function () {
+  describe('Transmitting remote events', function () {
     it('Should not throw error on socket if ackTimeout elapses before response to event is sent back', async function () {
       client = asyngularClient.create(clientOptions);
 
@@ -811,6 +812,88 @@ describe('Integration tests', function () {
 
       assert.notEqual(responseError, null);
       assert.equal(caughtError, null);
+    });
+  });
+
+  describe('Pub/sub', function () {
+    let publisherClient;
+    let lastServerMessage = null;
+
+    beforeEach('Setup publisher client', async function () {
+      publisherClient = asyngularClient.create(clientOptions);
+
+      server.removeMiddleware(server.MIDDLEWARE_INBOUND);
+      server.setMiddleware(server.MIDDLEWARE_INBOUND, async (middlewareStream) => {
+        for await (let action of middlewareStream) {
+          if (action.type === Action.PUBLISH_IN) {
+            lastServerMessage = action.data;
+          }
+          action.allow();
+        }
+      });
+    });
+
+    afterEach('Destroy publisher client', async function () {
+      publisherClient.disconnect();
+    });
+
+    it('Should receive transmitted publish messages if subscribed to channel', async function () {
+      client = asyngularClient.create(clientOptions);
+
+      let channel = client.subscribe('foo');
+      await channel.listener('subscribe').once();
+
+      (async () => {
+        await wait(10);
+        publisherClient.transmitPublish('foo', 'hello');
+        await wait(20);
+        publisherClient.transmitPublish('foo', 'world');
+        publisherClient.transmitPublish('foo', {abc: 123});
+        await wait(10);
+        channel.close();
+      })();
+
+      let receivedMessages = [];
+
+      for await (let message of channel) {
+        receivedMessages.push(message);
+      }
+
+      assert.equal(receivedMessages.length, 3);
+      assert.equal(receivedMessages[0], 'hello');
+      assert.equal(receivedMessages[1], 'world');
+      assert.equal(JSON.stringify(receivedMessages[2]), JSON.stringify({abc: 123}));
+    });
+
+    it('Should receive invoked publish messages if subscribed to channel', async function () {
+      client = asyngularClient.create(clientOptions);
+
+      let channel = client.subscribe('bar');
+      await channel.listener('subscribe').once();
+
+      (async () => {
+        await wait(10);
+        await publisherClient.transmitPublish('bar', 'hi');
+        // assert.equal(lastServerMessage, 'hi');
+        await wait(20);
+        await publisherClient.transmitPublish('bar', 'world');
+        // assert.equal(lastServerMessage, 'world');
+        await publisherClient.transmitPublish('bar', {def: 123});
+        // assert.equal(JSON.stringify(clientReceivedMessages[2]), JSON.stringify({def: 123}));
+        await wait(10);
+        channel.close();
+      })();
+
+      let clientReceivedMessages = [];
+
+      for await (let message of channel) {
+        clientReceivedMessages.push(message);
+      }
+
+      assert.equal(clientReceivedMessages.length, 3);
+      assert.equal(clientReceivedMessages[0], 'hi');
+      assert.equal(clientReceivedMessages[1], 'world');
+      assert.equal(JSON.stringify(clientReceivedMessages[2]), JSON.stringify({def: 123}));
     });
   });
 

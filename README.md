@@ -92,10 +92,28 @@ socket.transmit('foo', 123);
 
 ```js
 // Publish data to the channel.
-myChannel.publish('This is a message');
+myChannel.transmitPublish('This is a message');
 
 // Publish data to the channel from the socket.
-socket.publish('myChannel', 'This is a message');
+socket.transmitPublish('myChannel', 'This is a message');
+
+(async () => {
+  // Publish data to the channel and await for the message
+  // to reach the server.
+  try {
+    await myChannel.invokePublish('This is a message');
+  } catch (error) {
+    // Handle error.
+  }
+
+  // Publish data to the channel from the socket and await for
+  // the message to reach the server.
+  try {
+    await socket.invokePublish('myChannel', 'This is a message');
+  } catch (error) {
+    // Handle error.
+  }
+})();
 ```
 
 ### Consume data from a channel
