@@ -2,4 +2,5 @@ node_modules/
 browser/
 dist/
 .idea
+package-lock.json
 
