@@ -1,6 +1,6 @@
 const assert = require('assert');
 const asyngularServer = require('asyngular-server');
-const Action = require('asyngular-server/action');
+const AGAction = require('asyngular-server/action');
 const asyngularClient = require('../');
 const localStorage = require('localStorage');
 
@@ -825,7 +825,7 @@ describe('Integration tests', function () {
       server.removeMiddleware(server.MIDDLEWARE_INBOUND);
       server.setMiddleware(server.MIDDLEWARE_INBOUND, async (middlewareStream) => {
         for await (let action of middlewareStream) {
-          if (action.type === Action.PUBLISH_IN) {
+          if (action.type === AGAction.PUBLISH_IN) {
             lastServerMessage = action.data;
           }
           action.allow();

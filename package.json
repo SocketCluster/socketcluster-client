@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "ag-channel": "^3.0.0",
+    "ag-request": "^1.0.0",
     "async-stream-emitter": "^2.0.0",
     "base-64": "0.1.0",
     "clone": "2.1.1",
@@ -38,7 +39,7 @@
   "devDependencies": {
     "@babel/core": "^7.2.2",
     "@babel/preset-env": "^7.2.3",
-    "asyngular-server": "^3.2.0",
+    "asyngular-server": "^3.2.2",
     "babel-plugin-minify-dead-code-elimination": "^0.5.0",
     "browserify": "^16.2.3",
     "gulp": "^4.0.0",
