@@ -21,15 +21,15 @@
     "ag-channel": "^3.0.0",
     "ag-request": "^1.0.0",
     "async-stream-emitter": "^2.0.0",
-    "base-64": "0.1.0",
-    "clone": "2.1.1",
-    "linked-list": "0.1.0",
-    "querystring": "0.2.0",
+    "base-64": "^0.1.0",
+    "linked-list": "^0.1.0",
+    "lodash.clonedeep": "^4.5.0",
+    "querystring": "^0.2.0",
     "sc-errors": "^2.0.0",
     "sc-formatter": "^3.0.2",
     "stream-demux": "^5.1.0",
-    "uuid": "3.2.1",
-    "ws": "6.1.2"
+    "uuid": "^3.2.1",
+    "ws": "^6.1.2"
   },
   "browser": {
     "ws": "./lib/ws-browser.js"
@@ -50,7 +50,7 @@
     "gulp-rename": "^1.4.0",
     "gulp-uglify": "^3.0.1",
     "localStorage": "^1.0.3",
-    "mocha": "5.2.0",
+    "mocha": "^5.2.0",
     "uglify-es": "^3.3.9",
     "vinyl-source-stream": "^2.0.0"
   }
