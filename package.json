@@ -18,16 +18,16 @@
     "test": "mocha --reporter spec --timeout 3000 --slow 3000"
   },
   "dependencies": {
-    "ag-channel": "^3.0.0",
+    "ag-channel": "^3.1.0",
     "ag-request": "^1.0.0",
-    "async-stream-emitter": "^2.0.0",
+    "async-stream-emitter": "^2.1.0",
     "base-64": "^0.1.0",
     "linked-list": "^0.1.0",
     "lodash.clonedeep": "^4.5.0",
     "querystring": "^0.2.0",
     "sc-errors": "^2.0.0",
     "sc-formatter": "^3.0.2",
-    "stream-demux": "^5.1.0",
+    "stream-demux": "^6.1.0",
     "uuid": "^3.2.1",
     "ws": "^6.1.2"
   },
