@@ -1,5 +1,5 @@
 /**
- * Asyngular JavaScript client v5.1.0
+ * Asyngular JavaScript client v5.2.0
  */
  (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.asyngularClient = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 (function (global){
@@ -1994,15 +1994,15 @@ AsyncStreamEmitter.prototype.closeAllListeners = function () {
   this._listenerDemux.closeAll();
 };
 
-AsyncStreamEmitter.prototype.getConsumerStats = function (consumerId) {
+AsyncStreamEmitter.prototype.getListenerConsumerStats = function (consumerId) {
   return this._listenerDemux.getConsumerStats(consumerId);
 };
 
-AsyncStreamEmitter.prototype.getConsumerStatsList = function (eventName) {
+AsyncStreamEmitter.prototype.getListenerConsumerStatsList = function (eventName) {
   return this._listenerDemux.getConsumerStatsList(eventName);
 };
 
-AsyncStreamEmitter.prototype.getConsumerStatsListAll = function () {
+AsyncStreamEmitter.prototype.getAllListenerConsumerStatsList = function () {
   return this._listenerDemux.getConsumerStatsListAll();
 };
 
@@ -2014,27 +2014,27 @@ AsyncStreamEmitter.prototype.killAllListeners = function () {
   this._listenerDemux.killAll();
 };
 
-AsyncStreamEmitter.prototype.killConsumer = function (consumerId) {
+AsyncStreamEmitter.prototype.killListenerConsumer = function (consumerId) {
   this._listenerDemux.killConsumer(consumerId);
 };
 
-AsyncStreamEmitter.prototype.getBackpressure = function (eventName) {
+AsyncStreamEmitter.prototype.getListenerBackpressure = function (eventName) {
   return this._listenerDemux.getBackpressure(eventName);
 };
 
-AsyncStreamEmitter.prototype.getBackpressureAll = function () {
+AsyncStreamEmitter.prototype.getAllListenersBackpressure = function () {
   return this._listenerDemux.getBackpressureAll();
 };
 
-AsyncStreamEmitter.prototype.getConsumerBackpressure = function (consumerId) {
+AsyncStreamEmitter.prototype.getListenerConsumerBackpressure = function (consumerId) {
   return this._listenerDemux.getConsumerBackpressure(consumerId);
 };
 
-AsyncStreamEmitter.prototype.hasConsumer = function (eventName, consumerId) {
+AsyncStreamEmitter.prototype.hasListenerConsumer = function (eventName, consumerId) {
   return this._listenerDemux.hasConsumer(eventName, consumerId);
 };
 
-AsyncStreamEmitter.prototype.hasConsumerAll = function (consumerId) {
+AsyncStreamEmitter.prototype.hasAnyListenerConsumer = function (consumerId) {
   return this._listenerDemux.hasConsumerAll(consumerId);
 };
 
@@ -2363,6 +2363,7 @@ function fromByteArray (uint8) {
 }
 
 },{}],12:[function(require,module,exports){
+(function (Buffer){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -4141,7 +4142,8 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":11,"ieee754":14}],13:[function(require,module,exports){
+}).call(this,require("buffer").Buffer)
+},{"base64-js":11,"buffer":12,"ieee754":14}],13:[function(require,module,exports){
 class ConsumableStream {
   async next(timeout) {
     let asyncIterator = this.createConsumer(timeout);
@@ -7119,32 +7121,6 @@ class DemuxedConsumableStream extends ConsumableStream {
     this._streamDemux = streamDemux;
   }
 
-  hasConsumer(consumerId) {
-    return this._streamDemux.hasConsumer(this.name, consumerId);
-  }
-
-  getConsumerStats(consumerId) {
-    if (!this.hasConsumer(consumerId)) {
-      return undefined;
-    }
-    return this._streamDemux.getConsumerStats(consumerId);
-  }
-
-  getConsumerStatsList() {
-    return this._streamDemux.getConsumerStatsList(this.name);
-  }
-
-  getBackpressure() {
-    return this._streamDemux.getBackpressure(this.name);
-  }
-
-  getConsumerBackpressure(consumerId) {
-    if (!this.hasConsumer(consumerId)) {
-      return 0;
-    }
-    return this._streamDemux.getConsumerBackpressure(consumerId);
-  }
-
   createConsumer(timeout) {
     return this._streamDemux.createConsumer(this.name, timeout);
   }
@@ -7841,7 +7817,7 @@ module.exports = WritableConsumableStream;
 },{"./consumer":31,"consumable-stream":13}],"asyngular-client":[function(require,module,exports){
 const AGClientSocket = require('./lib/clientsocket');
 const factory = require('./lib/factory');
-const version = '5.1.0';
+const version = '5.2.0';
 
 module.exports.factory = factory;
 module.exports.AGClientSocket = AGClientSocket;
