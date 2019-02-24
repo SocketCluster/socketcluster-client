@@ -1,7 +1,7 @@
 {
   "name": "asyngular-client",
   "description": "Asyngular JavaScript client",
-  "version": "5.2.0",
+  "version": "5.2.1",
   "homepage": "http://socketcluster.io",
   "contributors": [
     {
@@ -20,7 +20,7 @@
   "dependencies": {
     "ag-channel": "^3.1.0",
     "ag-request": "^1.0.0",
-    "async-stream-emitter": "^3.0.0",
+    "async-stream-emitter": "^3.0.1",
     "base-64": "^0.1.0",
     "linked-list": "^0.1.0",
     "lodash.clonedeep": "^4.5.0",

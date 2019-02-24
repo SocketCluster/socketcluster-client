@@ -1,5 +1,5 @@
 /**
- * Asyngular JavaScript client v5.2.0
+ * Asyngular JavaScript client v5.2.1
  */
  (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.asyngularClient = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 (function (global){
@@ -1210,6 +1210,124 @@ AGClientSocket.prototype.unsubscribe = function (channelName) {
   }
 };
 
+// ---- Receiver logic ----
+
+AGClientSocket.prototype.receiver = function (receiverName) {
+  return this._receiverDemux.stream(receiverName);
+};
+
+AGClientSocket.prototype.closeReceiver = function (receiverName) {
+  this._receiverDemux.close(receiverName);
+};
+
+AGClientSocket.prototype.closeAllReceivers = function () {
+  this._receiverDemux.closeAll();
+};
+
+AGClientSocket.prototype.killReceiver = function (receiverName) {
+  this._receiverDemux.kill(receiverName);
+};
+
+AGClientSocket.prototype.killAllReceivers = function () {
+  this._receiverDemux.killAll();
+};
+
+AGClientSocket.prototype.killReceiverConsumer = function (consumerId) {
+  this._receiverDemux.killConsumer(consumerId);
+};
+
+AGClientSocket.prototype.getReceiverConsumerStats = function (consumerId) {
+  return this._receiverDemux.getConsumerStats(consumerId);
+};
+
+AGClientSocket.prototype.getReceiverConsumerStatsList = function (receiverName) {
+  return this._receiverDemux.getConsumerStatsList(receiverName);
+};
+
+AGClientSocket.prototype.getAllReceiversConsumerStatsList = function () {
+  return this._receiverDemux.getConsumerStatsListAll();
+};
+
+AGClientSocket.prototype.getReceiverBackpressure = function (receiverName) {
+  return this._receiverDemux.getBackpressure(receiverName);
+};
+
+AGClientSocket.prototype.getAllReceiversBackpressure = function () {
+  return this._receiverDemux.getBackpressureAll();
+};
+
+AGClientSocket.prototype.getReceiverConsumerBackpressure = function (consumerId) {
+  return this._receiverDemux.getConsumerBackpressure(consumerId);
+};
+
+AGClientSocket.prototype.hasReceiverConsumer = function (receiverName, consumerId) {
+  return this._receiverDemux.hasConsumer(receiverName, consumerId);
+};
+
+AGClientSocket.prototype.hasAnyReceiverConsumer = function (consumerId) {
+  return this._receiverDemux.hasConsumerAll(consumerId);
+};
+
+// ---- Procedure logic ----
+
+AGClientSocket.prototype.procedure = function (procedureName) {
+  return this._procedureDemux.stream(procedureName);
+};
+
+AGClientSocket.prototype.closeProcedure = function (procedureName) {
+  this._procedureDemux.close(procedureName);
+};
+
+AGClientSocket.prototype.closeAllProcedures = function () {
+  this._procedureDemux.closeAll();
+};
+
+AGClientSocket.prototype.killProcedure = function (procedureName) {
+  this._procedureDemux.kill(procedureName);
+};
+
+AGClientSocket.prototype.killAllProcedures = function () {
+  this._procedureDemux.killAll();
+};
+
+AGClientSocket.prototype.killProcedureConsumer = function (consumerId) {
+  this._procedureDemux.killConsumer(consumerId);
+};
+
+AGClientSocket.prototype.getProcedureConsumerStats = function (consumerId) {
+  return this._procedureDemux.getConsumerStats(consumerId);
+};
+
+AGClientSocket.prototype.getProcedureConsumerStatsList = function (procedureName) {
+  return this._procedureDemux.getConsumerStatsList(procedureName);
+};
+
+AGClientSocket.prototype.getAllProceduresConsumerStatsList = function () {
+  return this._procedureDemux.getConsumerStatsListAll();
+};
+
+AGClientSocket.prototype.getProcedureBackpressure = function (procedureName) {
+  return this._procedureDemux.getBackpressure(procedureName);
+};
+
+AGClientSocket.prototype.getAllProceduresBackpressure = function () {
+  return this._procedureDemux.getBackpressureAll();
+};
+
+AGClientSocket.prototype.getProcedureConsumerBackpressure = function (consumerId) {
+  return this._procedureDemux.getConsumerBackpressure(consumerId);
+};
+
+AGClientSocket.prototype.hasProcedureConsumer = function (procedureName, consumerId) {
+  return this._procedureDemux.hasConsumer(procedureName, consumerId);
+};
+
+AGClientSocket.prototype.hasAnyProcedureConsumer = function (consumerId) {
+  return this._procedureDemux.hasConsumerAll(consumerId);
+};
+
+// Channel logic
+
 AGClientSocket.prototype.channel = function (channelName) {
   let currentChannel = this._channelMap[channelName];
 
@@ -1222,6 +1340,58 @@ AGClientSocket.prototype.channel = function (channelName) {
   );
 
   return channelIterable;
+};
+
+AGClientSocket.prototype.closeChannel = function (channelName) {
+  this._channelDataDemux.close(channelName);
+};
+
+AGClientSocket.prototype.closeAllChannels = function () {
+  this._channelDataDemux.closeAll();
+};
+
+AGClientSocket.prototype.killChannel = function (channelName) {
+  this._channelDataDemux.kill(channelName);
+};
+
+AGClientSocket.prototype.killAllChannels = function () {
+  this._channelDataDemux.killAll();
+};
+
+AGClientSocket.prototype.killChannelConsumer = function (consumerId) {
+  this._channelDataDemux.killConsumer(consumerId);
+};
+
+AGClientSocket.prototype.getChannelConsumerStats = function (consumerId) {
+  return this._channelDataDemux.getConsumerStats(consumerId);
+};
+
+AGClientSocket.prototype.getChannelConsumerStatsList = function (channelName) {
+  return this._channelDataDemux.getConsumerStatsList(channelName);
+};
+
+AGClientSocket.prototype.getAllChannelsConsumerStatsList = function () {
+  return this._channelDataDemux.getConsumerStatsListAll();
+};
+
+AGClientSocket.prototype.getChannelBackpressure = function (channelName) {
+  return this._channelDataDemux.getBackpressure(channelName);
+};
+
+AGClientSocket.prototype.getAllChannelsBackpressure = function () {
+  return this._channelDataDemux.getBackpressureAll();
+};
+
+AGClientSocket.prototype.getChannelConsumerBackpressure = function (consumerId) {
+  return this._channelDataDemux.getConsumerBackpressure(consumerId);
+};
+
+AGClientSocket.prototype.hasChannelConsumer = function (channelName, consumerId) {
+  return this._channelDataDemux.hasConsumer(channelName, consumerId);
+};
+
+AGClientSocket.prototype.hasAnyChannelConsumer = function (consumerId) {
+  return this._channelDataDemux.hasConsumerAll(consumerId);
 };
 
 AGClientSocket.prototype.getChannelState = function (channelName) {
@@ -1238,26 +1408,6 @@ AGClientSocket.prototype.getChannelOptions = function (channelName) {
     return {...channel.options};
   }
   return {};
-};
-
-AGClientSocket.prototype.receiver = function (receiverName) {
-  return this._receiverDemux.stream(receiverName);
-};
-
-AGClientSocket.prototype.closeReceiver = function (receiverName) {
-  this._receiverDemux.close(receiverName);
-};
-
-AGClientSocket.prototype.procedure = function (procedureName) {
-  return this._procedureDemux.stream(procedureName);
-};
-
-AGClientSocket.prototype.closeProcedure = function (procedureName) {
-  this._procedureDemux.close(procedureName);
-};
-
-AGClientSocket.prototype.closeChannel = function (channelName) {
-  this._channelDataDemux.close(channelName);
 };
 
 AGClientSocket.prototype.subscriptions = function (includePending) {
@@ -2002,7 +2152,7 @@ AsyncStreamEmitter.prototype.getListenerConsumerStatsList = function (eventName)
   return this._listenerDemux.getConsumerStatsList(eventName);
 };
 
-AsyncStreamEmitter.prototype.getAllListenerConsumerStatsList = function () {
+AsyncStreamEmitter.prototype.getAllListenersConsumerStatsList = function () {
   return this._listenerDemux.getConsumerStatsListAll();
 };
 
@@ -7817,7 +7967,7 @@ module.exports = WritableConsumableStream;
 },{"./consumer":31,"consumable-stream":13}],"asyngular-client":[function(require,module,exports){
 const AGClientSocket = require('./lib/clientsocket');
 const factory = require('./lib/factory');
-const version = '5.2.0';
+const version = '5.2.1';
 
 module.exports.factory = factory;
 module.exports.AGClientSocket = AGClientSocket;
