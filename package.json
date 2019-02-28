@@ -18,7 +18,7 @@
     "test": "mocha --reporter spec --timeout 3000 --slow 3000"
   },
   "dependencies": {
-    "ag-channel": "^3.1.0",
+    "ag-channel": "^4.0.0",
     "ag-request": "^1.0.0",
     "async-stream-emitter": "^3.0.1",
     "base-64": "^0.1.0",
