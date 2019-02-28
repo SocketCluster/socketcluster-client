@@ -131,7 +131,6 @@ describe('Integration tests', function () {
   });
 
   describe('Creation', function () {
-
     it('Should automatically connect socket on creation by default', async function () {
       clientOptions = {
         hostname: '127.0.0.1',
@@ -1281,14 +1280,191 @@ describe('Integration tests', function () {
     });
   });
 
+  describe('Consumable streams', function () {
+    it('Should be able to get the stats list of consumers and check if consumers exist on specific channels', async function () {
+      client = asyngularClient.create(clientOptions);
+
+      let fooChannel = client.channel('foo');
+      (async () => {
+        for await (let data of fooChannel.listener('subscribe')) {}
+      })();
+      (async () => {
+        for await (let data of fooChannel.listener('subscribe')) {}
+      })();
+      (async () => {
+        for await (let data of fooChannel.listener('subscribeFail')) {}
+      })();
+      (async () => {
+        for await (let data of fooChannel.listener('customEvent')) {}
+      })();
+
+      (async () => {
+        for await (let data of client.channel('bar').listener('subscribe')) {}
+      })();
+
+      let fooStatsList = client.channelGetAllListenersConsumerStatsList('foo');
+      let barStatsList = client.channelGetAllListenersConsumerStatsList('bar');
+
+      assert.equal(fooStatsList.length, 4);
+      assert.equal(fooStatsList[0].id, 1);
+      assert.equal(fooStatsList[0].stream, 'foo/subscribe');
+      assert.equal(fooStatsList[1].id, 2);
+      assert.equal(fooStatsList[2].id, 3);
+      assert.equal(fooStatsList[3].id, 4);
+      assert.equal(fooStatsList[3].stream, 'foo/customEvent');
+
+      assert.equal(barStatsList.length, 1);
+      assert.equal(barStatsList[0].id, 5);
+      assert.equal(barStatsList[0].stream, 'bar/subscribe');
+
+      assert.equal(client.channelHasAnyListenerConsumer('foo', 1), true);
+      assert.equal(client.channelHasAnyListenerConsumer('foo', 4), true);
+      assert.equal(client.channelHasAnyListenerConsumer('foo', 5), false);
+      assert.equal(client.channelHasAnyListenerConsumer('bar', 5), true);
+    });
+
+    it('Should be able to check the listener backpressure for specific channels', async function () {
+      client = asyngularClient.create(clientOptions);
+
+      let fooChannel = client.channel('foo');
+      let barChannel = client.channel('bar');
+      let fooBackpressures = [];
+      let barBackpressures = [];
+
+      await Promise.all([
+        (async () => {
+          for await (let data of fooChannel.listener('customEvent')) {
+            fooBackpressures.push(client.channelGetAllListenersBackpressure('foo'));
+            await wait(50);
+          }
+        })(),
+        (async () => {
+          for await (let data of barChannel.listener('customEvent')) {
+            barBackpressures.push(client.channelGetAllListenersBackpressure('bar'));
+            await wait(20);
+          }
+        })(),
+        (async () => {
+          for (let i = 0; i < 20; i++) {
+            fooChannel._eventDemux.write('foo/customEvent', `message${i}`);
+          }
+          barChannel._eventDemux.write('bar/customEvent', `hi0`);
+          barChannel._eventDemux.write('bar/customEvent', `hi1`);
+          barChannel._eventDemux.write('bar/anotherEvent', `hi2`);
+          barChannel._eventDemux.close('bar/customEvent');
+          barChannel._eventDemux.close('bar/anotherEvent');
+          fooChannel._eventDemux.close('foo/customEvent');
+        })()
+      ]);
+
+      assert.equal(fooBackpressures.length, 20);
+      assert.equal(fooBackpressures[0], 20);
+      assert.equal(fooBackpressures[1], 19);
+      assert.equal(fooBackpressures[19], 1);
+
+      assert.equal(barBackpressures.length, 2);
+      assert.equal(barBackpressures[0], 2);
+      assert.equal(barBackpressures[1], 1);
+
+      assert.equal(client.channelGetAllListenersBackpressure('foo'), 0);
+      assert.equal(client.channelGetAllListenersBackpressure('bar'), 0);
+    });
+
+    it('Should be able to kill and close channels and backpressure should update accordingly', async function () {
+      client = asyngularClient.create(clientOptions);
+
+      await client.listener('connect').once();
+
+      let fooChannel = client.channel('foo');
+      let barChannel = client.subscribe('bar');
+
+      await barChannel.listener('subscribe').once();
+
+      let fooEvents = [];
+      let barEvents = [];
+      let barMessages = [];
+      let barBackpressures = [];
+      let allBackpressures = [];
+
+      await Promise.all([
+        (async () => {
+          for await (let data of barChannel) {
+            await wait(10);
+            assert.equal(client.getChannelBackpressure('bar'), barChannel.getBackpressure());
+            barBackpressures.push(client.getChannelBackpressure('bar'));
+            allBackpressures.push(client.getAllChannelsBackpressure());
+            barMessages.push(data);
+          }
+        })(),
+        (async () => {
+          for await (let data of fooChannel.listener('customEvent')) {
+            fooEvents.push(data);
+            await wait(50);
+          }
+        })(),
+        (async () => {
+          for await (let data of barChannel.listener('customEvent')) {
+            barEvents.push(data);
+            await wait(20);
+          }
+        })(),
+        (async () => {
+          for (let i = 0; i < 20; i++) {
+            fooChannel._eventDemux.write('foo/customEvent', `message${i}`);
+          }
+          for (let i = 0; i < 50; i++) {
+            barChannel.transmitPublish(`hello${i}`);
+          }
+
+          barChannel._eventDemux.write('bar/customEvent', `hi0`);
+          barChannel._eventDemux.write('bar/customEvent', `hi1`);
+          barChannel._eventDemux.write('bar/customEvent', `hi2`);
+          barChannel._eventDemux.write('bar/customEvent', `hi3`);
+          barChannel._eventDemux.write('bar/customEvent', `hi4`);
+          assert.equal(client.getChannelBackpressure('bar'), 5);
+          fooChannel._eventDemux.close('foo/customEvent');
+          client.killChannel('foo');
+
+
+          await wait(600);
+          assert.equal(client.getChannelBackpressure('bar'), 0);
+          client.closeChannel('bar');
+          assert.equal(client.getChannelBackpressure('bar'), 1);
+        })()
+      ]);
+
+      assert.equal(fooEvents.length, 0);
+
+      assert.equal(barEvents.length, 5);
+      assert.equal(barEvents[0], 'hi0');
+      assert.equal(barEvents[1], 'hi1');
+      assert.equal(barEvents[4], 'hi4');
+
+      assert.equal(barMessages.length, 50);
+      assert.equal(barMessages[0], 'hello0');
+      assert.equal(barMessages[49], 'hello49');
+
+      assert.equal(client.channelGetAllListenersBackpressure('foo'), 0);
+      assert.equal(client.channelGetAllListenersConsumerStatsList('bar').length, 0);
+      assert.equal(client.channelGetAllListenersBackpressure('bar'), 0);
+
+      assert.equal(barBackpressures.length, 50);
+      assert.equal(barBackpressures[0], 49);
+      assert.equal(barBackpressures[49], 0);
+
+      assert.equal(allBackpressures.length, 50);
+      assert.equal(allBackpressures[0], 49);
+      assert.equal(allBackpressures[49], 0);
+    });
+  });
+
   describe('Utilities', function () {
-    it('Can encode a string to base64 and then decode it back to utf8', function (done) {
+    it('Can encode a string to base64 and then decode it back to utf8', async function () {
       client = asyngularClient.create(clientOptions);
       let encodedString = client.encodeBase64('This is a string');
       assert.equal(encodedString, 'VGhpcyBpcyBhIHN0cmluZw==');
       let decodedString = client.decodeBase64(encodedString);
       assert.equal(decodedString, 'This is a string');
-      done();
     });
   });
 });
