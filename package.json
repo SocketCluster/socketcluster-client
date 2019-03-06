@@ -18,7 +18,7 @@
     "test": "mocha --reporter spec --timeout 3000 --slow 3000"
   },
   "dependencies": {
-    "base-64": "0.1.0",
+    "buffer": "^5.2.1",
     "clone": "2.1.1",
     "component-emitter": "1.2.1",
     "linked-list": "0.1.0",
