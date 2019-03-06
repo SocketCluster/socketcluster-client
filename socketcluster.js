@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v14.2.1
+ * SocketCluster JavaScript client v14.2.2
  */
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(_dereq_,module,exports){
 var SCClientSocket = _dereq_('./lib/scclientsocket');
@@ -22,9 +22,9 @@ module.exports.destroy = function (socket) {
 
 module.exports.clients = factory.clients;
 
-module.exports.version = '14.2.1';
+module.exports.version = '14.2.2';
 
-},{"./lib/factory":3,"./lib/scclientsocket":5,"component-emitter":12}],2:[function(_dereq_,module,exports){
+},{"./lib/factory":3,"./lib/scclientsocket":5,"component-emitter":11}],2:[function(_dereq_,module,exports){
 (function (global){
 var AuthEngine = function () {
   this._internalStorage = {};
@@ -211,7 +211,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./scclientsocket":5,"sc-errors":21,"uuid":23}],4:[function(_dereq_,module,exports){
+},{"./scclientsocket":5,"sc-errors":20,"uuid":22}],4:[function(_dereq_,module,exports){
 var scErrors = _dereq_('sc-errors');
 var InvalidActionError = scErrors.InvalidActionError;
 
@@ -268,8 +268,8 @@ Response.prototype.callback = function (error, data) {
 
 module.exports.Response = Response;
 
-},{"sc-errors":21}],5:[function(_dereq_,module,exports){
-(function (global,Buffer){
+},{"sc-errors":20}],5:[function(_dereq_,module,exports){
+(function (global){
 var Emitter = _dereq_('component-emitter');
 var SCChannel = _dereq_('sc-channel').SCChannel;
 var Response = _dereq_('./response').Response;
@@ -278,7 +278,7 @@ var formatter = _dereq_('sc-formatter');
 var SCTransport = _dereq_('./sctransport').SCTransport;
 var querystring = _dereq_('querystring');
 var LinkedList = _dereq_('linked-list');
-var base64 = _dereq_('base-64');
+var Buffer = _dereq_('buffer/').Buffer;
 var clone = _dereq_('clone');
 
 var scErrors = _dereq_('sc-errors');
@@ -652,33 +652,11 @@ SCClientSocket.prototype._changeToAuthenticatedState = function (signedAuthToken
 };
 
 SCClientSocket.prototype.decodeBase64 = function (encodedString) {
-  var decodedString;
-  if (typeof Buffer === 'undefined') {
-    if (global.atob) {
-      decodedString = global.atob(encodedString);
-    } else {
-      decodedString = base64.decode(encodedString);
-    }
-  } else {
-    var buffer = Buffer.from(encodedString, 'base64');
-    decodedString = buffer.toString('utf8');
-  }
-  return decodedString;
+  return Buffer.from(encodedString, 'base64').toString('utf8');
 };
 
 SCClientSocket.prototype.encodeBase64 = function (decodedString) {
-  var encodedString;
-  if (typeof Buffer === 'undefined') {
-    if (global.btoa) {
-      encodedString = global.btoa(decodedString);
-    } else {
-      encodedString = base64.encode(decodedString);
-    }
-  } else {
-    var buffer = Buffer.from(decodedString, 'utf8');
-    encodedString = buffer.toString('base64');
-  }
-  return encodedString;
+  return Buffer.from(decodedString, 'utf8').toString('base64');
 };
 
 SCClientSocket.prototype._extractAuthTokenData = function (signedAuthToken) {
@@ -1308,8 +1286,8 @@ SCClientSocket.prototype.watchers = function (channelName) {
 
 module.exports = SCClientSocket;
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},_dereq_("buffer").Buffer)
-},{"./auth":2,"./response":4,"./sctransport":6,"base-64":8,"buffer":10,"clone":11,"component-emitter":12,"linked-list":15,"querystring":18,"sc-channel":19,"sc-errors":21,"sc-formatter":22}],6:[function(_dereq_,module,exports){
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./auth":2,"./response":4,"./sctransport":6,"buffer/":9,"clone":10,"component-emitter":11,"linked-list":14,"querystring":17,"sc-channel":18,"sc-errors":20,"sc-formatter":21}],6:[function(_dereq_,module,exports){
 (function (global){
 var Emitter = _dereq_('component-emitter');
 var Response = _dereq_('./response').Response;
@@ -1757,7 +1735,7 @@ SCTransport.prototype.sendObject = function (object, options) {
 module.exports.SCTransport = SCTransport;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./response":4,"component-emitter":12,"querystring":18,"sc-errors":21,"ws":7}],7:[function(_dereq_,module,exports){
+},{"./response":4,"component-emitter":11,"querystring":17,"sc-errors":20,"ws":7}],7:[function(_dereq_,module,exports){
 var global;
 if (typeof WorkerGlobalScope !== 'undefined') {
   global = self;
@@ -1795,175 +1773,6 @@ if (WebSocket) ws.prototype = WebSocket.prototype;
 module.exports = WebSocket ? ws : null;
 
 },{}],8:[function(_dereq_,module,exports){
-(function (global){
-/*! http://mths.be/base64 v0.1.0 by @mathias | MIT license */
-;(function(root) {
-
-	// Detect free variables `exports`.
-	var freeExports = typeof exports == 'object' && exports;
-
-	// Detect free variable `module`.
-	var freeModule = typeof module == 'object' && module &&
-		module.exports == freeExports && module;
-
-	// Detect free variable `global`, from Node.js or Browserified code, and use
-	// it as `root`.
-	var freeGlobal = typeof global == 'object' && global;
-	if (freeGlobal.global === freeGlobal || freeGlobal.window === freeGlobal) {
-		root = freeGlobal;
-	}
-
-	/*--------------------------------------------------------------------------*/
-
-	var InvalidCharacterError = function(message) {
-		this.message = message;
-	};
-	InvalidCharacterError.prototype = new Error;
-	InvalidCharacterError.prototype.name = 'InvalidCharacterError';
-
-	var error = function(message) {
-		// Note: the error messages used throughout this file match those used by
-		// the native `atob`/`btoa` implementation in Chromium.
-		throw new InvalidCharacterError(message);
-	};
-
-	var TABLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-	// http://whatwg.org/html/common-microsyntaxes.html#space-character
-	var REGEX_SPACE_CHARACTERS = /[\t\n\f\r ]/g;
-
-	// `decode` is designed to be fully compatible with `atob` as described in the
-	// HTML Standard. http://whatwg.org/html/webappapis.html#dom-windowbase64-atob
-	// The optimized base64-decoding algorithm used is based on @atk’s excellent
-	// implementation. https://gist.github.com/atk/1020396
-	var decode = function(input) {
-		input = String(input)
-			.replace(REGEX_SPACE_CHARACTERS, '');
-		var length = input.length;
-		if (length % 4 == 0) {
-			input = input.replace(/==?$/, '');
-			length = input.length;
-		}
-		if (
-			length % 4 == 1 ||
-			// http://whatwg.org/C#alphanumeric-ascii-characters
-			/[^+a-zA-Z0-9/]/.test(input)
-		) {
-			error(
-				'Invalid character: the string to be decoded is not correctly encoded.'
-			);
-		}
-		var bitCounter = 0;
-		var bitStorage;
-		var buffer;
-		var output = '';
-		var position = -1;
-		while (++position < length) {
-			buffer = TABLE.indexOf(input.charAt(position));
-			bitStorage = bitCounter % 4 ? bitStorage * 64 + buffer : buffer;
-			// Unless this is the first of a group of 4 characters…
-			if (bitCounter++ % 4) {
-				// …convert the first 8 bits to a single ASCII character.
-				output += String.fromCharCode(
-					0xFF & bitStorage >> (-2 * bitCounter & 6)
-				);
-			}
-		}
-		return output;
-	};
-
-	// `encode` is designed to be fully compatible with `btoa` as described in the
-	// HTML Standard: http://whatwg.org/html/webappapis.html#dom-windowbase64-btoa
-	var encode = function(input) {
-		input = String(input);
-		if (/[^\0-\xFF]/.test(input)) {
-			// Note: no need to special-case astral symbols here, as surrogates are
-			// matched, and the input is supposed to only contain ASCII anyway.
-			error(
-				'The string to be encoded contains characters outside of the ' +
-				'Latin1 range.'
-			);
-		}
-		var padding = input.length % 3;
-		var output = '';
-		var position = -1;
-		var a;
-		var b;
-		var c;
-		var d;
-		var buffer;
-		// Make sure any padding is handled outside of the loop.
-		var length = input.length - padding;
-
-		while (++position < length) {
-			// Read three bytes, i.e. 24 bits.
-			a = input.charCodeAt(position) << 16;
-			b = input.charCodeAt(++position) << 8;
-			c = input.charCodeAt(++position);
-			buffer = a + b + c;
-			// Turn the 24 bits into four chunks of 6 bits each, and append the
-			// matching character for each of them to the output.
-			output += (
-				TABLE.charAt(buffer >> 18 & 0x3F) +
-				TABLE.charAt(buffer >> 12 & 0x3F) +
-				TABLE.charAt(buffer >> 6 & 0x3F) +
-				TABLE.charAt(buffer & 0x3F)
-			);
-		}
-
-		if (padding == 2) {
-			a = input.charCodeAt(position) << 8;
-			b = input.charCodeAt(++position);
-			buffer = a + b;
-			output += (
-				TABLE.charAt(buffer >> 10) +
-				TABLE.charAt((buffer >> 4) & 0x3F) +
-				TABLE.charAt((buffer << 2) & 0x3F) +
-				'='
-			);
-		} else if (padding == 1) {
-			buffer = input.charCodeAt(position);
-			output += (
-				TABLE.charAt(buffer >> 2) +
-				TABLE.charAt((buffer << 4) & 0x3F) +
-				'=='
-			);
-		}
-
-		return output;
-	};
-
-	var base64 = {
-		'encode': encode,
-		'decode': decode,
-		'version': '0.1.0'
-	};
-
-	// Some AMD build optimizers, like r.js, check for specific condition patterns
-	// like the following:
-	if (
-		typeof define == 'function' &&
-		typeof define.amd == 'object' &&
-		define.amd
-	) {
-		define(function() {
-			return base64;
-		});
-	}	else if (freeExports && !freeExports.nodeType) {
-		if (freeModule) { // in Node.js or RingoJS v0.8.0+
-			freeModule.exports = base64;
-		} else { // in Narwhal or RingoJS v0.7.0-
-			for (var key in base64) {
-				base64.hasOwnProperty(key) && (freeExports[key] = base64[key]);
-			}
-		}
-	} else { // in Rhino or a web browser
-		root.base64 = base64;
-	}
-
-}(this));
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],9:[function(_dereq_,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -2116,7 +1925,8 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],10:[function(_dereq_,module,exports){
+},{}],9:[function(_dereq_,module,exports){
+(function (Buffer){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -3895,7 +3705,8 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":9,"ieee754":13}],11:[function(_dereq_,module,exports){
+}).call(this,_dereq_("buffer").Buffer)
+},{"base64-js":8,"buffer":9,"ieee754":12}],10:[function(_dereq_,module,exports){
 (function (Buffer){
 var clone = (function() {
 'use strict';
@@ -4150,7 +3961,7 @@ if (typeof module === 'object' && module.exports) {
 }
 
 }).call(this,_dereq_("buffer").Buffer)
-},{"buffer":10}],12:[function(_dereq_,module,exports){
+},{"buffer":9}],11:[function(_dereq_,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -4315,7 +4126,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],13:[function(_dereq_,module,exports){
+},{}],12:[function(_dereq_,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -4401,7 +4212,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],14:[function(_dereq_,module,exports){
+},{}],13:[function(_dereq_,module,exports){
 'use strict';
 
 /**
@@ -4789,12 +4600,12 @@ ListItemPrototype.append = function (item) {
 
 module.exports = List;
 
-},{}],15:[function(_dereq_,module,exports){
+},{}],14:[function(_dereq_,module,exports){
 'use strict';
 
 module.exports = _dereq_('./_source/linked-list.js');
 
-},{"./_source/linked-list.js":14}],16:[function(_dereq_,module,exports){
+},{"./_source/linked-list.js":13}],15:[function(_dereq_,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4880,7 +4691,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],17:[function(_dereq_,module,exports){
+},{}],16:[function(_dereq_,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4967,13 +4778,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],18:[function(_dereq_,module,exports){
+},{}],17:[function(_dereq_,module,exports){
 'use strict';
 
 exports.decode = exports.parse = _dereq_('./decode');
 exports.encode = exports.stringify = _dereq_('./encode');
 
-},{"./decode":16,"./encode":17}],19:[function(_dereq_,module,exports){
+},{"./decode":15,"./encode":16}],18:[function(_dereq_,module,exports){
 var Emitter = _dereq_('component-emitter');
 
 var SCChannel = function (name, client, options) {
@@ -5045,7 +4856,7 @@ SCChannel.prototype.destroy = function () {
 
 module.exports.SCChannel = SCChannel;
 
-},{"component-emitter":12}],20:[function(_dereq_,module,exports){
+},{"component-emitter":11}],19:[function(_dereq_,module,exports){
 // Based on https://github.com/dscape/cycle/blob/master/cycle.js
 
 module.exports = function decycle(object) {
@@ -5126,7 +4937,7 @@ module.exports = function decycle(object) {
     }(object, '$'));
 };
 
-},{}],21:[function(_dereq_,module,exports){
+},{}],20:[function(_dereq_,module,exports){
 var decycle = _dereq_('./decycle');
 
 var isStrict = (function () { return !this; })();
@@ -5454,7 +5265,7 @@ module.exports.hydrateError = function hydrateError(error) {
 
 module.exports.decycle = decycle;
 
-},{"./decycle":20}],22:[function(_dereq_,module,exports){
+},{"./decycle":19}],21:[function(_dereq_,module,exports){
 (function (global){
 var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 var validJSONStartRegex = /^[ \n\r\t]*[{\[]/;
@@ -5552,7 +5363,7 @@ module.exports.encode = function (object) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],23:[function(_dereq_,module,exports){
+},{}],22:[function(_dereq_,module,exports){
 var v1 = _dereq_('./v1');
 var v4 = _dereq_('./v4');
 
@@ -5562,7 +5373,7 @@ uuid.v4 = v4;
 
 module.exports = uuid;
 
-},{"./v1":26,"./v4":27}],24:[function(_dereq_,module,exports){
+},{"./v1":25,"./v4":26}],23:[function(_dereq_,module,exports){
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -5587,7 +5398,7 @@ function bytesToUuid(buf, offset) {
 
 module.exports = bytesToUuid;
 
-},{}],25:[function(_dereq_,module,exports){
+},{}],24:[function(_dereq_,module,exports){
 // Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
 // and inconsistent support for the `crypto` API.  We do the best we can via
@@ -5621,7 +5432,7 @@ if (getRandomValues) {
   };
 }
 
-},{}],26:[function(_dereq_,module,exports){
+},{}],25:[function(_dereq_,module,exports){
 var rng = _dereq_('./lib/rng');
 var bytesToUuid = _dereq_('./lib/bytesToUuid');
 
@@ -5732,7 +5543,7 @@ function v1(options, buf, offset) {
 
 module.exports = v1;
 
-},{"./lib/bytesToUuid":24,"./lib/rng":25}],27:[function(_dereq_,module,exports){
+},{"./lib/bytesToUuid":23,"./lib/rng":24}],26:[function(_dereq_,module,exports){
 var rng = _dereq_('./lib/rng');
 var bytesToUuid = _dereq_('./lib/bytesToUuid');
 
@@ -5763,5 +5574,5 @@ function v4(options, buf, offset) {
 
 module.exports = v4;
 
-},{"./lib/bytesToUuid":24,"./lib/rng":25}]},{},[1])(1)
+},{"./lib/bytesToUuid":23,"./lib/rng":24}]},{},[1])(1)
 });
