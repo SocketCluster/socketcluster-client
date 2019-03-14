@@ -43,11 +43,11 @@ socket.on('connect', function () {
   console.log('CONNECTED');
 });
 
-// Listen to an event called 'rand' from the server
-socket.on('rand', function (num) {
-  console.log('RANDOM: ' + num);
+// Listen to an event called 'random' from the server
+socket.on('random', function (data) {
+  console.log('RANDOM: ' + data.number);
   var curHTML = document.body.innerHTML;
-  curHTML += 'RANDOM: ' + num + '<br />';
+  curHTML += 'RANDOM: ' + data.number + '<br />';
   document.body.innerHTML = curHTML;
 });
 ```
