@@ -146,10 +146,11 @@ Also, see tests from the `asyngular-server` module.
 
 ### Connect Options
 
-See all available options : https://socketcluster.io/#!/docs/api-socketcluster-client
+See all available options: https://asyngular.io/docs/api-asyngular-client/
+
 ```js
 let options = {
-  path: '/socketcluster/',
+  path: '/asyngular/',
   port: 8000,
   hostname: '127.0.0.1',
   autoConnect: true,
@@ -159,7 +160,6 @@ let options = {
   ackTimeout: 10000, //milliseconds
   channelPrefix: null,
   disconnectOnUnload: true,
-  multiplex: true,
   autoReconnectOptions: {
     initialDelay: 10000, //milliseconds
     randomness: 10000, //milliseconds
@@ -181,6 +181,17 @@ let options = {
 - Navigate to project directory: `cd asyngular-client`
 - Install all dependencies: `npm install`
 - Run the tests: `npm test`
+
+## Compatibility mode
+
+For compatibility with an existing SocketCluster server, set the `protocolVersion` to `1` and make sure that the `path` matches your old server path:
+
+```js
+let socket = asyngularClient.create({
+  protocolVersion: 1,
+  path: '/socketcluster/'
+});
+```
 
 ## Developing
 
@@ -210,7 +221,7 @@ See the 'releases' section for changes: https://github.com/SocketCluster/asyngul
 
 (The MIT License)
 
-Copyright (c) 2013-2019 SocketCluster.io
+Copyright (c) 2013-2019 Asyngular.io
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
