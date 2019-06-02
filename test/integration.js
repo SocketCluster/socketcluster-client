@@ -285,8 +285,10 @@ describe('Integration tests', function () {
 
       await client.listener('connect').once();
 
-      await client.invoke('login', {username: 'bob'});
-      await client.listener('authenticate').once();
+      await Promise.all([
+        client.invoke('login', {username: 'bob'}),
+        client.listener('authenticate').once()
+      ]);
 
       assert.equal(client.authState, 'authenticated');
       assert.notEqual(client.authToken, null);
@@ -317,9 +319,10 @@ describe('Integration tests', function () {
 
       await client.listener('connect').once();
 
-      client.invoke('login', {username: 'bob'});
-
-      await client.listener('authenticate').once();
+      await Promise.all([
+        client.invoke('login', {username: 'bob'}),
+        client.listener('authenticate').once()
+      ]);
 
       assert.equal(client.authState, 'authenticated');
       assert.notEqual(client.authToken, null);
@@ -352,19 +355,20 @@ describe('Integration tests', function () {
 
       await Promise.all([
         (async () => {
-          await client.invoke('login', {username: 'bob'});
-          await client.listener('authenticate').once();
-          client.disconnect();
-        })(),
-        (async () => {
           await client.listener('authenticate').once();
           await client.listener('disconnect').once();
           client.connect();
           let event = await client.listener('connect').once();
-
           assert.equal(event.isAuthenticated, true);
           assert.notEqual(client.authToken, null);
           assert.equal(client.authToken.username, 'bob');
+        })(),
+        (async () => {
+          await Promise.all([
+            client.invoke('login', {username: 'bob'}),
+            client.listener('authenticate').once()
+          ]);
+          client.disconnect();
         })()
       ]);
 
@@ -465,8 +469,10 @@ describe('Integration tests', function () {
       assert.equal(client.authState, 'unauthenticated');
 
       (async () => {
-        await client.invoke('login', {username: 'bob'});
-        await client.listener('authenticate').once();
+        await Promise.all([
+          client.invoke('login', {username: 'bob'}),
+          client.listener('authenticate').once()
+        ]);
         client.disconnect();
       })();
 
@@ -626,7 +632,13 @@ describe('Integration tests', function () {
       await client.listener('connect').once();
       assert.equal(privateChannel.state, 'pending');
 
-      client.invoke('login', {username: 'bob'});
+      let authState = null;
+
+      (async () => {
+        await client.invoke('login', {username: 'bob'});
+        authState = client.authState;
+      })();
+
       await client.listener('subscribe').once();
       assert.equal(privateChannel.state, 'subscribed');
 
@@ -636,6 +648,8 @@ describe('Integration tests', function () {
       client.authenticate(validSignedAuthTokenBob);
       await client.listener('subscribe').once();
       assert.equal(privateChannel.state, 'subscribed');
+
+      assert.equal(authState, 'authenticated');
     });
 
     it('Subscriptions (including those with waitForAuth option) should have priority over the authenticate action', async function () {
@@ -1005,20 +1019,10 @@ describe('Integration tests', function () {
       assert.equal(hasSubscribeFailed, false);
     });
 
-    it('Should resolve invoke Promise with BadConnectionError after triggering the disconnect event', async function () {
+    it('Should resolve invoke Promise with BadConnectionError before triggering the disconnect event', async function () {
       client = asyngularClient.create(clientOptions);
       let messageList = [];
-
-      (async () => {
-        try {
-          await client.invoke('someEvent', 123);
-        } catch (err) {
-          messageList.push({
-            type: 'error',
-            error: err
-          });
-        }
-      })();
+      let clientState = client.state;
 
       (async () => {
         for await (let event of client.listener('disconnect')) {
@@ -1030,13 +1034,26 @@ describe('Integration tests', function () {
         }
       })();
 
+      (async () => {
+        try {
+          await client.invoke('someEvent', 123);
+        } catch (err) {
+          clientState = client.state;
+          messageList.push({
+            type: 'error',
+            error: err
+          });
+        }
+      })();
+
       await client.listener('connect').once();
       client.disconnect();
       await wait(200);
       assert.equal(messageList.length, 2);
-      assert.equal(messageList[0].type, 'disconnect');
-      assert.equal(messageList[1].type, 'error');
-      assert.equal(messageList[1].error.name, 'BadConnectionError');
+      assert.equal(clientState, client.CLOSED);
+      assert.equal(messageList[0].error.name, 'BadConnectionError');
+      assert.equal(messageList[0].type, 'error');
+      assert.equal(messageList[1].type, 'disconnect');
     });
 
     it('Should reconnect if transmit is called on a disconnected socket', async function () {
