@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "main": "socketcluster.js",
-  "version": "14.2.2",
+  "version": "14.3.0",
   "homepage": "https://github.com/SocketCluster/socketcluster-client",
   "description": "SocketCluster JavaScript client",
   "authors": [
