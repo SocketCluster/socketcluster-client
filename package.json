@@ -27,7 +27,7 @@
     "sc-errors": "^1.4.1",
     "sc-formatter": "^3.0.1",
     "uuid": "3.2.1",
-    "ws": "5.1.1"
+    "ws": "7.1.0"
   },
   "browser": {
     "ws": "./lib/ws-browser.js"
@@ -35,11 +35,12 @@
   "readmeFilename": "README.md",
   "license": "MIT",
   "devDependencies": {
+    "@babel/core": "^7.5.4",
     "babel-plugin-minify-dead-code-elimination": "0.4.3",
     "babel-runtime": "^6.26.0",
     "browserify": "^16.2.2",
-    "gulp": "^4.0.0",
-    "gulp-babel": "^6.1.2",
+    "gulp": "^4.0.2",
+    "gulp-babel": "^8.0.0",
     "gulp-cli": "^2.0.1",
     "gulp-convert-newline": "^0.0.3",
     "gulp-derequire": "^2.1.0",
@@ -48,7 +49,7 @@
     "gulp-uglify": "^3.0.1",
     "localStorage": "^1.0.3",
     "mocha": "5.2.0",
-    "socketcluster-server": "^14.2.2",
+    "socketcluster-server": "^14.5.0",
     "uglify-js": "^3.4.8",
     "vinyl-source-stream": "^2.0.0"
   }
