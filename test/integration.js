@@ -81,21 +81,6 @@ describe('Integration tests', function () {
     }
     handleServerConnection();
 
-    server.setMiddleware(server.MIDDLEWARE_INBOUND, async function (middlewareStream) {
-      for await (let action of middlewareStream) {
-        if (
-          action.type === server.ACTION_AUTHENTICATE &&
-          (!action.authToken || action.authToken.username === 'alice')
-        ) {
-          let err = new Error('Blocked by MIDDLEWARE_AUTHENTICATE');
-          err.name = 'AuthenticateMiddlewareError';
-          action.block(err);
-          continue;
-        }
-        action.allow();
-      }
-    });
-
     clientOptions = {
       hostname: '127.0.0.1',
       port: PORT_NUMBER,
