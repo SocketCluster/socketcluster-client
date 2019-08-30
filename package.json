@@ -24,7 +24,7 @@
     "linked-list": "0.1.0",
     "querystring": "0.2.0",
     "sc-channel": "^1.2.0",
-    "sc-errors": "^1.4.1",
+    "sc-errors": "^2.0.1",
     "sc-formatter": "^3.0.1",
     "uuid": "3.2.1",
     "ws": "7.1.0"
