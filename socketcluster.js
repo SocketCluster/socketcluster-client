@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v14.3.0
+ * SocketCluster JavaScript client v14.3.1
  */
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketCluster = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(_dereq_,module,exports){
 var SCClientSocket = _dereq_('./lib/scclientsocket');
@@ -22,7 +22,7 @@ module.exports.destroy = function (socket) {
 
 module.exports.clients = factory.clients;
 
-module.exports.version = '14.3.0';
+module.exports.version = '14.3.1';
 
 },{"./lib/factory":3,"./lib/scclientsocket":5,"component-emitter":11}],2:[function(_dereq_,module,exports){
 (function (global){
@@ -1840,7 +1840,8 @@ function toByteArray (b64) {
     ? validLen - 4
     : validLen
 
-  for (var i = 0; i < len; i += 4) {
+  var i
+  for (i = 0; i < len; i += 4) {
     tmp =
       (revLookup[b64.charCodeAt(i)] << 18) |
       (revLookup[b64.charCodeAt(i + 1)] << 12) |
@@ -1939,6 +1940,10 @@ function fromByteArray (uint8) {
 
 var base64 = _dereq_('base64-js')
 var ieee754 = _dereq_('ieee754')
+var customInspectSymbol =
+  (typeof Symbol === 'function' && typeof Symbol.for === 'function')
+    ? Symbol.for('nodejs.util.inspect.custom')
+    : null
 
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
@@ -1975,7 +1980,9 @@ function typedArraySupport () {
   // Can typed array instances can be augmented?
   try {
     var arr = new Uint8Array(1)
-    arr.__proto__ = { __proto__: Uint8Array.prototype, foo: function () { return 42 } }
+    var proto = { foo: function () { return 42 } }
+    Object.setPrototypeOf(proto, Uint8Array.prototype)
+    Object.setPrototypeOf(arr, proto)
     return arr.foo() === 42
   } catch (e) {
     return false
@@ -2004,7 +2011,7 @@ function createBuffer (length) {
   }
   // Return an augmented `Uint8Array` instance
   var buf = new Uint8Array(length)
-  buf.__proto__ = Buffer.prototype
+  Object.setPrototypeOf(buf, Buffer.prototype)
   return buf
 }
 
@@ -2054,7 +2061,7 @@ function from (value, encodingOrOffset, length) {
   }
 
   if (value == null) {
-    throw TypeError(
+    throw new TypeError(
       'The first argument must be one of type string, Buffer, ArrayBuffer, Array, ' +
       'or Array-like Object. Received type ' + (typeof value)
     )
@@ -2106,8 +2113,8 @@ Buffer.from = function (value, encodingOrOffset, length) {
 
 // Note: Change prototype *after* Buffer.from is defined to workaround Chrome bug:
 // https://github.com/feross/buffer/pull/148
-Buffer.prototype.__proto__ = Uint8Array.prototype
-Buffer.__proto__ = Uint8Array
+Object.setPrototypeOf(Buffer.prototype, Uint8Array.prototype)
+Object.setPrototypeOf(Buffer, Uint8Array)
 
 function assertSize (size) {
   if (typeof size !== 'number') {
@@ -2211,7 +2218,8 @@ function fromArrayBuffer (array, byteOffset, length) {
   }
 
   // Return an augmented `Uint8Array` instance
-  buf.__proto__ = Buffer.prototype
+  Object.setPrototypeOf(buf, Buffer.prototype)
+
   return buf
 }
 
@@ -2533,6 +2541,9 @@ Buffer.prototype.inspect = function inspect () {
   if (this.length > max) str += ' ... '
   return '<Buffer ' + str + '>'
 }
+if (customInspectSymbol) {
+  Buffer.prototype[customInspectSymbol] = Buffer.prototype.inspect
+}
 
 Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
   if (isInstance(target, Uint8Array)) {
@@ -2658,7 +2669,7 @@ function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
         return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
       }
     }
-    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
+    return arrayIndexOf(buffer, [val], byteOffset, encoding, dir)
   }
 
   throw new TypeError('val must be string, number or Buffer')
@@ -3024,7 +3035,8 @@ Buffer.prototype.slice = function slice (start, end) {
 
   var newBuf = this.subarray(start, end)
   // Return an augmented `Uint8Array` instance
-  newBuf.__proto__ = Buffer.prototype
+  Object.setPrototypeOf(newBuf, Buffer.prototype)
+
   return newBuf
 }
 
@@ -3513,6 +3525,8 @@ Buffer.prototype.fill = function fill (val, start, end, encoding) {
     }
   } else if (typeof val === 'number') {
     val = val & 255
+  } else if (typeof val === 'boolean') {
+    val = Number(val)
   }
 
   // Invalid ranges are not set to a default, so can range check early.
@@ -4992,6 +5006,18 @@ function AuthTokenError(message) {
 }
 AuthTokenError.prototype = Object.create(Error.prototype);
 
+// For any other auth error; not specifically related to the auth token itself.
+function AuthError(message) {
+  this.name = 'AuthError';
+  this.message = message;
+  if (Error.captureStackTrace && !isStrict) {
+    Error.captureStackTrace(this, arguments.callee);
+  } else {
+    this.stack = (new Error()).stack;
+  }
+}
+AuthError.prototype = Object.create(Error.prototype);
+
 
 function SilentMiddlewareBlockedError(message, type) {
   this.name = 'SilentMiddlewareBlockedError';
@@ -5169,6 +5195,7 @@ module.exports = {
   AuthTokenInvalidError: AuthTokenInvalidError,
   AuthTokenNotBeforeError: AuthTokenNotBeforeError,
   AuthTokenError: AuthTokenError,
+  AuthError: AuthError,
   SilentMiddlewareBlockedError: SilentMiddlewareBlockedError,
   InvalidActionError: InvalidActionError,
   InvalidArgumentsError: InvalidArgumentsError,
@@ -5204,7 +5231,8 @@ module.exports.socketProtocolErrorStatuses = {
   4005: 'Did not receive #handshake from client before timeout',
   4006: 'Failed to bind socket to message broker',
   4007: 'Client connection establishment timed out',
-  4008: 'Server rejected handshake from client'
+  4008: 'Server rejected handshake from client',
+  4009: 'Server received a message before the client handshake'
 };
 
 module.exports.socketProtocolIgnoreStatuses = {
