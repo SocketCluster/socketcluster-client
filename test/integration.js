@@ -1241,7 +1241,7 @@ describe('Integration tests', function () {
         }
       })();
 
-      let disconnectCode = null;
+      let disconnectEvent = null;
       let clientError = null;
 
       (async () => {
@@ -1252,13 +1252,14 @@ describe('Integration tests', function () {
 
       (async () => {
         for await (let event of client.listener('disconnect')) {
-          disconnectCode = event.code;
+          disconnectEvent = event;
         }
       })();
 
       await wait(1000);
 
-      assert.equal(disconnectCode, 4000);
+      assert.equal(disconnectEvent.code, 4000);
+      assert.equal(disconnectEvent.reason, 'Server ping timed out');
       assert.notEqual(clientError, null);
       assert.equal(clientError.name, 'SocketProtocolError');
     });

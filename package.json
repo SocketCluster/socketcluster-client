@@ -25,7 +25,7 @@
     "linked-list": "^0.1.0",
     "lodash.clonedeep": "^4.5.0",
     "querystring": "^0.2.0",
-    "sc-errors": "^2.0.0",
+    "sc-errors": "^2.0.1",
     "sc-formatter": "^3.0.2",
     "stream-demux": "^7.0.1",
     "uuid": "^3.2.1",
