@@ -1,7 +1,7 @@
 {
   "name": "asyngular-client",
   "description": "Asyngular JavaScript client",
-  "version": "6.2.0",
+  "version": "6.2.1",
   "homepage": "https://asyngular.io/",
   "main": "asyngular-client.min.js",
   "contributors": [
