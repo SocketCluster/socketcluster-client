@@ -24,12 +24,12 @@ var FULL_HEADER = (
 
 gulp.task('browserify', function (done) {
   var stream = browserify({
-      builtins: ['_process', 'events', 'buffer', 'querystring'],
-      entries: 'index.js',
-      standalone: 'asyngularClient'
-    })
+    builtins: ['_process', 'events', 'buffer', 'querystring'],
+    entries: 'index.js',
+    standalone: 'asyngularClient'
+  })
     .ignore('_process')
-    .require('./index.js', {expose: 'asyngular-client'})
+    .require('./index.js', { expose: 'asyngular-client' })
     .bundle();
   return stream.pipe(source('asyngular-client.js'))
     .pipe(insert.prepend(FULL_HEADER))
@@ -47,6 +47,9 @@ gulp.task('minify', function () {
     }))
     .pipe(babel({
       plugins: ['minify-dead-code-elimination']
+    }))
+    .pipe(babel({
+      presets: ['@babel/preset-env']
     }))
     .pipe(minify())
     .pipe(insert.prepend(FULL_HEADER))
