@@ -1,8 +1,9 @@
 {
   "name": "asyngular-client",
   "description": "Asyngular JavaScript client",
-  "version": "6.2.0",
+  "version": "6.2.1",
   "homepage": "https://asyngular.io/",
+  "main": "asyngular-client.min.js",
   "contributors": [
     {
       "name": "Jonathan Gros-Dubois",
@@ -37,11 +38,12 @@
   "readmeFilename": "README.md",
   "license": "MIT",
   "devDependencies": {
-    "@babel/core": "^7.2.2",
-    "@babel/preset-env": "^7.2.3",
+    "@babel/core": "^7.7.4",
+    "@babel/preset-env": "^7.7.4",
     "asyngular-server": "^6.2.0",
     "babel-plugin-minify-dead-code-elimination": "^0.5.0",
     "browserify": "^16.2.3",
+    "es-check": "^5.1.0",
     "gulp": "^4.0.0",
     "gulp-babel": "^8.0.0",
     "gulp-cli": "^2.0.1",
