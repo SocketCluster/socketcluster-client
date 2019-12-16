@@ -29,7 +29,9 @@ gulp.task('browserify', function (done) {
     standalone: 'asyngularClient'
   })
     .ignore('_process')
-    .require('./index.js', { expose: 'asyngular-client' })
+    .require('./index.js', {
+      expose: 'asyngular-client'
+    })
     .bundle();
   return stream.pipe(source('asyngular-client.js'))
     .pipe(insert.prepend(FULL_HEADER))
