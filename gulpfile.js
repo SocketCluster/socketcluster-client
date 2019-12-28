@@ -50,9 +50,6 @@ gulp.task('minify', function () {
     .pipe(babel({
       plugins: ['minify-dead-code-elimination']
     }))
-    .pipe(babel({
-      presets: ['@babel/preset-env']
-    }))
     .pipe(minify())
     .pipe(insert.prepend(FULL_HEADER))
     .pipe(rename({

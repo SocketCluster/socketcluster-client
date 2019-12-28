@@ -3,7 +3,6 @@
   "description": "Asyngular JavaScript client",
   "version": "6.2.2",
   "homepage": "https://asyngular.io/",
-  "main": "asyngular-client.min.js",
   "contributors": [
     {
       "name": "Jonathan Gros-Dubois",
