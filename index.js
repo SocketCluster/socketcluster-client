@@ -1,6 +1,6 @@
 const AGClientSocket = require('./lib/clientsocket');
 const factory = require('./lib/factory');
-const version = '6.2.0';
+const version = '6.2.4';
 
 module.exports.factory = factory;
 module.exports.AGClientSocket = AGClientSocket;
