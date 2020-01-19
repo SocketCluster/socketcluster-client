@@ -1,8 +1,8 @@
 {
-  "name": "asyngular-client",
-  "description": "Asyngular JavaScript client",
-  "version": "6.2.4",
-  "homepage": "https://asyngular.io/",
+  "name": "socketcluster-client",
+  "description": "SocketCluster JavaScript client",
+  "version": "15.0.0",
+  "homepage": "https://socketcluster.io/",
   "contributors": [
     {
       "name": "Jonathan Gros-Dubois",
@@ -11,12 +11,18 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/SocketCluster/asyngular-client.git"
+    "url": "git://github.com/SocketCluster/socketcluster-client.git"
   },
   "scripts": {
     "build": "gulp browserify; gulp minify",
     "test": "mocha --reporter spec --timeout 3000 --slow 3000"
   },
+  "keywords": [
+    "websocket",
+    "realtime",
+    "client",
+    "socketcluster"
+  ],
   "dependencies": {
     "ag-channel": "^4.0.2",
     "ag-request": "^1.0.0",
@@ -39,7 +45,7 @@
   "devDependencies": {
     "@babel/core": "^7.7.4",
     "@babel/preset-env": "^7.7.4",
-    "asyngular-server": "^6.2.0",
+    "socketcluster-server": "^15.0.0",
     "babel-plugin-minify-dead-code-elimination": "^0.5.0",
     "browserify": "^16.2.3",
     "es-check": "^5.1.0",

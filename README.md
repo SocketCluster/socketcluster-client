@@ -1,33 +1,33 @@
-Asyngular JavaScript client
+SocketCluster JavaScript client
 ======
 
-Client module for Asyngular.
+Client module for SocketCluster.
 
 ## Setting up
 
-You will need to install both ```asyngular-client``` and ```asyngular-server``` (https://github.com/SocketCluster/asyngular-server).
+You will need to install both ```socketcluster-client``` and ```socketcluster-server``` (https://github.com/SocketCluster/socketcluster-server).
 
 To install this module:
 ```bash
-npm install asyngular-client
+npm install socketcluster-client
 ```
 
 ## How to use
 
-The asyngular-client script is called `asyngular-client.js` (located in the main asyngular-client directory).
+The socketcluster-client script is called `socketcluster-client.js` (located in the main socketcluster-client directory).
 Embed it in your HTML page like this:
 ```html
-<script type="text/javascript" src="/asyngular-client.js"></script>
+<script type="text/javascript" src="/socketcluster-client.js"></script>
 ```
 \* Note that the src attribute may be different depending on how you setup your HTTP server.
 
-Once you have embedded the client `asyngular-client.js` into your page, you will gain access to a global `asyngularClient` object.
+Once you have embedded the client `socketcluster-client.js` into your page, you will gain access to a global `socketClusterClient` object.
 You may also use CommonJS `require` or ES6 module imports.
 
 ### Connect to a server
 
 ```js
-let socket = asyngularClient.create({
+let socket = socketClusterClient.create({
   hostname: 'localhost',
   port: 8000
 });
@@ -138,19 +138,19 @@ let options = {
   rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
 };
 // Initiate the connection to the server
-let socket = asyngularClient.create(options);
+let socket = socketClusterClient.create(options);
 ```
 
-For more detailed examples of how to use Asyngular, see `test/integration.js`.
-Also, see tests from the `asyngular-server` module.
+For more detailed examples of how to use SocketCluster, see `test/integration.js`.
+Also, see tests from the `socketcluster-server` module.
 
 ### Connect Options
 
-See all available options: https://asyngular.io/docs/api-asyngular-client/
+See all available options: https://socketcluster.io/
 
 ```js
 let options = {
-  path: '/asyngular/',
+  path: '/socketcluster/',
   port: 8000,
   hostname: '127.0.0.1',
   autoConnect: true,
@@ -177,8 +177,8 @@ let options = {
 
 ## Running the tests
 
-- Clone this repo: `git clone git@github.com:SocketCluster/asyngular-client.git`
-- Navigate to project directory: `cd asyngular-client`
+- Clone this repo: `git clone git@github.com:SocketCluster/socketcluster-client.git`
+- Navigate to project directory: `cd socketcluster-client`
 - Install all dependencies: `npm install`
 - Run the tests: `npm test`
 
@@ -187,7 +187,7 @@ let options = {
 For compatibility with an existing SocketCluster server, set the `protocolVersion` to `1` and make sure that the `path` matches your old server path:
 
 ```js
-let socket = asyngularClient.create({
+let socket = socketClusterClient.create({
   protocolVersion: 1,
   path: '/socketcluster/'
 });
@@ -198,7 +198,7 @@ let socket = asyngularClient.create({
 ### Install all dependencies
 
 ```bash
-cd asyngular-client
+cd socketcluster-client
 
 npm install -g gulp gulp-cli browserify uglify-es
 
@@ -207,7 +207,7 @@ npm install
 
 ### Building
 
-To build the Asyngular client:
+To build the SocketCluster client:
 
 ```bash
 npm run build
@@ -215,13 +215,13 @@ npm run build
 
 ## Change log
 
-See the 'releases' section for changes: https://github.com/SocketCluster/asyngular-client/releases
+See the 'releases' section for changes: https://github.com/SocketCluster/socketcluster-client/releases
 
 ## License
 
 (The MIT License)
 
-Copyright (c) 2013-2019 Asyngular.io
+Copyright (c) 2013-2019 SocketCluster.io
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
