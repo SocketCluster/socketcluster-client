@@ -1,7 +1,7 @@
 const assert = require('assert');
-const asyngularServer = require('asyngular-server');
-const AGAction = require('asyngular-server/action');
-const asyngularClient = require('../');
+const socketClusterServer = require('socketcluster-server');
+const AGAction = require('socketcluster-server/action');
+const socketClusterClient = require('../');
 const localStorage = require('localStorage');
 
 // Add to the global scope like in browser.
@@ -73,7 +73,7 @@ describe('Integration tests', function () {
       ackTimeout: 200
     };
 
-    server = asyngularServer.listen(PORT_NUMBER, serverOptions);
+    server = socketClusterServer.listen(PORT_NUMBER, serverOptions);
     async function handleServerConnection() {
       for await (let {socket} of server.listener('connection')) {
         connectionHandler(socket);
@@ -92,7 +92,7 @@ describe('Integration tests', function () {
 
   afterEach('Shut down server and clients afterwards', async function () {
     let cleanupTasks = [];
-    global.localStorage.removeItem('asyngular.authToken');
+    global.localStorage.removeItem('socketcluster.authToken');
     if (client) {
       if (client.state !== client.CLOSED) {
         cleanupTasks.push(
@@ -122,7 +122,7 @@ describe('Integration tests', function () {
         port: PORT_NUMBER
       };
 
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.state, client.CONNECTING);
     });
@@ -134,7 +134,7 @@ describe('Integration tests', function () {
         autoConnect: false
       };
 
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.state, client.CLOSED);
     });
@@ -142,7 +142,7 @@ describe('Integration tests', function () {
 
   describe('Errors', function () {
     it('Should be able to emit the error event locally on the socket', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let err = null;
 
       (async () => {
@@ -168,14 +168,14 @@ describe('Integration tests', function () {
 
   describe('Authentication', function () {
     it('Should not send back error if JWT is not provided in handshake', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let event = await client.listener('connect').once();
       assert.equal(event.authError === undefined, true);
     });
 
     it('Should be authenticated on connect if previous JWT token is present', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
 
       let event = await client.listener('connect').once();
       assert.equal(client.authState, 'authenticated');
@@ -184,8 +184,8 @@ describe('Integration tests', function () {
     });
 
     it('Should send back error if JWT is invalid during handshake', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
 
       let event = await client.listener('connect').once();
       assert.notEqual(event, null);
@@ -218,8 +218,8 @@ describe('Integration tests', function () {
     });
 
     it('Should allow switching between users', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
       let authenticateTriggered = false;
       let authStateChangeTriggered = false;
 
@@ -251,7 +251,7 @@ describe('Integration tests', function () {
 
     it('If token engine signing is synchronous, authentication can be captured using the authenticate event', async function () {
       let port = 8509;
-      let customServer = asyngularServer.listen(port, {
+      let customServer = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: false
       });
@@ -263,7 +263,7 @@ describe('Integration tests', function () {
 
       await customServer.listener('ready').once();
 
-      client = asyngularClient.create({
+      client = socketClusterClient.create({
         hostname: clientOptions.hostname,
         port: port
       });
@@ -285,7 +285,7 @@ describe('Integration tests', function () {
 
     it('If token engine signing is asynchronous, authentication can be captured using the authenticate event', async function () {
       let port = 8510;
-      let customServer = asyngularServer.listen(port, {
+      let customServer = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authSignAsync: true
       });
@@ -297,7 +297,7 @@ describe('Integration tests', function () {
 
       await customServer.listener('ready').once();
 
-      client = asyngularClient.create({
+      client = socketClusterClient.create({
         hostname: clientOptions.hostname,
         port: port
       });
@@ -319,7 +319,7 @@ describe('Integration tests', function () {
 
     it('If token verification is synchronous, authentication can be captured using the authenticate event', async function () {
       let port = 8511;
-      customServer = asyngularServer.listen(port, {
+      customServer = socketClusterServer.listen(port, {
         authKey: serverOptions.authKey,
         authVerifyAsync: false
       });
@@ -331,7 +331,7 @@ describe('Integration tests', function () {
 
       await customServer.listener('ready').once();
 
-      client = asyngularClient.create({
+      client = socketClusterClient.create({
         hostname: clientOptions.hostname,
         port: port
       });
@@ -362,7 +362,7 @@ describe('Integration tests', function () {
     });
 
     it('Should start out in pending authState and switch to unauthenticated if no token exists', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       assert.equal(client.authState, 'unauthenticated');
 
       (async () => {
@@ -374,8 +374,8 @@ describe('Integration tests', function () {
     });
 
     it('Should deal with auth engine errors related to saveToken function', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
 
       let caughtError;
 
@@ -418,7 +418,7 @@ describe('Integration tests', function () {
     });
 
     it('Should gracefully handle authenticate abortion due to disconnection', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       await client.listener('connect').once();
 
@@ -435,7 +435,7 @@ describe('Integration tests', function () {
     });
 
     it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 1', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let expectedAuthStateChanges = [
         'unauthenticated->authenticated'
@@ -483,8 +483,8 @@ describe('Integration tests', function () {
     });
 
     it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 2', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
 
       let expectedAuthStateChanges = [
         'unauthenticated->authenticated',
@@ -524,8 +524,8 @@ describe('Integration tests', function () {
     });
 
     it('Should go through the correct sequence of authentication state changes when dealing with disconnections; part 3', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
 
       let expectedAuthStateChanges = [
         'unauthenticated->authenticated',
@@ -558,8 +558,8 @@ describe('Integration tests', function () {
     });
 
     it('Should go through the correct sequence of authentication state changes when authenticating as a user while already authenticated as another user', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
 
       let expectedAuthStateChanges = [
         'unauthenticated->authenticated'
@@ -609,7 +609,7 @@ describe('Integration tests', function () {
     });
 
     it('Should wait for socket to be authenticated before subscribing to waitForAuth channel', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let privateChannel = client.subscribe('priv', {waitForAuth: true});
       assert.equal(privateChannel.state, 'pending');
@@ -638,8 +638,8 @@ describe('Integration tests', function () {
     });
 
     it('Subscriptions (including those with waitForAuth option) should have priority over the authenticate action', async function () {
-      global.localStorage.setItem('asyngular.authToken', validSignedAuthTokenBob);
-      client = asyngularClient.create(clientOptions);
+      global.localStorage.setItem('socketcluster.authToken', validSignedAuthTokenBob);
+      client = socketClusterClient.create(clientOptions);
 
       let expectedAuthStateChanges = [
         'unauthenticated->authenticated',
@@ -714,7 +714,7 @@ describe('Integration tests', function () {
     });
 
     it('Should trigger the close event if the socket disconnects in the middle of the handshake phase', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let aborted = false;
       let diconnected = false;
       let closed = false;
@@ -744,7 +744,7 @@ describe('Integration tests', function () {
     });
 
     it('Should trigger the close event if the socket disconnects after the handshake phase', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let aborted = false;
       let diconnected = false;
       let closed = false;
@@ -780,7 +780,7 @@ describe('Integration tests', function () {
 
   describe('Transmitting remote events', function () {
     it('Should not throw error on socket if ackTimeout elapses before response to event is sent back', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let caughtError;
       let clientError;
@@ -818,7 +818,7 @@ describe('Integration tests', function () {
     let lastServerMessage = null;
 
     beforeEach('Setup publisher client', async function () {
-      publisherClient = asyngularClient.create(clientOptions);
+      publisherClient = socketClusterClient.create(clientOptions);
 
       server.removeMiddleware(server.MIDDLEWARE_INBOUND);
       server.setMiddleware(server.MIDDLEWARE_INBOUND, async (middlewareStream) => {
@@ -836,7 +836,7 @@ describe('Integration tests', function () {
     });
 
     it('Should receive transmitted publish messages if subscribed to channel', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let channel = client.subscribe('foo');
       await channel.listener('subscribe').once();
@@ -864,7 +864,7 @@ describe('Integration tests', function () {
     });
 
     it('Should receive invoked publish messages if subscribed to channel', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let channel = client.subscribe('bar');
       await channel.listener('subscribe').once();
@@ -897,7 +897,7 @@ describe('Integration tests', function () {
 
   describe('Reconnecting socket', function () {
     it('Should disconnect socket with code 1000 and reconnect', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       await client.listener('connect').once();
 
@@ -919,7 +919,7 @@ describe('Integration tests', function () {
     });
 
     it('Should disconnect socket with custom code and data when socket.reconnect() is called with arguments', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       await client.listener('connect').once();
 
@@ -942,7 +942,7 @@ describe('Integration tests', function () {
 
   describe('Order of events', function () {
     it('Should trigger unsubscribe event on channel before disconnect event', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let hasUnsubscribed = false;
 
       let fooChannel = client.subscribe('foo');
@@ -965,7 +965,7 @@ describe('Integration tests', function () {
     });
 
     it('Should not invoke subscribeFail event if connection is aborted', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let hasSubscribeFailed = false;
       let gotBadConnectionError = false;
       let wasConnected = false;
@@ -1005,7 +1005,7 @@ describe('Integration tests', function () {
     });
 
     it('Should resolve invoke Promise with BadConnectionError before triggering the disconnect event', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let messageList = [];
       let clientState = client.state;
 
@@ -1054,7 +1054,7 @@ describe('Integration tests', function () {
         }
       })();
 
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let clientError;
 
@@ -1110,7 +1110,7 @@ describe('Integration tests', function () {
     });
 
     it('Should correctly handle multiple successive connect and disconnect calls', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let eventList = [];
 
@@ -1228,7 +1228,7 @@ describe('Integration tests', function () {
   describe('Ping/pong', function () {
     it('Should disconnect if ping is not received before timeout', async function () {
       clientOptions.connectTimeout = 500;
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.pingTimeout, 500);
 
@@ -1267,7 +1267,7 @@ describe('Integration tests', function () {
     it('Should not disconnect if ping is not received before timeout when pingTimeoutDisabled is true', async function () {
       clientOptions.connectTimeout = 500;
       clientOptions.pingTimeoutDisabled = true;
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       assert.equal(client.pingTimeout, 500);
 
@@ -1285,7 +1285,7 @@ describe('Integration tests', function () {
 
   describe('Consumable streams', function () {
     it('Should be able to get the stats list of consumers and check if consumers exist on specific channels', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let fooChannel = client.channel('foo');
       (async () => {
@@ -1327,7 +1327,7 @@ describe('Integration tests', function () {
     });
 
     it('Should be able to check the listener backpressure for specific channels', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       let fooChannel = client.channel('foo');
       let barChannel = client.channel('bar');
@@ -1374,7 +1374,7 @@ describe('Integration tests', function () {
     });
 
     it('Should be able to kill and close channels and backpressure should update accordingly', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
 
       await client.listener('connect').once();
 
@@ -1463,7 +1463,7 @@ describe('Integration tests', function () {
 
   describe('Utilities', function () {
     it('Can encode a string to base64 and then decode it back to utf8', async function () {
-      client = asyngularClient.create(clientOptions);
+      client = socketClusterClient.create(clientOptions);
       let encodedString = client.encodeBase64('This is a string');
       assert.equal(encodedString, 'VGhpcyBpcyBhIHN0cmluZw==');
       let decodedString = client.decodeBase64(encodedString);
