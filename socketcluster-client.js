@@ -1,5 +1,5 @@
 /**
- * SocketCluster JavaScript client v15.0.2
+ * SocketCluster JavaScript client v15.1.0
  */
  (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.socketClusterClient = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 (function (global){
@@ -90,6 +90,8 @@ function AGClientSocket(socketOptions) {
   let defaultOptions = {
     path: '/socketcluster/',
     secure: false,
+    protocolScheme: null,
+    socketPath: null,
     autoConnect: true,
     autoReconnect: true,
     autoSubscribeOnConnect: true,
@@ -1747,7 +1749,12 @@ AGTransport.CLOSED = AGTransport.prototype.CLOSED = 'closed';
 
 AGTransport.prototype.uri = function () {
   let query = this.options.query || {};
-  let schema = this.options.secure ? 'wss' : 'ws';
+  let scheme;
+  if (this.options.protocolScheme == null) {
+    scheme = this.options.secure ? 'wss' : 'ws';
+  } else {
+    scheme = this.options.protocolScheme;
+  }
 
   if (this.options.timestampRequests) {
     query[this.options.timestampParam] = (new Date()).getTime();
@@ -1760,19 +1767,25 @@ AGTransport.prototype.uri = function () {
   }
 
   let host;
-  if (this.options.host) {
-    host = this.options.host;
-  } else {
-    let port = '';
+  let path;
+  if (this.options.socketPath == null) {
+    if (this.options.host) {
+      host = this.options.host;
+    } else {
+      let port = '';
 
-    if (this.options.port && ((schema === 'wss' && this.options.port !== 443)
-      || (schema === 'ws' && this.options.port !== 80))) {
-      port = ':' + this.options.port;
+      if (this.options.port && ((scheme === 'wss' && this.options.port !== 443)
+        || (scheme === 'ws' && this.options.port !== 80))) {
+        port = ':' + this.options.port;
+      }
+      host = this.options.hostname + port;
     }
-    host = this.options.hostname + port;
+    path = this.options.path;
+  } else {
+    host = this.options.socketPath;
+    path = `:${this.options.path}`;
   }
-
-  return schema + '://' + host + this.options.path + query;
+  return scheme + '://' + host + path + query;
 };
 
 AGTransport.prototype._onOpen = async function () {
@@ -6629,7 +6642,7 @@ module.exports = WritableConsumableStream;
 },{"./consumer":34,"consumable-stream":13}],"socketcluster-client":[function(require,module,exports){
 const AGClientSocket = require('./lib/clientsocket');
 const factory = require('./lib/factory');
-const version = '15.0.2';
+const version = '15.1.0';
 
 module.exports.factory = factory;
 module.exports.AGClientSocket = AGClientSocket;
