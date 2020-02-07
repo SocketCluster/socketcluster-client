@@ -45,7 +45,6 @@
   "devDependencies": {
     "@babel/core": "^7.7.4",
     "@babel/preset-env": "^7.7.4",
-    "socketcluster-server": "^16.0.0",
     "babel-plugin-minify-dead-code-elimination": "^0.5.0",
     "browserify": "^16.2.3",
     "es-check": "^5.1.0",
@@ -58,6 +57,7 @@
     "gulp-uglify": "^3.0.1",
     "localStorage": "^1.0.3",
     "mocha": "^5.2.0",
+    "socketcluster-server": "^16.0.0",
     "uglify-es": "^3.3.9",
     "vinyl-source-stream": "^2.0.0"
   }
