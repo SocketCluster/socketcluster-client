@@ -24,18 +24,18 @@
     "socketcluster"
   ],
   "dependencies": {
-    "ag-channel": "^4.0.2",
+    "ag-channel": "^5.0.0",
     "ag-request": "^1.0.0",
-    "async-stream-emitter": "^3.0.2",
+    "async-stream-emitter": "^4.0.0",
     "buffer": "^5.2.1",
     "clone-deep": "^4.0.1",
     "linked-list": "^0.1.0",
     "querystring": "^0.2.0",
     "sc-errors": "^2.0.1",
     "sc-formatter": "^3.0.2",
-    "stream-demux": "^7.0.1",
+    "stream-demux": "^8.0.0",
     "uuid": "^3.2.1",
-    "ws": "^7.1.0"
+    "ws": "^7.2.1"
   },
   "browser": {
     "ws": "./lib/ws-browser.js"
