@@ -5,6 +5,7 @@ var babel = require('gulp-babel');
 var insert = require('gulp-insert');
 var rename = require('gulp-rename');
 var source = require('vinyl-source-stream');
+var buffer = require('vinyl-buffer');
 var uglify = require('uglify-es');
 var uglifyComposer = require('gulp-uglify/composer');
 var minify = uglifyComposer(uglify, console);
@@ -24,7 +25,7 @@ var FULL_HEADER = (
 
 gulp.task('browserify', function (done) {
   var stream = browserify({
-    builtins: ['_process', 'events', 'buffer', 'querystring'],
+    builtins: ['_process', 'events', 'buffer', 'url'],
     entries: 'index.js',
     standalone: 'socketClusterClient'
   })
@@ -34,6 +35,7 @@ gulp.task('browserify', function (done) {
     })
     .bundle();
   return stream.pipe(source('socketcluster-client.js'))
+    .pipe(buffer())
     .pipe(insert.prepend(FULL_HEADER))
     .pipe(convertNewline({
       newline: 'lf',
