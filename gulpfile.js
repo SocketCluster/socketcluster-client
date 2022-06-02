@@ -25,7 +25,7 @@ var FULL_HEADER = (
 
 gulp.task('browserify', function (done) {
   var stream = browserify({
-    builtins: ['_process', 'events', 'buffer', 'url'],
+    builtins: ['_process', 'events', 'buffer'],
     entries: 'index.js',
     standalone: 'socketClusterClient'
   })
