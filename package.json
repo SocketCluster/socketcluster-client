@@ -57,7 +57,7 @@
     "gulp-uglify": "^3.0.2",
     "localStorage": "^1.0.3",
     "mocha": "^9.0.0",
-    "socketcluster-server": "^17.0.0",
+    "socketcluster-server": "^17.1.0",
     "uglify-es": "^3.3.9",
     "vinyl-source-stream": "^2.0.0"
   }
