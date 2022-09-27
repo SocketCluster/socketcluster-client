@@ -1226,6 +1226,7 @@ describe('Integration tests', function () {
   });
 
   describe('Ping/pong', function () {
+
     it('Should disconnect if ping is not received before timeout', async function () {
       clientOptions.connectTimeout = 500;
       client = socketClusterClient.create(clientOptions);
