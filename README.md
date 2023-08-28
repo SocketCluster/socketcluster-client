@@ -135,7 +135,7 @@ let options = {
   hostname: 'securedomain.com',
   secure: true,
   port: 443,
-  rejectUnauthorized: false // Only necessary during debug if using a self-signed certificate
+  wsOptions: { rejectUnauthorized: false } // Only necessary during debug if using a self-signed certificate
 };
 // Initiate the connection to the server
 let socket = socketClusterClient.create(options);
@@ -155,7 +155,6 @@ let options = {
   hostname: '127.0.0.1',
   autoConnect: true,
   secure: false,
-  rejectUnauthorized: false,
   connectTimeout: 10000, //milliseconds
   ackTimeout: 10000, //milliseconds
   channelPrefix: null,
@@ -169,6 +168,7 @@ let options = {
   authEngine: null,
   codecEngine: null,
   subscriptionRetryOptions: {},
+  wsOptions: { rejectUnauthorized: false },
   query: {
     yourparam: 'hello'
   }
