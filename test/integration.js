@@ -940,7 +940,7 @@ describe('Integration tests', function () {
     });
   });
 
-  describe('Order of events', function () {
+  describe('Events', function () {
     it('Should trigger unsubscribe event on channel before disconnect event', async function () {
       client = socketClusterClient.create(clientOptions);
       let hasUnsubscribed = false;
@@ -1222,6 +1222,23 @@ describe('Integration tests', function () {
         },
       ];
       assert.equal(JSON.stringify(eventList), JSON.stringify(expectedEventList));
+    });
+
+    it('Should support event listener timeout using once(timeout) method', async function () {
+      client = socketClusterClient.create(clientOptions);
+
+      let event;
+      let error;
+
+      try {
+        // Since the authStateChange event will not trigger, this should timeout.
+        event = await client.listener('authStateChange').once(100);
+      } catch (err) {
+        error = err;
+      }
+
+      assert.notEqual(error, null);
+      assert.equal(error.name, 'TimeoutError');
     });
   });
 
