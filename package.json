@@ -49,6 +49,6 @@
     "localStorage": "^1.0.3",
     "mocha": "^10.2.0",
     "rollup": "^3.28.1",
-    "socketcluster-server": "^17.4.1"
+    "socketcluster-server": "^18.0.1"
   }
 }
