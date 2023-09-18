@@ -30,7 +30,7 @@
     "buffer": "^5.2.1",
     "clone-deep": "^4.0.1",
     "linked-list": "^0.1.0",
-    "sc-errors": "^2.0.1",
+    "sc-errors": "^2.0.2",
     "sc-formatter": "^4.0.0",
     "stream-demux": "^9.0.2",
     "uuid": "^8.3.2",
