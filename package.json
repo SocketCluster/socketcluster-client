@@ -25,7 +25,7 @@
   ],
   "dependencies": {
     "ag-channel": "^5.0.0",
-    "ag-request": "^1.0.0",
+    "ag-request": "^1.0.1",
     "async-stream-emitter": "^6.0.1",
     "buffer": "^5.2.1",
     "clone-deep": "^4.0.1",
@@ -49,6 +49,6 @@
     "localStorage": "^1.0.3",
     "mocha": "^10.2.0",
     "rollup": "^3.28.1",
-    "socketcluster-server": "^18.0.1"
+    "socketcluster-server": "^18.1.0"
   }
 }
