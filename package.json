@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "18.1.1",
+  "version": "18.1.2",
   "homepage": "https://socketcluster.io/",
   "contributors": [
     {
@@ -30,7 +30,7 @@
     "buffer": "^5.2.1",
     "clone-deep": "^4.0.1",
     "linked-list": "^0.1.0",
-    "sc-errors": "^2.0.2",
+    "sc-errors": "^2.0.3",
     "sc-formatter": "^4.0.0",
     "stream-demux": "^9.0.2",
     "uuid": "^8.3.2",
@@ -49,6 +49,6 @@
     "localStorage": "^1.0.3",
     "mocha": "^10.2.0",
     "rollup": "^3.28.1",
-    "socketcluster-server": "^18.1.1"
+    "socketcluster-server": "^18.1.2"
   }
 }
