@@ -158,7 +158,6 @@ let options = {
   connectTimeout: 10000, //milliseconds
   ackTimeout: 10000, //milliseconds
   channelPrefix: null,
-  disconnectOnUnload: true,
   autoReconnectOptions: {
     initialDelay: 10000, //milliseconds
     randomness: 10000, //milliseconds
