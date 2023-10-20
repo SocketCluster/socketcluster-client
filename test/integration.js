@@ -1175,16 +1175,19 @@ describe('Integration tests', function () {
         }
       })();
 
+      let onceDisconnect = client.listener('close').once();
       client.disconnect(1000, 'One');
+      await onceDisconnect;
+
+      client.listener('connect').once();
       client.connect();
       client.disconnect(4444, 'Two');
 
-      (async () => {
-        await client.listener('connect').once();
-        client.disconnect(4455, 'Three');
-      })();
-
+      let onceConnect = client.listener('connect').once();
       client.connect();
+      await onceConnect;
+
+      client.disconnect(4455, 'Three');
 
       await wait(200);
 
