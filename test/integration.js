@@ -948,6 +948,51 @@ describe('Integration tests', function () {
     });
   });
 
+  describe('Connecting an already connected socket', function () {
+    it('Should not disconnect socket if no options are provided', async function () {
+      client = socketClusterClient.create(clientOptions);
+
+      await client.listener('connect').once();
+
+      let disconnectCode;
+      let disconnectReason;
+
+      (async () => {
+        for await (let event of client.listener('disconnect')) {
+          disconnectCode = event.code;
+          disconnectReason = event.reason;
+        }
+      })();
+
+      client.connect();
+
+      assert.equal(disconnectCode, null);
+      assert.equal(disconnectReason, null);
+    });
+
+    it('Should disconnect socket with code 1000 and connect again if new options are provided', async function () {
+      client = socketClusterClient.create(clientOptions);
+
+      await client.listener('connect').once();
+
+      let disconnectCode;
+      let disconnectReason;
+
+      (async () => {
+        for await (let event of client.listener('disconnect')) {
+          disconnectCode = event.code;
+          disconnectReason = event.reason;
+        }
+      })();
+
+      client.connect(clientOptions);
+      await client.listener('connect').once();
+
+      assert.equal(disconnectCode, 1000);
+      assert.equal(disconnectReason, 'Socket was disconnected by the client to initiate a new connection');
+    });
+  });
+
   describe('Events', function () {
     it('Should trigger unsubscribe event on channel before disconnect event', async function () {
       client = socketClusterClient.create(clientOptions);
