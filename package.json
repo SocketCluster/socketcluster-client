@@ -24,13 +24,14 @@
     "socketcluster"
   ],
   "dependencies": {
+    "ag-auth": "^2.1.0",
     "ag-channel": "^5.0.0",
-    "ag-request": "^1.0.1",
+    "ag-request": "^1.1.0",
     "async-stream-emitter": "^7.0.1",
     "buffer": "^5.2.1",
     "clone-deep": "^4.0.1",
     "linked-list": "^2.1.0",
-    "sc-errors": "^2.0.3",
+    "sc-errors": "^3.0.0",
     "sc-formatter": "^4.0.0",
     "stream-demux": "^10.0.1",
     "uuid": "^8.3.2",
@@ -49,6 +50,6 @@
     "localStorage": "^1.0.3",
     "mocha": "^10.2.0",
     "rollup": "^3.28.1",
-    "socketcluster-server": "19.x.x"
+    "socketcluster-server": "*"
   }
 }
