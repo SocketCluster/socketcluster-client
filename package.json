@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "19.2.7",
+  "version": "20.0.0",
   "homepage": "https://socketcluster.io/",
   "contributors": [
     {
@@ -24,7 +24,7 @@
     "socketcluster"
   ],
   "dependencies": {
-    "ag-auth": "^2.1.0",
+    "ag-auth": "^2.1.1",
     "ag-channel": "^5.0.0",
     "ag-request": "^1.1.0",
     "async-stream-emitter": "^7.0.1",
@@ -47,7 +47,6 @@
     "@rollup/plugin-commonjs": "^25.0.4",
     "@rollup/plugin-node-resolve": "^15.2.1",
     "@rollup/plugin-terser": "^0.4.3",
-    "localStorage": "^1.0.3",
     "mocha": "^10.2.0",
     "rollup": "^3.28.1",
     "socketcluster-server": "*"

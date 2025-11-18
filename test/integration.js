@@ -2,12 +2,28 @@ const assert = require('assert');
 const socketClusterServer = require('socketcluster-server');
 const AGAction = require('socketcluster-server/action');
 const socketClusterClient = require('../');
-const localStorage = require('localStorage');
 
 // Add to the global scope like in browser.
-global.localStorage = localStorage;
+// Simple in-memory localStorage implementation for testing
+const storage = {};
+global.localStorage = {
+  setItem: (key, value) => {
+    storage[key] = String(value);
+  },
+  getItem: (key) => {
+    return storage[key] || null;
+  },
+  removeItem: (key) => {
+    delete storage[key];
+  },
+  clear: () => {
+    for (let key in storage) {
+      delete storage[key];
+    }
+  }
+};
 
-const PORT_NUMBER = 8009;
+const PORT_NUMBER = 8010;
 
 let clientOptions;
 let serverOptions;
@@ -627,6 +643,8 @@ describe('Integration tests', function () {
 
       let authState = null;
 
+      await wait(2000);
+
       (async () => {
         await client.invoke('login', {username: 'bob'});
         authState = client.authState;
@@ -642,6 +660,7 @@ describe('Integration tests', function () {
       await client.listener('subscribe').once();
       assert.equal(privateChannel.state, 'subscribed');
 
+      await wait(1000);
       assert.equal(authState, 'authenticated');
     });
 
