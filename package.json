@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "20.0.1",
+  "version": "20.0.2",
   "homepage": "https://socketcluster.io/",
   "contributors": [
     {
@@ -34,7 +34,7 @@
     "sc-errors": "^3.0.0",
     "sc-formatter": "^4.0.0",
     "stream-demux": "^10.0.1",
-    "uuid": "^8.3.2",
+    "uuid": "^14.0.2",
     "vinyl-buffer": "^1.0.1",
     "ws": "^8.18.0"
   },
@@ -46,9 +46,13 @@
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.4",
     "@rollup/plugin-node-resolve": "^15.2.1",
-    "@rollup/plugin-terser": "^0.4.3",
-    "mocha": "^10.2.0",
+    "@rollup/plugin-terser": "^1.0.0",
+    "mocha": "^11.8.0",
     "rollup": "^3.28.1",
     "socketcluster-server": "*"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.1.0"
   }
 }

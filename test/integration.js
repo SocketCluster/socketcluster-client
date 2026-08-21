@@ -23,7 +23,7 @@ global.localStorage = {
   }
 };
 
-const PORT_NUMBER = 8010;
+const PORT_NUMBER = 8175;
 
 let clientOptions;
 let serverOptions;
@@ -85,6 +85,13 @@ function connectionHandler(socket) {
 };
 
 describe('Integration tests', function () {
+  before('Show port availability notice', async function () {
+    console.log('');
+    console.log(`  NOTICE: These tests start and stop a server on port ${PORT_NUMBER} of 127.0.0.1.`);
+    console.log(`  Make sure that port ${PORT_NUMBER} is free before running the test cases, otherwise tests will fail.`);
+    console.log('');
+  });
+
   beforeEach('Run the server before start', async function () {
     serverOptions = {
       authKey: 'testkey',
