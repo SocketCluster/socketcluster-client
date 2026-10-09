@@ -1019,6 +1019,161 @@ describe('Integration tests', function () {
     });
   });
 
+  describe('Security', function () {
+    it('Should ignore inbound event and procedure names which exist on Object.prototype', async function () {
+      client = socketClusterClient.create(clientOptions);
+
+      await client.listener('connect').once();
+
+      let errors = [];
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          errors.push(error);
+        }
+      })();
+
+      // These used to throw a TypeError out of the WebSocket message handler.
+      let thrownError = null;
+      try {
+        client._onInboundTransmit('__proto__', {});
+        client._onInboundTransmit('toString', {});
+        client._onInboundInvoke({
+          procedure: '__proto__',
+          data: {},
+          end: () => {},
+          error: () => {}
+        });
+      } catch (err) {
+        thrownError = err;
+      }
+      await wait(0);
+
+      assert.equal(thrownError, null);
+      assert.equal(errors.length, 2);
+      assert.equal(errors[0].name, 'InvalidMessageError');
+    });
+
+    it('Should not report subscriptions for channel names which exist on Object.prototype', async function () {
+      client = socketClusterClient.create(clientOptions);
+
+      await client.listener('connect').once();
+
+      assert.equal(client.isSubscribed('__proto__', true), false);
+      assert.equal(client.isSubscribed('toString', true), false);
+      assert.equal(client.getChannelState('constructor'), 'unsubscribed');
+    });
+
+    it('Should not become authenticated if #setAuthToken is sent without a string token', async function () {
+      client = socketClusterClient.create(clientOptions);
+
+      await client.listener('connect').once();
+
+      let errors = [];
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          errors.push(error);
+        }
+      })();
+
+      assert.equal(client.authState, 'unauthenticated');
+
+      client._onInboundTransmit('#setAuthToken', 'not-an-object');
+      await wait(0);
+
+      assert.equal(client.authState, 'unauthenticated');
+      assert.equal(client.signedAuthToken, null);
+      assert.equal(errors.length, 1);
+      assert.equal(errors[0].name, 'InvalidMessageError');
+    });
+
+    it('Should regenerate the auth token name if connect() is given a different host', async function () {
+      client = socketClusterClient.create({
+        ...clientOptions,
+        authTokenName: null,
+        autoConnect: false,
+        autoReconnect: false
+      });
+
+      assert.equal(client.options.authTokenName, `socketcluster.authToken.127.0.0.1:${PORT_NUMBER}`);
+
+      // The previous host's token must not be sent to the new host.
+      client.connect({hostname: '127.0.0.2'});
+
+      assert.equal(client.options.authTokenName, `socketcluster.authToken.127.0.0.2:${PORT_NUMBER}`);
+      assert.equal(client.authTokenName, client.options.authTokenName);
+    });
+
+    it('Should keep the auth token name when reconnecting without any options', async function () {
+      client = socketClusterClient.create({
+        ...clientOptions,
+        authTokenName: 'my.custom.token',
+        autoReconnect: false
+      });
+
+      await client.listener('connect').once();
+      client.disconnect();
+
+      // An explicit name survives both a bare reconnect and an options change.
+      client.connect();
+      assert.equal(client.options.authTokenName, 'my.custom.token');
+      client.disconnect();
+
+      client.connect({ackTimeout: 500});
+      assert.equal(client.options.authTokenName, 'my.custom.token');
+    });
+
+    it('Should ignore an invalid pingTimeout sent by the server', async function () {
+      client = socketClusterClient.create(clientOptions);
+
+      await client.listener('connect').once();
+
+      let errors = [];
+      (async () => {
+        for await (let {error} of client.listener('error')) {
+          errors.push(error);
+        }
+      })();
+
+      let validPingTimeout = client.transport.pingTimeout;
+
+      // Each of these used to arm a 1ms timer and reconnect in a tight loop.
+      client.transport._applyPingTimeout(Math.pow(2, 31));
+      assert.equal(client.transport.pingTimeout, validPingTimeout);
+
+      client.transport._applyPingTimeout(undefined);
+      assert.equal(client.transport.pingTimeout, validPingTimeout);
+
+      client.transport._applyPingTimeout(-1);
+      assert.equal(client.transport.pingTimeout, validPingTimeout);
+
+      // A legitimate value must still be applied.
+      client.transport._applyPingTimeout(12345);
+      assert.equal(client.transport.pingTimeout, 12345);
+
+      await wait(0);
+
+      assert.equal(errors.length, 3);
+      assert.equal(errors[0].name, 'InvalidMessageError');
+    });
+
+    it('Should reject a host option which is more than a hostname and port', async function () {
+      let error = null;
+      try {
+        socketClusterClient.create({
+          host: `127.0.0.1:${PORT_NUMBER}@attacker.example.com:${PORT_NUMBER}`
+        });
+      } catch (err) {
+        error = err;
+      }
+      assert.notEqual(error, null);
+      assert.equal(error.name, 'InvalidArgumentsError');
+
+      // A single digit port is valid and must still be accepted.
+      let socket = socketClusterClient.create({host: '127.0.0.1:9', autoConnect: false});
+      assert.equal(socket.options.host, '127.0.0.1:9');
+    });
+  });
+
   describe('Events', function () {
     it('Should trigger unsubscribe event on channel before disconnect event', async function () {
       client = socketClusterClient.create(clientOptions);

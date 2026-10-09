@@ -1,7 +1,7 @@
 {
   "name": "socketcluster-client",
   "description": "SocketCluster JavaScript client",
-  "version": "20.0.2",
+  "version": "21.0.0",
   "homepage": "https://socketcluster.io/",
   "contributors": [
     {
@@ -27,13 +27,13 @@
     "ag-auth": "^2.1.1",
     "ag-channel": "^5.0.0",
     "ag-request": "^1.1.0",
-    "async-stream-emitter": "^7.0.1",
+    "async-stream-emitter": "^7.1.1",
     "buffer": "^5.2.1",
     "clone-deep": "^4.0.1",
     "linked-list": "^2.1.0",
     "sc-errors": "^3.0.0",
     "sc-formatter": "^4.0.0",
-    "stream-demux": "^10.0.1",
+    "stream-demux": "^10.2.1",
     "uuid": "^14.0.2",
     "vinyl-buffer": "^1.0.1",
     "ws": "^8.18.0"
@@ -49,7 +49,7 @@
     "@rollup/plugin-terser": "^1.0.0",
     "mocha": "^11.8.0",
     "rollup": "^3.28.1",
-    "socketcluster-server": "*"
+    "socketcluster-server": "^21.0.1"
   },
   "overrides": {
     "diff": "^8.0.4",
